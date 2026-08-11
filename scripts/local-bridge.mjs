@@ -47,8 +47,9 @@ async function readRequestBody(request) {
   for await (const chunk of request) { total += chunk.length; if (total > 128 * 1024) throw new Error("Request body is too large."); chunks.push(chunk); }
   try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new Error("Request body must be valid JSON."); }
 }
-function send(response, status, payload) {
-  response.writeHead(status, { "Access-Control-Allow-Origin": "http://127.0.0.1:4173", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+const allowedOrigins = new Set(["http://127.0.0.1:4173", "http://localhost:4173", "http://127.0.0.1:5173", "http://localhost:5173"]);
+function send(response, status, payload, origin) {
+  response.writeHead(status, { "Access-Control-Allow-Origin": allowedOrigins.has(origin) ? origin : "http://127.0.0.1:4173", "Vary": "Origin", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   response.end(JSON.stringify(payload));
 }
 async function writeEvent(config, event) {
@@ -79,15 +80,16 @@ async function handleBoard(url) {
   return { status: 200, body: responseBody(board, connected ? "connected" : "local") };
 }
 const server = createServer(async (request, response) => {
-  if (!request.url) { send(response, 400, { error: "Request URL is required." }); return; }
-  if (request.method === "OPTIONS") { send(response, 204, {}); return; }
+  const origin = request.headers.origin;
+  if (!request.url) { send(response, 400, { error: "Request URL is required." }, origin); return; }
+  if (request.method === "OPTIONS") { send(response, 204, {}, origin); return; }
   const url = new URL(request.url, "http://127.0.0.1:" + PORT);
   try {
-    if (request.method === "GET" && url.pathname === "/api/health") { const config = await loadConfig(); send(response, 200, { status: "ok", dataDir: DATA_DIR, handoffSinkDir: config.handoffSinkDir || null, connected: Boolean(config.handoffSinkDir) }); return; }
-    if (request.method === "GET" && url.pathname === "/api/board") { const result = await handleBoard(url); send(response, result.status, result.body); return; }
-    if (request.method === "POST" && url.pathname === "/api/report") { const result = await handleReport(await readRequestBody(request)); send(response, result.status, result.body); return; }
-    send(response, 404, { error: "Not found." });
-  } catch (error) { send(response, 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error." }); }
+    if (request.method === "GET" && url.pathname === "/api/health") { const config = await loadConfig(); send(response, 200, { status: "ok", dataDir: DATA_DIR, handoffSinkDir: config.handoffSinkDir || null, connected: Boolean(config.handoffSinkDir) }, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/board") { const result = await handleBoard(url); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/report") { const result = await handleReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
+    send(response, 404, { error: "Not found." }, origin);
+  } catch (error) { send(response, 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error." }, origin); }
 });
 await mkdir(join(DATA_DIR, "boards"), { recursive: true });
 server.listen(PORT, "127.0.0.1", () => console.log("Daybridge local bridge listening on http://127.0.0.1:" + PORT));
