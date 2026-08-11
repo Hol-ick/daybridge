@@ -1,0 +1,23 @@
+{
+  "name": "daybridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turn daily notes into a focused next-day action list.",
+  "type": "module",
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "bridge": "node scripts/compile-quests.mjs && node scripts/local-bridge.mjs",
+    "compile": "node scripts/compile-quests.mjs",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  }
+}
