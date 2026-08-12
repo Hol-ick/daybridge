@@ -48,7 +48,9 @@ export interface QuestBoard {
   sourceInputs?: string[];
   title: string;
   generatedAt: string;
-  sourceCoverage: "demo" | "connected" | "stale";
+  sourceCoverage: "demo" | "connected" | "stale" | "attention";
+  sourceQuality?: "aligned" | "attention" | "unknown";
+  sourceWarnings?: string[];
   quests: Quest[];
 }
 

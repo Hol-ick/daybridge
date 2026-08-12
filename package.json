@@ -12,12 +12,21 @@
     "dev": "vite",
     "bridge": "node scripts/compile-quests.mjs && node scripts/local-bridge.mjs",
     "compile": "node scripts/compile-quests.mjs",
+    "compile:closeout": "node scripts/compile-quests.mjs --source closeout",
+    "test:compiler": "node --test scripts/compile-quests.test.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "tauri": "tauri",
+    "dev:widget": "tauri dev",
+    "build:widget": "tauri build"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "typescript": "^7.0.2",
     "vite": "^8.2.1"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1"
   }
 }

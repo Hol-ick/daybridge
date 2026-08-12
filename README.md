@@ -6,23 +6,30 @@ Daybridge is a local-first desktop companion. It reduces a detailed daily note t
 
 ## What the first release includes
 
-- A calm, always-available board for every extracted daily quest
+- A compact Windows floating widget that stays above other windows and lives in the system tray
 - A concrete first step and a completion condition for every action
 - One-click complete, progress, pause, block, and confirmation states
 - Local status reports mirrored to an AIHUB handoff when the machine profile is available
 - A link back to the evidence that produced each action
-- Freshness and source-coverage indicators instead of invented certainty
+- Closeout-first generation: one workstream quest with a checklist, rather than every raw note line
+- Freshness, record-quality, and source-coverage indicators instead of invented certainty
 
 ## Local development
 
-Requirements: Node.js 22.12 or later and pnpm 11.
+Requirements: Node.js 22.12 or later and pnpm 11. The native Windows widget additionally needs Rust (MSVC target), Microsoft C++ Build Tools with the Windows SDK, and WebView2.
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-`pnpm build` runs the strict TypeScript check and creates a production web bundle. `pnpm compile` reads the previous KST work diary without editing it and writes the next quest board to the local Daybridge data directory. `pnpm bridge` compiles the board and starts the local bridge; each status report is written locally and mirrored to AIHUB when the machine profile is available.
+`pnpm build` runs the strict TypeScript check and creates a production web bundle. `pnpm compile:closeout -- --source-date YYYY-MM-DD` reads one sanitized AIHUB closeout synthesis and writes the next-business-day board to the local Daybridge data directory. `pnpm bridge` compiles the current board and starts the local bridge; each status report is written locally and mirrored to AIHUB when the machine profile is available.
+
+To run the always-on-top shell after the Windows prerequisites are installed:
+
+```bash
+pnpm dev:widget
+```
 
 ## Data boundary
 
@@ -37,7 +44,7 @@ Daybridge does not edit the original daily note. The compiler creates a sanitize
 
 ## Status
 
-The quest board, deterministic diary compiler, progress bridge, and AIHUB handoff integration are implemented. A Windows shell, licensing, and public release remain separate decisions.
+The closeout-first compiler, progress bridge, AIHUB handoff integration, and Tauri widget shell are implemented. The native installer build is blocked on this computer until Rust and the Microsoft C++ Build Tools are installed. Licensing and public release remain separate decisions.
 
 ## License
 

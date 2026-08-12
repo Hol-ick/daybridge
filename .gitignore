@@ -7,3 +7,4 @@ dist/
 !.env.example
 src-tauri/target/
 src-tauri/Cargo.lock
+test-artifacts/

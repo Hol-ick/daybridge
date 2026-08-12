@@ -13,6 +13,7 @@ This contract defines the sanitized, read-only quest board consumed by Daybridge
   "activityDate": "2026-08-11",
   "sourceDate": "2026-08-10",
   "sourceCoverage": "connected",
+  "sourceQuality": "aligned",
   "quests": [
     {
       "id": "stable-unique-id",
@@ -32,7 +33,8 @@ This contract defines the sanitized, read-only quest board consumed by Daybridge
 ## Constraints
 
 - `schemaVersion` is currently `1`.
-- `quests` contains every extracted next action. The interface can filter active, completed, and paused quests without hiding the backlog.
+- `quests` contains parent workstream quests. Each parent keeps its extracted next actions as a checklist, so a fragmented closeout still starts with a short board.
+- `sourceCoverage` can be `demo`, `connected`, `stale`, or `attention`; `sourceQuality` is `aligned`, `attention`, or `unknown` when known.
 - `title`, `firstStep`, and `doneWhen` must be sanitized before writing this artifact.
 - `sourcePath` must be a local or relative reference. It must never contain a credential, token, or personal identifier.
 - `status` values are `not_started`, `in_progress`, `completed`, `blocked`, `paused`, and `needs_confirmation`.

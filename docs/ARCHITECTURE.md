@@ -2,12 +2,12 @@
 
 ## Product shape
 
-Daybridge has four deliberately separated layers:
+Daybridge has five deliberately separated layers:
 
-1. **Source adapter** — reads a permitted local note or handoff artifact.
-2. **Action compiler** — extracts, filters, deduplicates, ranks, and validates action candidates.
+1. **Closeout source adapter** — reads the sanitized `*_briefing_synthesis.json` produced by AIHUB closeout. A daily diary is only a local fallback when no closeout exists.
+2. **Action compiler** — filters completed/policy-only text, keeps uncertainty as a status, and groups related actions into parent workstream quests with checklists.
 3. **Local state** — keeps the user’s status, checklist, and progress-report receipts outside source notes.
-4. **Desktop surface** — renders every quest with achievement feedback and easy status changes.
+4. **Desktop surface** — renders a compact focus card and an expanded quest board with achievement feedback and easy status changes.
 5. **AIHUB handoff** — mirrors sanitized reports for the 17:50 closeout and next-morning briefing.
 
 The first repository milestone implements the desktop surface as a browser-preview interface with demo data. A Windows Tauri shell will wrap the same interface only after the compiler contract is proven.
@@ -15,11 +15,11 @@ The first repository milestone implements the desktop surface as a browser-previ
 ## Data flow
 
 ```text
-daily note / handoff
-        ↓ read-only
+AIHUB closeout synthesis
+        ↓ read-only, action-first
 action compiler
-        ↓ validated quest board
-Daybridge interface
+        ↓ grouped parent quests + local board
+Daybridge widget / browser preview
         ↓ local event + optional AIHUB mirror
 status / progress / next-action history
         ↓ 17:50 closeout
@@ -44,16 +44,16 @@ The compiler must reject source sentences such as “do not finalize this yet”
 | Data | Owner | May Daybridge edit it? |
 |---|---|---:|
 | Original daily note | Existing note system | No |
-| Generated action-list JSON | Action compiler | Yes, atomically |
+| Generated action-list JSON | Action compiler | Yes, atomically; preserve user receipts by quest ID |
 | User interaction receipt | Daybridge local storage | Yes |
 | Canonical project memory | Existing memory system | No |
 
 ## Desktop packaging
 
-The target shell is Tauri on Windows:
+The Windows shell uses Tauri:
 
-- frameless, compact window;
-- optional always-on-top behavior;
-- system-tray access and autostart;
-- persisted widget position;
+- frameless, transparent, always-on-top compact window;
+- system-tray show, hide, and explicit quit actions;
+- a close button that hides to the tray instead of ending the process;
+- browser-safe fallback for the same Vite interface;
 - no cloud account in the first release.

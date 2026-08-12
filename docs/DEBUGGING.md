@@ -1,16 +1,18 @@
 # Debugging Daybridge
 
-Daybridge is easiest to debug one layer at a time: compiler, local bridge, browser UI, then AIHUB handoff.
+Daybridge is easiest to debug one layer at a time: closeout synthesis, compiler, local bridge, widget UI, then AIHUB handoff.
 
-## 1. Rebuild today's board
+## 1. Rebuild a board from one closeout
 
 From the repository root:
 
 ```powershell
-pnpm compile -- --target-date 2026-08-11 --source-date 2026-08-10 --print
+pnpm compile:closeout -- --target-date 2026-08-11 --source-date 2026-08-10 --print
 ```
 
-The compiler reads the diary without editing it. Check the quest count, titles, statuses, and `diary://` source references. If the board is unexpectedly empty, confirm that the previous diary exists and that the source section uses a heading or field such as `다음 행동`, `내일 첫 행동`, `남은 작업`, `확인 필요`, or `요청/다음 행동`.
+The compiler reads the sanitized closeout without editing it. Check the quest count, parent titles, checklist items, statuses, and `aihub://` source references. If the board is empty, inspect the matching `*_briefing_synthesis.json` first: it must be a `closeout` packet for the requested date, not a future/test artifact, and its action-first fields must contain safe next actions.
+
+The scheduled closeout uses the same path through `daybridge_board.py`. It reads the machine-local `daybridge_root` and `daybridge_node` profile fields, creates the local board, and stores a redacted AIHUB receipt. Neither absolute path belongs in shared AIHUB documents.
 
 ## 2. Check the local bridge
 
@@ -33,7 +35,27 @@ Invoke-RestMethod "http://127.0.0.1:39393/api/board?date=2026-08-11"
 
 Use the UI to change a quest status or submit a progress note. The bridge should return `eventRecorded: true`. The event is stored locally and mirrored to the AIHUB automation-owned `reports/daily/_system/daybridge_handoff/YYYY-MM-DD/` folder. The original diary is never edited.
 
-## 4. Check the AIHUB handoff
+## 4. Check the floating widget
+
+Use two terminals for the browser-safe preview:
+
+```powershell
+pnpm bridge
+pnpm dev
+```
+
+The compact card should show at most three current focus quests. Select **전체 보기** to inspect all parent quests, change a status, and open **진행 보고**. In the native shell, use `pnpm dev:widget`; its close control hides the widget to the tray, while the tray menu has the explicit Quit command.
+
+For an installer build, check the native prerequisites first:
+
+```powershell
+pnpm tauri info
+pnpm build:widget
+```
+
+Windows needs WebView2, Rust with the MSVC target, and Microsoft C++ Build Tools with the Windows SDK. A missing compiler/toolchain is a local setup blocker, not a successful native build.
+
+## 5. Check the AIHUB handoff
 
 At closeout, run the collector for the work date:
 
@@ -47,18 +69,19 @@ Inspect the generated JSON/Markdown for `status`, `event_count`, `completed`, `o
 
 | Symptom | Check |
 | --- | --- |
-| Demo board remains visible | Start `pnpm bridge`, generate today's board, and reload the browser. |
-| Board is empty | Run the compiler with `--print` and inspect the source date and diary headings. |
+| Demo board remains visible | Start `pnpm bridge`, compile today's board, and reload the browser. |
+| Board is empty | Run the closeout compiler with `--print` and inspect the source date, packet phase, and action-first fields. |
 | Status changes disappear after reload | Check that the bridge is running; browser storage is only a local fallback. |
 | `connected: false` | Check `%LOCALAPPDATA%\AIHUB\environment.json` and the `aihub_root` value. |
 | Handoff has zero events | Confirm `eventRecorded: true`, the activity date, and that closeout collected the same date. |
-| A quest looks too broad | Narrow the diary's next-action sentence; the compiler intentionally preserves source wording and does not invent subtasks. |
+| A quest looks too broad | Check the closeout's workstream/evidence metadata. The compiler groups it into a parent quest but must not invent ungrounded subtasks. |
 
 ## Verification commands
 
 ```powershell
 pnpm check
 pnpm build
+pnpm test:compiler
 node scripts/compile-quests.mjs --self-test
 python -B .\04_Operations_And_Automation\Memory_System\conversation_bridge\daybridge_handoff.py --self-test
 ```
