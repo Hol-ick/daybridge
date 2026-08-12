@@ -10,7 +10,7 @@ function AddItemForm() {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      await refresh();
+      await refresh({ announce: true });
     } finally {
       setRefreshing(false);
     }

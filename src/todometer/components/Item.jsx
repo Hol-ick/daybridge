@@ -42,7 +42,7 @@ function Item({ quest }) {
         <div className={styles.subquests}>
           {quest.steps.map((step) => {
             const locked = isLocked(step);
-            return <button key={step.id} type="button" disabled={locked} className={`${styles.subquest} ${step.completed ? styles.subquestCompleted : ""} ${locked ? styles.subquestLocked : ""} ${celebratingStep === step.id ? styles.subquestCelebrating : ""}`} onClick={() => toggleStep(step)} aria-pressed={step.completed} aria-disabled={locked} data-testid="subquest"><span className={styles.subquestCheck}>{locked ? "·" : step.completed ? "✓" : ""}</span><span>{step.label}</span></button>;
+            return <button key={step.id} type="button" disabled={locked} className={`${styles.subquest} ${step.completed ? styles.subquestCompleted : ""} ${locked ? styles.subquestLocked : ""} ${celebratingStep === step.id ? styles.subquestCelebrating : ""}`} onClick={() => toggleStep(step)} aria-pressed={step.completed} aria-disabled={locked} data-testid="subquest"><span className={styles.subquestCheck}>{locked ? "🔒" : step.completed ? "✓" : ""}</span><span>{step.label}</span></button>;
           })}
         </div>
       </div>

@@ -315,6 +315,12 @@
 	cursor: not-allowed;
 }
 
+.subquestLocked .subquestCheck {
+	border-color: var(--yellow);
+	color: var(--yellow);
+	font-size: .78rem;
+}
+
 .carryover {
 	display: block;
 	margin-top: 10px;

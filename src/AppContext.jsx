@@ -43,6 +43,7 @@ function reducer(state, action) {
 
 export function useAppState() { return useContext(AppContext).state; }
 export function useAppActions() { return useContext(AppContext).actions; }
+export function useAppNotice() { return useContext(AppContext).notice; }
 
 export function useQuestGroups() {
   const { board } = useAppState();
@@ -61,20 +62,40 @@ export function useQuestGroups() {
 export function AppStateProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, { board: loadStoredBoard(), expandedQuestId: "" });
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState("");
   const boardRef = useRef(state.board);
   const reportQueueRef = useRef(Promise.resolve());
   const reportVersionRef = useRef(0);
-  const refresh = useCallback(async () => {
+  const noticeTimerRef = useRef(null);
+  const showNotice = useCallback((message) => {
+    setNotice(message);
+    if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = window.setTimeout(() => setNotice(""), 2600);
+  }, []);
+  const refresh = useCallback(async ({ announce = false } = {}) => {
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 1800);
     try {
-      const response = await fetch(`${BRIDGE_URL}/api/board?date=${currentKstDate()}`);
-      if (!response.ok) return;
+      const response = await fetch(`${BRIDGE_URL}/api/board?date=${currentKstDate()}`, { signal: controller.signal });
+      if (!response.ok) {
+        if (announce) showNotice("브리핑을 불러오지 못했어요");
+        return false;
+      }
       const result = await response.json();
       boardRef.current = result.board;
       dispatch({ type: "INIT", board: result.board });
       persistBoard(result.board);
-    } catch { /* local board remains usable */ } finally { setLoading(false); }
-  }, []);
+      if (announce) showNotice("브리핑을 업데이트했어요");
+      return true;
+    } catch {
+      if (announce) showNotice("브리지를 확인할 수 없어요");
+      return false;
+    } finally {
+      window.clearTimeout(timeoutId);
+      setLoading(false);
+    }
+  }, [showNotice]);
   useEffect(() => { void refresh(); }, [refresh]);
 
   const reportQuest = useCallback(({ questId, status, note, nextAction, steps }) => {
@@ -84,6 +105,9 @@ export function AppStateProvider({ children }) {
       return { ...quest, state: nextState, status, steps: nextSteps, progress: progressFor(nextSteps), currentAction: nextAction || quest.currentAction, updatedAt: new Date().toISOString(), reports: [...quest.reports, { id: crypto.randomUUID(), occurredAt: new Date().toISOString(), status, note, nextAction, source: "daybridge" }].slice(-20) };
     });
     boardRef.current = nextBoard;
+    const questTitle = nextBoard.quests.find((item) => item.id === questId)?.title || "퀘스트";
+    if (status === "completed") showNotice(`완료했어요 · ${questTitle}`);
+    if (status === "deferred") showNotice(`내일로 미뤘어요 · ${questTitle}`);
     const reportVersion = reportVersionRef.current + 1;
     reportVersionRef.current = reportVersion;
     dispatch({ type: "UPDATE_BOARD", board: nextBoard });
@@ -101,7 +125,7 @@ export function AppStateProvider({ children }) {
       } catch { /* receipt remains local */ }
     });
     return reportQueueRef.current;
-  }, []);
+  }, [showNotice]);
 
   const actions = useMemo(() => ({
     toggleQuest: (questId) => dispatch({ type: "TOGGLE_QUEST", questId }),
@@ -112,6 +136,6 @@ export function AppStateProvider({ children }) {
     reportQuest,
   }), [refresh, reportQuest]);
 
-  const value = useMemo(() => ({ state, actions, loading }), [actions, loading, state]);
+  const value = useMemo(() => ({ state, actions, loading, notice }), [actions, loading, notice, state]);
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

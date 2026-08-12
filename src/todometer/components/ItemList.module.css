@@ -85,6 +85,24 @@
 	margin-top: 16px;
 }
 
+.notice {
+	min-height: 22px;
+	margin: 0 4px;
+	color: var(--green);
+	font-size: .78rem;
+	font-weight: 700;
+	letter-spacing: -.02em;
+	opacity: 0;
+	transform: translateY(-4px);
+	transition: opacity .2s ease, transform .2s ease;
+}
+
+.notice[data-visible="true"] {
+	opacity: 1;
+	transform: translateY(0);
+	animation: noticeIn .26s ease;
+}
+
 .arrow {
 	display: inline-block;
 	width: 18px;
@@ -142,4 +160,9 @@
 	100% {
 		opacity: 1;
 	}
+}
+
+@keyframes noticeIn {
+	0% { transform: translateY(-8px); opacity: 0; }
+	100% { transform: translateY(0); opacity: 1; }
 }
