@@ -8,7 +8,7 @@ const PORT = Number(process.env.DAYBRIDGE_BRIDGE_PORT || 39393);
 const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
 const DATA_DIR = resolve(process.env.DAYBRIDGE_DATA_DIR || join(APP_DATA, "Daybridge"));
 const CONFIG_PATH = join(DATA_DIR, "config.json");
-const VALID_STATUSES = new Set(["not_started", "in_progress", "completed", "blocked", "paused", "needs_confirmation"]);
+const VALID_STATUSES = new Set(["ready", "in_progress", "deferred", "completed", "blocked", "not_started", "paused", "needs_confirmation"]);
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const phonePattern = /(?<!\d)01[016789][ -]?\d{3,4}[ -]?\d{4}(?!\d)/g;
 const secretPattern = /(\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|client[_ -]?secret|cookie|session[_ -]?token|private[_ -]?key)\b\s*[:=]\s*)(['"]?)[^\s'"]{8,}/gi;
@@ -39,7 +39,7 @@ async function loadConfig() {
 function normalizeSteps(value, existing) {
   if (!Array.isArray(value)) return existing;
   const known = new Map(existing.map((step) => [step.id, step]));
-  return value.filter((step) => step && typeof step.id === "string" && known.has(step.id)).map((step) => ({ id: step.id, label: sanitizeText(known.get(step.id).label, 180), completed: Boolean(step.completed) }));
+  return value.filter((step) => step && typeof step.id === "string" && known.has(step.id)).map((step) => ({ id: step.id, label: sanitizeText(known.get(step.id).label, 180), completed: Boolean(step.completed), order: known.get(step.id).order, dependsOn: known.get(step.id).dependsOn || known.get(step.id).depends_on || [] }));
 }
 function responseBody(board, connection, eventRecorded = false) { return { board, connection, eventRecorded }; }
 async function readRequestBody(request) {
@@ -65,11 +65,11 @@ async function handleReport(body) {
   if (!board || !Array.isArray(board.quests)) return { status: 404, body: { error: "No quest board exists for this date." } };
   const quest = board.quests.find((item) => item && item.id === questId);
   if (!quest) return { status: 404, body: { error: "Quest was not found." } };
-  quest.status = status; quest.steps = normalizeSteps(body.steps, Array.isArray(quest.steps) ? quest.steps : []); quest.updatedAt = now();
+  quest.status = status; quest.state = status === "not_started" ? "ready" : status === "paused" ? "deferred" : status; quest.steps = normalizeSteps(body.steps, Array.isArray(quest.steps) ? quest.steps : []); quest.progress = { completed: quest.steps.filter((step) => step.completed).length, total: quest.steps.length }; quest.currentAction = sanitizeText(body.nextAction, 240); quest.updatedAt = now();
   const report = { id: randomUUID(), occurredAt: quest.updatedAt, status, note: sanitizeText(body.note), nextAction: sanitizeText(body.nextAction, 240), source: "daybridge" };
   quest.reports = [...(Array.isArray(quest.reports) ? quest.reports : []), report].slice(-20); board.generatedAt = now(); board.sourceCoverage = "connected";
   const config = await loadConfig(); await atomicWrite(path, board); await atomicWrite(join(DATA_DIR, "boards", "latest.json"), board);
-  const event = { schemaVersion: 1, id: report.id, eventType: "quest_status_report", activityDate, occurredAt: report.occurredAt, source: "daybridge", sensitivity: "sanitized", quest: { id: quest.id, title: sanitizeText(quest.title, 180), project: sanitizeText(quest.project, 100), status: quest.status, firstStep: sanitizeText(quest.firstStep, 240), doneWhen: sanitizeText(quest.doneWhen, 240), sourceLabel: sanitizeText(quest.sourceLabel, 100), sourcePath: sanitizeText(quest.sourcePath, 220) }, report };
+  const event = { schemaVersion: 1, id: report.id, eventType: "quest_status_report", activityDate, occurredAt: report.occurredAt, source: "daybridge", sensitivity: "sanitized", quest: { id: quest.id, missionId: quest.missionId || null, title: sanitizeText(quest.title, 180), project: sanitizeText(quest.project, 100), status: quest.status, state: quest.state, progress: quest.progress, carryoverCount: quest.carryoverCount || 0, firstStep: sanitizeText(quest.firstStep, 240), doneWhen: sanitizeText(quest.doneWhen, 240), sourceLabel: sanitizeText(quest.sourceLabel, 100), sourcePath: sanitizeText(quest.sourcePath, 220) }, report };
   const mirrored = await writeEvent(config, event);
   return { status: 200, body: responseBody(board, mirrored ? "connected" : "local", mirrored) };
 }

@@ -8,10 +8,11 @@ Daybridge is a local-first desktop companion. It reduces a detailed daily note t
 
 - A compact Windows floating widget that stays above other windows and lives in the system tray
 - A concrete first step and a completion condition for every action
-- One-click complete, progress, pause, block, and confirmation states
+- One-click complete, defer-to-tomorrow, resume, and blocked states
 - Local status reports mirrored to an AIHUB handoff when the machine profile is available
 - A link back to the evidence that produced each action
-- Closeout-first generation: one workstream quest with a checklist, rather than every raw note line
+- Detailed closeout plus a separate Quest Extractor: every eligible atomic quest is retained, while system/automation work is excluded with a reason
+- Stable mission and quest IDs for multi-day carryover, with explicit sequential dependencies only when AIHUB declares them
 - Freshness, record-quality, and source-coverage indicators instead of invented certainty
 
 ## Local development
@@ -23,7 +24,7 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm build` runs the strict TypeScript check and creates a production web bundle. `pnpm compile:closeout -- --source-date YYYY-MM-DD` reads one sanitized AIHUB closeout synthesis and writes the next-business-day board to the local Daybridge data directory. `pnpm bridge` compiles the current board and starts the local bridge; each status report is written locally and mirrored to AIHUB when the machine profile is available.
+`pnpm build` runs the strict TypeScript check and creates a production web bundle. The AIHUB Quest Extractor first writes a derived `*_daybridge_quest_plan.json`; `pnpm compile:closeout -- --source-date YYYY-MM-DD` consumes that plan and writes the next-business-day board to the local Daybridge data directory. `pnpm bridge` starts the local bridge; each status report is written locally and mirrored to AIHUB when the machine profile is available.
 
 To run the always-on-top shell after the Windows prerequisites are installed:
 

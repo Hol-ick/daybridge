@@ -2,58 +2,42 @@
 
 ## Product shape
 
-Daybridge has five deliberately separated layers:
+Daybridge is an execution layer over AIHUB, not a second diary. The layers are:
 
-1. **Closeout source adapter** — reads the sanitized `*_briefing_synthesis.json` produced by AIHUB closeout. A daily diary is only a local fallback when no closeout exists.
-2. **Action compiler** — filters completed/policy-only text, keeps uncertainty as a status, and groups related actions into parent workstream quests with checklists.
-3. **Local state** — keeps the user’s status, checklist, and progress-report receipts outside source notes.
-4. **Desktop surface** — renders a compact focus card and an expanded quest board with achievement feedback and easy status changes.
-5. **AIHUB handoff** — mirrors sanitized reports for the 17:50 closeout and next-morning briefing.
-
-The first repository milestone implements the desktop surface as a browser-preview interface with demo data. A Windows Tauri shell will wrap the same interface only after the compiler contract is proven.
+1. **AIHUB closeout** — produces the detailed, evidence-linked report. It is the source of truth and is never edited by Daybridge.
+2. **Quest Extractor** — a separate AIHUB automation step reads the full synthesis, keeps every actionable user task, assigns actor/kind/priority/dependency metadata, and records excluded system work.
+3. **Quest Plan** — a sanitized derived artifact. Stable `mission_id` and `quest_id` let a multi-day mission continue without resetting progress.
+4. **Daybridge compiler and bridge** — converts the plan into a local board, preserves receipts, and mirrors sanitized user interactions back to AIHUB.
+5. **Widget** — shows atomic quests (one observable outcome, normally 10–30 minutes), explicit sequence locks, progress, and carryover.
 
 ## Data flow
 
 ```text
-AIHUB closeout synthesis
-        ↓ read-only, action-first
-action compiler
-        ↓ grouped parent quests + local board
-Daybridge widget / browser preview
-        ↓ local event + optional AIHUB mirror
-status / progress / next-action history
-        ↓ 17:50 closeout
-AIHUB morning handoff
+17:30 AIHUB detailed closeout
+        ↓
+17:40 Quest Extractor + quality gate
+        ↓  daybridge_quest_plan.json / .md
+09:05 Daybridge compiler → Now / Next / Waiting / Completed
+        ↓  user receipts: complete, defer, blocked, resume
+AIHUB handoff sink → next closeout reconciliation
 ```
 
-## Action quality rules
+## Execution model
 
-An action must:
+- A **mission** aggregates a multi-day outcome; it is not directly checked off.
+- A **quest** is one concrete result. Large work is split into several quests rather than hidden in one parent card.
+- A **step** is a mechanical unit. It is locked only when the plan explicitly declares `depends_on` or sequential execution.
+- States are `ready`, `in_progress`, `deferred`, `blocked`, and `completed`.
+- There are no XP, levels, badges, or artificial side-quest buckets. Priority (`must`, `should`, `could`) and execution mode (`independent`, `sequential`) are enough.
+- Deferring a quest keeps its stable ID and moves the unfinished work into the next plan as carryover.
 
-- describe a concrete action, not a completed event or a policy statement;
-- provide a first step that can normally begin within 15 minutes;
-- state a completion condition;
-- retain a source reference;
-- be assigned `ready`, `needs-confirmation`, or `waiting`;
-- be safe to display in a desktop context after sanitization.
+## Ownership and safety
 
-The compiler must reject source sentences such as “do not finalize this yet” unless it can convert them into a verifiable action, for example “identify the official evidence needed before finalizing.”
-
-## State ownership
-
-| Data | Owner | May Daybridge edit it? |
+| Data | Owner | Daybridge may edit it? |
 |---|---|---:|
-| Original daily note | Existing note system | No |
-| Generated action-list JSON | Action compiler | Yes, atomically; preserve user receipts by quest ID |
-| User interaction receipt | Daybridge local storage | Yes |
-| Canonical project memory | Existing memory system | No |
+| Daily notes, worklogs, closeout synthesis | AIHUB source system | No |
+| Quest Plan | AIHUB extractor | No (read-only consumer) |
+| Local board and user receipts | Daybridge | Yes |
+| Canonical project memory | AIHUB memory system | No |
 
-## Desktop packaging
-
-The Windows shell uses Tauri:
-
-- frameless, transparent, always-on-top compact window;
-- system-tray show, hide, and explicit quit actions;
-- a close button that hides to the tray instead of ending the process;
-- browser-safe fallback for the same Vite interface;
-- no cloud account in the first release.
+The bridge treats a click as a user acknowledgement, not independent proof. Every quest retains sanitized `source_refs`, coverage, quality, and exclusion warnings.

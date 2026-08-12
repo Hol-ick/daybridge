@@ -208,6 +208,11 @@
 	border-left: 3px solid var(--yellow);
 }
 
+.lockedItem {
+	opacity: .62;
+	border-left: 3px solid var(--gray);
+}
+
 .index {
 	display: inline-grid;
 	flex: 0 0 auto;
@@ -280,6 +285,10 @@
 	color: var(--green) !important;
 }
 
+.lockedNotice {
+	color: var(--yellow) !important;
+}
+
 .subquests {
 	display: grid;
 	gap: 6px;
@@ -330,4 +339,16 @@
 
 .subquestCelebrating .subquestCheck {
 	animation: var(--pulse-animation);
+}
+
+.subquestLocked {
+	opacity: .42;
+	cursor: not-allowed;
+}
+
+.carryover {
+	display: block;
+	margin-top: 10px;
+	color: var(--yellow);
+	font-size: .65rem;
 }

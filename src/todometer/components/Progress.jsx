@@ -5,7 +5,7 @@ function Progress() {
   const { board } = useAppState();
   const total = board.quests.reduce((sum, quest) => sum + quest.steps.length, 0);
   const completed = board.quests.reduce((sum, quest) => sum + quest.steps.filter((step) => step.completed).length, 0);
-  const paused = board.quests.filter((quest) => quest.status === "paused").reduce((sum, quest) => sum + quest.steps.length, 0);
+  const paused = board.quests.filter((quest) => ["deferred", "blocked"].includes(quest.state || quest.status)).reduce((sum, quest) => sum + quest.steps.length, 0);
   const completedWidth = total ? (completed / total) * 100 : 0;
   const pausedWidth = total ? ((completed + paused) / total) * 100 : 0;
 

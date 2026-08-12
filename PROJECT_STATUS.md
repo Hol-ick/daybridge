@@ -10,15 +10,17 @@ Turn the AIHUB closeout into a small, evidence-linked next-business-day quest bo
 
 ## Current milestone
 
-M1 complete in source: closeout-first quest compiler, automatic progress receipts, AIHUB handoff, a todometer-based quest renderer, and a Tauri always-on-top widget shell.
+M2 implemented in source: detailed-closeout → separate Quest Extractor → stable Quest Plan → carryover-aware compiler/bridge → compact sequential quest widget. The todometer-based renderer and Tauri always-on-top shell remain the presentation layer.
 
 ## Verified progress
 
-- The compiler prefers the action-first AIHUB closeout synthesis, rejects future/test packets, groups related actions into parent workstream quests, and preserves local status receipts.
-- The AIHUB closeout runner compiles the following business day's local board after synthesis and writes only a redacted receipt to the automation-owned system folder.
+- The Quest Extractor keeps the full closeout as source evidence, removes the fixed three-item limit, classifies user execution/review/decision work, and keeps automation/Codex/policy items in an auditable excluded list.
+- Missions and quests use stable IDs. The compiler preserves step receipts and increments carryover when unfinished work reaches a new board date.
+- Explicit `depends_on` and sequential execution lock only the declared next step; independent quests remain parallel.
+- The AIHUB closeout runner now creates the derived Quest Plan before compiling the following business day's local board.
 - The desktop surface shows compact parent quest cards; clicking one expands a full-width detail area below that card's action row with its summary, done-when line, and compact sub-quest cards. Only one parent card can be open at a time.
 - The former Daybridge-specific card renderer has been replaced by an adapted todometer React renderer: its progress meter, dark palette, task-card rhythm, CSS-module structure, SVG controls, and completion response are used directly. Daybridge keeps the quest adapter, parent/sub-quest data model, AIHUB bridge, and Tauri shell around that renderer. The reuse boundary and attribution are recorded in `THIRD_PARTY_NOTICES.md`.
-- Manual status, check-in, source, achievement, project, XP, and connection-copy UI remain hidden. A sub-quest click still writes the automatic in-progress/completed user receipt to its original parent quest through the existing bridge contract.
+- Manual status, check-in, source, achievement, project, XP, and connection-copy UI remain hidden. The compact card supports progress, completion, `내일 계속`, resume, and sequential sub-quest receipts.
 - The accordion unfold, staggered sub-quest reveal, and completion response respect reduced-motion preference. The isolated browser smoke check confirms the collapsed default, single-card expansion, sub-quest completion, and absence of removed controls.
 - The Tauri shell defines a transparent frameless always-on-top window plus tray show/hide/quit behavior. Closing the window hides it to the tray.
 - TypeScript, production Vite build, compiler tests, runner/profile self-tests, local bridge syntax, and browser smoke/visual checks passed. The card-deck smoke check was run against an isolated preview fixture.
