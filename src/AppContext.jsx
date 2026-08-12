@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { demoQuestBoard } from "./demo-data";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
@@ -33,6 +33,7 @@ function progressFor(steps) { return { completed: steps.filter((step) => step.co
 function reducer(state, action) {
   switch (action.type) {
     case "INIT": return { ...state, board: normalizeBoard(action.board), expandedQuestId: "" };
+    case "SYNC": return { ...state, board: normalizeBoard(action.board) };
     case "TOGGLE_QUEST": return { ...state, expandedQuestId: state.expandedQuestId === action.questId ? "" : action.questId };
     case "ADD_QUEST": { const board = normalizeBoard({ ...state.board, quests: [...state.board.quests, action.quest] }); persistBoard(board); return { ...state, board }; }
     case "UPDATE_BOARD": persistBoard(action.board); return { ...state, board: normalizeBoard(action.board) };
@@ -60,32 +61,47 @@ export function useQuestGroups() {
 export function AppStateProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, { board: loadStoredBoard(), expandedQuestId: "" });
   const [loading, setLoading] = useState(true);
+  const boardRef = useRef(state.board);
+  const reportQueueRef = useRef(Promise.resolve());
+  const reportVersionRef = useRef(0);
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`${BRIDGE_URL}/api/board?date=${currentKstDate()}`);
       if (!response.ok) return;
       const result = await response.json();
+      boardRef.current = result.board;
       dispatch({ type: "INIT", board: result.board });
       persistBoard(result.board);
     } catch { /* local board remains usable */ } finally { setLoading(false); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const reportQuest = useCallback(async ({ questId, status, note, nextAction, steps }) => {
-    const nextBoard = updateQuest(state.board, questId, (quest) => {
+  const reportQuest = useCallback(({ questId, status, note, nextAction, steps }) => {
+    const nextBoard = updateQuest(boardRef.current, questId, (quest) => {
       const nextSteps = steps ? steps.map((step) => ({ ...step })) : quest.steps;
       const nextState = status === "not_started" ? "ready" : status === "paused" ? "deferred" : status;
       return { ...quest, state: nextState, status, steps: nextSteps, progress: progressFor(nextSteps), currentAction: nextAction || quest.currentAction, updatedAt: new Date().toISOString(), reports: [...quest.reports, { id: crypto.randomUUID(), occurredAt: new Date().toISOString(), status, note, nextAction, source: "daybridge" }].slice(-20) };
     });
+    boardRef.current = nextBoard;
+    const reportVersion = reportVersionRef.current + 1;
+    reportVersionRef.current = reportVersion;
     dispatch({ type: "UPDATE_BOARD", board: nextBoard });
-    const quest = nextBoard.quests.find((item) => item.id === questId);
-    try {
-      const response = await fetch(`${BRIDGE_URL}/api/report`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: nextBoard.activityDate, questId, status, note, nextAction, steps: quest?.steps ?? [], missionId: quest?.missionId, state: quest?.state }) });
-      if (!response.ok) return;
-      const result = await response.json(); dispatch({ type: "INIT", board: result.board }); persistBoard(result.board);
-    } catch { /* receipt remains local */ }
-  }, [state.board]);
+    reportQueueRef.current = reportQueueRef.current.then(async () => {
+      const quest = nextBoard.quests.find((item) => item.id === questId);
+      try {
+        const response = await fetch(`${BRIDGE_URL}/api/report`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: nextBoard.activityDate, questId, status, note, nextAction, steps: quest?.steps ?? [], missionId: quest?.missionId, state: quest?.state }) });
+        if (!response.ok) return;
+        const result = await response.json();
+        if (reportVersion === reportVersionRef.current) {
+          boardRef.current = result.board;
+          dispatch({ type: "SYNC", board: result.board });
+          persistBoard(result.board);
+        }
+      } catch { /* receipt remains local */ }
+    });
+    return reportQueueRef.current;
+  }, []);
 
   const actions = useMemo(() => ({
     toggleQuest: (questId) => dispatch({ type: "TOGGLE_QUEST", questId }),
