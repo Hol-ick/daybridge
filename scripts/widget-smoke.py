@@ -32,6 +32,10 @@ def main() -> None:
         page.wait_for_selector('[data-testid="quest-details"][data-open="true"] [data-testid="subquest"]')
         assert page.locator('[data-testid="quest-toggle"][aria-expanded="true"]').count() == 1
         assert first_card.locator('[data-testid="quest-details"][data-open="true"] p').count() == 2
+        title_box = first_card.locator('[data-testid="quest-toggle"]').bounding_box()
+        details_box = first_card.locator('[data-testid="quest-details"][data-open="true"]').bounding_box()
+        assert title_box and details_box and details_box["y"] >= title_box["y"] + title_box["height"] - 1
+        assert details_box["width"] >= 300
 
         first_task = first_card.locator('[data-testid="subquest"]').first
         completed_before = first_card.locator('[data-testid="subquest"][aria-pressed="true"]').count()

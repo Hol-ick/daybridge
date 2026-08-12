@@ -1,7 +1,7 @@
 .item {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 100px;
 	align-items: center;
-	justify-content: space-between;
 	margin: 0 0 10px 0;
 	padding: 20px;
 	width: 100%;
@@ -33,7 +33,7 @@
 	}
 
 	.itemname {
-		width: calc(100% - 110px);
+		width: 100%;
 		overflow: visible;
 		padding: 0;
 		border: none;
@@ -247,15 +247,19 @@
 
 .questDetails {
 	display: grid;
-	grid-template-rows: 0fr;
+	grid-column: 1 / -1;
+	grid-template-rows: 1fr;
+	max-height: 0;
+	overflow: hidden;
 	margin: 0 -20px -20px;
+	padding: 0 20px;
 	opacity: 0;
 	pointer-events: none;
-	transition: grid-template-rows .25s ease, opacity .2s ease, padding .25s ease;
+	transition: max-height .3s ease, opacity .2s ease, padding .3s ease;
 }
 
 .questDetailsOpen {
-	grid-template-rows: 1fr;
+	max-height: 600px;
 	padding: 0 20px 20px;
 	opacity: 1;
 	pointer-events: auto;

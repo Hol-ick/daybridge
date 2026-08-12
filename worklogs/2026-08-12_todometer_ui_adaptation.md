@@ -13,6 +13,7 @@ Replace the bespoke Daybridge card UI with a polished open-source desktop to-do 
 - Replaced the old vanilla TypeScript card renderer with a React renderer organized around todometer's `App`/`ItemList`/`Item`/`Progress` composition.
 - Vendored and adapted todometer's CSS modules, variables, progress meter, date treatment, SVG controls, and completion response under `src/todometer/`.
 - Connected the renderer to Daybridge's parent quest/sub-quest adapter, local receipt persistence, and AIHUB bridge reporting.
+- Corrected the adopted card layout so a clicked task keeps its action row intact and expands its details as a full-width section below the row instead of squeezing content into a side column.
 - Kept Daybridge's AIHUB closeout compiler, local bridge, automatic progress receipt, parent/sub-quest schema, and isolated-browser bridge abort unchanged.
 - Added `THIRD_PARTY_NOTICES.md` with the upstream attribution and MIT notice.
 
@@ -22,6 +23,7 @@ Replace the bespoke Daybridge card UI with a polished open-source desktop to-do 
 - `pnpm build` passed.
 - `pnpm test:compiler` passed: 4 tests, 0 failures.
 - Browser smoke passed with a real Chromium executable: collapsed default, single-card expansion, summary rendering, sub-quest completion, removed-control check, and no page errors.
+- The same browser check now asserts that expanded details are vertically below the task row and span the widget width.
 - Visual inspection confirmed the dark meter-based widget surface and compact accordion hierarchy.
 - `git diff --check` reported no whitespace errors; Git emitted only line-ending warnings.
 
