@@ -47,6 +47,26 @@ function completedSteps(quest: Quest): number {
   return quest.steps.filter((step) => step.completed).length;
 }
 
+function boardProgress(): { completed: number; total: number; percentage: number } {
+  const total = board.quests.reduce((sum, quest) => sum + quest.steps.length, 0);
+  const completed = board.quests.reduce((sum, quest) => sum + completedSteps(quest), 0);
+  return {
+    completed,
+    total,
+    percentage: total ? Math.round((completed / total) * 100) : 0,
+  };
+}
+
+function activityLabel(): string {
+  const parsed = new Date(`${board.activityDate}T00:00:00+09:00`);
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+  }).format(parsed);
+}
+
 function taskKey(questId: string, stepId: string): string {
   return `${questId}:${stepId}`;
 }
@@ -95,10 +115,14 @@ function questCard(quest: Quest, index: number): string {
 }
 
 function render(): void {
+  const progress = boardProgress();
   app.innerHTML = `
     <main class="widget-shell">
       <header class="widget-header" data-tauri-drag-region>
-        <span class="brand"><span class="brand-mark">✦</span><span>daybridge</span></span>
+        <div class="brand-block">
+          <span class="brand"><span class="brand-mark">✦</span><span>daybridge</span></span>
+          <span class="date-label">${escapeHtml(activityLabel())}</span>
+        </div>
         <div class="window-actions">
           <button class="icon-button" type="button" data-action="sync" aria-label="새로고침">↻</button>
           <button class="icon-button desktop-only" type="button" data-action="minimize" aria-label="최소화">−</button>
@@ -106,6 +130,13 @@ function render(): void {
         </div>
       </header>
       <section class="widget-body">
+        <div class="progress-summary">
+          <span class="progress-count"><strong>${progress.completed}</strong><span> / ${progress.total} steps</span></span>
+          <span class="progress-percent">${progress.percentage}%</span>
+        </div>
+        <div class="progress" aria-label="오늘의 진행률">
+          <span class="progress-fill" style="width: ${progress.percentage}%"></span>
+        </div>
         <div class="quest-list">${board.quests.map(questCard).join("") || `<div class="empty-state">오늘의 퀘스트가 없습니다.</div>`}</div>
       </section>
     </main>`;
