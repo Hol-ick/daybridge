@@ -18,6 +18,7 @@ M2 implemented in source: detailed-closeout → separate Quest Extractor → sta
 - Missions and quests use stable IDs. The compiler preserves step receipts and increments carryover when unfinished work reaches a new board date.
 - Explicit `depends_on` and sequential execution lock only the declared next step; independent quests remain parallel.
 - The AIHUB closeout runner now creates the derived Quest Plan before compiling the following business day's local board.
+- Daybridge continuation is completion-driven: the closeout automation invokes `daybridge_continuation.py` after a ready packet, so a closeout that runs past ten minutes is not skipped by a fixed-time follow-up.
 - The desktop surface shows compact parent quest cards; clicking one expands a full-width detail area below that card's action row with its summary, done-when line, and compact sub-quest cards. Only one parent card can be open at a time.
 - The former Daybridge-specific card renderer has been replaced by an adapted todometer React renderer: its progress meter, dark palette, task-card rhythm, CSS-module structure, SVG controls, and completion response are used directly. Daybridge keeps the quest adapter, parent/sub-quest data model, AIHUB bridge, and Tauri shell around that renderer. The reuse boundary and attribution are recorded in `THIRD_PARTY_NOTICES.md`.
 - Manual status, check-in, source, achievement, project, XP, and connection-copy UI remain hidden. The compact card supports progress, completion, `내일 계속`, resume, and sequential sub-quest receipts.
@@ -32,7 +33,7 @@ The native Windows installer is not yet buildable on this computer because Rust/
 ## Next actions
 
 1. Install the Windows native build prerequisites, then run `pnpm build:widget` and test tray/always-on-top behavior.
-2. Use several real closeouts to tune broad evidence sentences and project grouping without losing source provenance.
+2. Observe the next delayed closeout and verify the continuation receipt and board handoff.
 3. Decide public-release packaging policy before publishing an installer; the current renderer reuse boundary is documented and attributed.
 
 ## Boundaries and risks

@@ -5,7 +5,7 @@
 Daybridge is an execution layer over AIHUB, not a second diary. The layers are:
 
 1. **AIHUB closeout** — produces the detailed, evidence-linked report. It is the source of truth and is never edited by Daybridge.
-2. **Quest Extractor** — a separate AIHUB automation step reads the full synthesis, keeps every actionable user task, assigns actor/kind/priority/dependency metadata, and records excluded system work.
+2. **Completion-driven continuation** — the closeout automation invokes the Quest Extractor only after a ready synthesis exists. No fixed 17:40 cron is required.
 3. **Quest Plan** — a sanitized derived artifact. Stable `mission_id` and `quest_id` let a multi-day mission continue without resetting progress.
 4. **Daybridge compiler and bridge** — converts the plan into a local board, preserves receipts, and mirrors sanitized user interactions back to AIHUB.
 5. **Widget** — shows atomic quests (one observable outcome, normally 10–30 minutes), explicit sequence locks, progress, and carryover.
@@ -13,14 +13,16 @@ Daybridge is an execution layer over AIHUB, not a second diary. The layers are:
 ## Data flow
 
 ```text
-17:30 AIHUB detailed closeout
-        ↓
-17:40 Quest Extractor + quality gate
-        ↓  daybridge_quest_plan.json / .md
-09:05 Daybridge compiler → Now / Next / Waiting / Completed
-        ↓  user receipts: complete, defer, blocked, resume
+17:30 AIHUB detailed closeout (may run long)
+        ↓ closeout packet ready signal
+        ↓ Quest Extractor + quality gate + board compiler
+        ↓ daybridge_quest_plan.json / .md
+09:05 Daybridge board refresh → Now / Next / Waiting / Completed
+        ↓ user receipts: complete, defer, blocked, resume
 AIHUB handoff sink → next closeout reconciliation
 ```
+
+The continuation runner writes `daybridge_continuation.json` with `waiting`, `blocked`, or `ready`. A delayed closeout is therefore picked up when it actually finishes rather than being missed by a clock-based follow-up.
 
 ## Execution model
 

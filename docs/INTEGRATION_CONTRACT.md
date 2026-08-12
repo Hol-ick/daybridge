@@ -40,3 +40,4 @@ Rules:
 - States: `ready`, `in_progress`, `deferred`, `blocked`, `completed`. Legacy `not_started` and `paused` are accepted only as compatibility inputs.
 - Source text is sanitized and source paths are safe references; machine-local paths and secrets never enter the plan.
 - The compiler writes boards atomically. The bridge writes sanitized receipt events to `reports/daily/_system/daybridge_handoff/YYYY-MM-DD/`.
+- The AIHUB closeout automation invokes the continuation runner only after a ready closeout packet. Its `daybridge_continuation.json` receipt uses `waiting`, `blocked`, or `ready`; it is not driven by a separate fixed-time follow-up.
