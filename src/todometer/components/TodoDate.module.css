@@ -19,3 +19,10 @@
 		}
 	}
 }
+
+.weekday {
+	font-family: "Pretendard", "SUIT", "Noto Sans KR", "Malgun Gothic", sans-serif;
+	font-size: 1.08em;
+	font-weight: 800;
+	letter-spacing: -0.06em;
+}

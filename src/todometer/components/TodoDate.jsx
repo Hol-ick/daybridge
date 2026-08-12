@@ -13,7 +13,7 @@ function TodoDate() {
         <div className={styles.day}>{get("day")}</div>
         <div className={styles.my}><div className={styles.month}>{get("month")}</div><div className={styles.year}>{get("year")}</div></div>
       </div>
-      <div className="today">{get("weekday")}</div>
+      <div className={styles.weekday}>{get("weekday")}</div>
     </div>
   );
 }

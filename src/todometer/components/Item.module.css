@@ -213,24 +213,10 @@
 	border-left: 3px solid var(--gray);
 }
 
-.index {
-	display: inline-grid;
-	flex: 0 0 auto;
-	place-items: center;
-	margin-right: 10px;
-	width: 26px;
-	height: 26px;
-	border-radius: 5px;
-	background: var(--input-color);
-	color: var(--gray);
-	font-size: .62rem;
-	font-weight: 800;
-}
-
 .copy {
 	display: grid;
 	min-width: 0;
-	gap: 4px;
+	gap: 5px;
 }
 
 .copy strong {
@@ -246,7 +232,7 @@
 
 .copy small {
 	color: var(--gray);
-	font-size: .68rem;
+	font-size: .78rem;
 	font-weight: 400;
 }
 
@@ -270,25 +256,6 @@
 	pointer-events: auto;
 }
 
-.questDetails p {
-	min-height: 0;
-	margin: 0 0 9px;
-	overflow: hidden;
-	color: var(--gray);
-	font-size: .72rem;
-	line-height: 1.45;
-}
-
-.doneWhen {
-	border-left: 2px solid var(--green);
-	padding-left: 8px;
-	color: var(--green) !important;
-}
-
-.lockedNotice {
-	color: var(--yellow) !important;
-}
-
 .subquests {
 	display: grid;
 	gap: 6px;
@@ -296,17 +263,19 @@
 
 .subquest {
 	display: grid;
-	grid-template-columns: 24px minmax(0, 1fr);
-	gap: 9px;
+	grid-template-columns: 30px minmax(0, 1fr);
+	gap: 12px;
 	align-items: center;
-	min-height: 43px;
+	min-height: 58px;
 	border: 1px solid rgb(250 250 250 / 10%);
 	border-radius: 4px;
-	padding: 8px 9px;
+	padding: 13px 14px;
 	background: var(--input-color);
 	color: var(--font-color);
 	text-align: left;
-	font-size: .72rem;
+	font-size: 80%;
+	font-weight: 500;
+	line-height: 1.35;
 	transition: border-color .16s ease, transform .16s ease, background .16s ease;
 }
 
@@ -317,8 +286,8 @@
 
 .subquestCheck {
 	display: grid;
-	width: 22px;
-	height: 22px;
+	width: 28px;
+	height: 28px;
 	place-items: center;
 	border: 1px solid var(--gray);
 	border-radius: 4px;

@@ -48,7 +48,10 @@ function inferState(raw) { const state = raw.state || raw.status; if (state === 
 function sourceRefs(raw, fallback) { const refs = raw.source_refs || raw.sourceRefs || raw.evidence_refs || raw.evidenceRefs || raw.evidence || fallback; return Array.isArray(refs) ? refs.map((item) => clean(item, 240)).filter(Boolean) : [clean(refs, 240)].filter(Boolean); }
 function stepObjects(raw, id) {
   const input = Array.isArray(raw.steps) ? raw.steps : [raw.first_step || raw.firstStep || raw.next_action || raw.nextAction || raw.title || raw.action];
-  return input.map((step, index) => {
+  const hasStepDependencies = input.some((step) => step && typeof step === "object" && Array.isArray(step.depends_on || step.dependsOn) && (step.depends_on || step.dependsOn).length > 0);
+  const keepBreakdown = inferExecution(raw) === "sequential" || hasStepDependencies || raw.split_steps === true;
+  const selected = keepBreakdown ? input : input.slice(0, 1);
+  return selected.map((step, index) => {
     const item = typeof step === "string" ? { label: step } : step || {};
     return { id: String(item.id || `${id}-step-${index + 1}`), label: clean(item.label || item.title || item.action, 180), completed: Boolean(item.completed), order: Number.isFinite(item.order) ? item.order : index + 1, dependsOn: Array.isArray(item.depends_on || item.dependsOn) ? [...(item.depends_on || item.dependsOn)] : [] };
   }).filter((step) => step.label);

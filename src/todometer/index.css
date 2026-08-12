@@ -3,7 +3,7 @@ body {
 	padding: 0;
 	background: var(--bg);
 	color: var(--font-color);
-	font-family: "Helvetica", "Arial", sans-serif;
+	font-family: "Pretendard", "SUIT", "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
 	font-weight: lighter;
 	overflow-y: auto;
 	-webkit-font-smoothing: antialiased;

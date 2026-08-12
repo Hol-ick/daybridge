@@ -9,7 +9,7 @@ function Group({ title, items, group, defaultOpen = false }) {
   if (!items.length) return null;
   return <section className={styles.group} data-group={group}>
     <button type="button" className={styles.toggle} onClick={() => setOpen((current) => !current)} aria-expanded={open}><span className={styles.arrow}>{open ? "⌄" : "›"}</span><span>{title}</span><small>{items.length}</small></button>
-    {open && <div className={styles.panel}>{items.map((quest, index) => <Item key={quest.id} quest={quest} index={index} />)}</div>}
+    {open && <div className={styles.panel}>{items.map((quest) => <Item key={quest.id} quest={quest} />)}</div>}
   </section>;
 }
 

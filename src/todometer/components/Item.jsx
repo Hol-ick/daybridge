@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAppActions, useAppState } from "../../AppContext.jsx";
 import styles from "./Item.module.css";
 
-function Item({ quest, index }) {
+function Item({ quest }) {
   const { toggleQuest, setQuestStatus, deferQuest, reportQuest } = useAppActions();
   const { expandedQuestId, board } = useAppState();
   const [celebratingStep, setCelebratingStep] = useState("");
@@ -31,8 +31,7 @@ function Item({ quest, index }) {
   return (
     <div className={`${styles.item} ${completed ? styles.completedItem : ""} ${waiting ? styles.pausedItem : ""} ${questLocked ? styles.lockedItem : ""}`} data-testid="quest-item" data-state={quest.state} data-locked={questLocked ? "true" : "false"}>
       <button type="button" className={styles.itemname} onClick={() => toggleQuest(quest.id)} aria-expanded={open} data-testid="quest-toggle">
-        <span className={styles.index}>{String(index + 1).padStart(2, "0")}</span>
-        <span className={styles.copy}><strong>{quest.title}</strong><small>{done}/{total} · {quest.currentAction || quest.firstStep}</small></span>
+        <span className={styles.copy}><strong>{quest.title}</strong><small>{done}/{total} 완료</small></span>
       </button>
       <div className={styles.buttons}>
         {!completed && !waiting && <button type="button" disabled={questLocked} className={styles.pause} onClick={() => deferQuest(quest)} aria-label="내일로 미루기">↥</button>}
@@ -40,14 +39,12 @@ function Item({ quest, index }) {
         {!completed && <button type="button" disabled={questLocked} className={styles.complete} onClick={() => setQuestStatus(quest, "completed")} aria-label="퀘스트 완료">✓</button>}
       </div>
       <div className={`${styles.questDetails} ${open ? styles.questDetailsOpen : ""}`} aria-hidden={!open} data-testid="quest-details" data-open={open ? "true" : "false"}>
-        <p>{quest.summary}</p>{questLocked && <p className={styles.lockedNotice}>선행 퀘스트가 완료되면 시작할 수 있어요.</p>}<p className={styles.doneWhen}>{quest.doneWhen}</p>
         <div className={styles.subquests}>
           {quest.steps.map((step) => {
             const locked = isLocked(step);
             return <button key={step.id} type="button" disabled={locked} className={`${styles.subquest} ${step.completed ? styles.subquestCompleted : ""} ${locked ? styles.subquestLocked : ""} ${celebratingStep === step.id ? styles.subquestCelebrating : ""}`} onClick={() => toggleStep(step)} aria-pressed={step.completed} aria-disabled={locked} data-testid="subquest"><span className={styles.subquestCheck}>{locked ? "·" : step.completed ? "✓" : ""}</span><span>{step.label}</span></button>;
           })}
         </div>
-        {quest.carryoverCount > 0 && <small className={styles.carryover}>내일로 이어진 퀘스트 · {quest.carryoverCount}회</small>}
       </div>
     </div>
   );
