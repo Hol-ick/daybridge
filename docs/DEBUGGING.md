@@ -37,7 +37,30 @@ Use the UI to change a quest status or submit a progress note. The bridge should
 
 ## 4. Check the floating widget
 
-Use two terminals for the browser-safe preview:
+패키징은 디버깅에 필요하지 않다. 기본 개발 루틴은 다음과 같다.
+
+```powershell
+# 터미널 1 — 화면과 코드 자동 새로고침
+pnpm dev
+```
+
+브라우저에서 `http://127.0.0.1:5173`을 열어 UI를 확인한다. 저장할 때마다 화면이 갱신되므로 카드 간격, 확장 애니메이션, 상태 클릭을 즉시 반복해서 확인할 수 있다. AIHUB 연결과 상태 영수증까지 확인할 때만 두 번째 터미널을 추가한다.
+
+```powershell
+# 터미널 2 — 선택 사항: 로컬 보드와 상태 기록
+pnpm bridge
+```
+
+이 경로에서 먼저 카드 확장·서브 퀘스트·순차 잠금·보류를 검증한 뒤, 네이티브 창을 확인한다.
+
+```powershell
+# 선택 사항 — Rust/MSVC/WebView2가 설치된 컴퓨터에서만
+pnpm dev:widget
+```
+
+`pnpm build:widget`은 설치 파일을 만들기 때문에 기능을 바꿀 때마다 실행하지 않는다. 릴리스 후보를 만들 때만 실행한다.
+
+이전의 두 터미널 예시는 다음과 같다.
 
 ```powershell
 pnpm bridge

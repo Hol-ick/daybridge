@@ -24,6 +24,8 @@ pnpm install
 pnpm dev
 ```
 
+개발 중에는 설치 파일을 만들 필요가 없다. `pnpm dev`는 Vite 개발 서버를 실행하며 코드와 스타일을 저장할 때 브라우저 위젯에 변경 사항을 즉시 반영한다. 이 브라우저 미리보기가 가장 빠른 디버깅 경로다. AIHUB 연결과 상태 영수증까지 확인할 때만 별도 터미널에서 `pnpm bridge`를 함께 실행한다.
+
 `pnpm build` runs the strict TypeScript check and creates a production web bundle. The AIHUB Quest Extractor first writes a derived `*_daybridge_quest_plan.json`; `pnpm compile:closeout -- --source-date YYYY-MM-DD` consumes that plan and writes the next-business-day board to the local Daybridge data directory. `pnpm bridge` starts the local bridge; each status report is written locally and mirrored to AIHUB when the machine profile is available.
 
 To run the always-on-top shell after the Windows prerequisites are installed:
@@ -31,6 +33,8 @@ To run the always-on-top shell after the Windows prerequisites are installed:
 ```bash
 pnpm dev:widget
 ```
+
+`pnpm dev:widget`도 개발 모드라서 저장 시 프런트엔드가 갱신되지만, Rust·MSVC·Windows SDK·WebView2가 필요하다. `pnpm build:widget`은 배포용 설치 파일을 만들 때만 실행한다.
 
 ## Data boundary
 
