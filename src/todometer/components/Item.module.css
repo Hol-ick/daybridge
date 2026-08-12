@@ -1,0 +1,329 @@
+.item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin: 0 0 10px 0;
+	padding: 20px;
+	width: 100%;
+	min-height: 70px;
+	background: var(--item-color);
+	border: 2px solid transparent;
+	border-radius: 3px;
+	box-sizing: border-box;
+	font-size: var(--item-font-size);
+	cursor: grab;
+
+	&.editing {
+		border: 2px dashed var(--gray);
+		cursor: auto;
+	}
+
+	&.dragSource {
+		opacity: 0.6;
+		cursor: grabbing;
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--font-color);
+		outline-offset: 2px;
+	}
+
+	@media (max-width: 600px) {
+		margin: 20px auto;
+	}
+
+	.itemname {
+		width: calc(100% - 110px);
+		overflow: visible;
+		padding: 0;
+		border: none;
+		background: transparent;
+		cursor: text;
+		text-align: left;
+		font: inherit;
+		color: inherit;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+
+		&:focus {
+			outline: none;
+		}
+
+		&:focus-visible {
+			border-radius: 3px;
+			outline: 1px solid var(--highlight);
+			outline-offset: 4px;
+		}
+
+		scrollbar-color: var(--bg) var(--item-color);
+		scrollbar-width: thin;
+	}
+
+	.editInput {
+		width: calc(100% - 110px);
+		background: transparent;
+		border: none;
+		outline: none;
+		color: inherit;
+		font-size: inherit;
+		font-family: inherit;
+		font-weight: inherit;
+		line-height: inherit;
+		resize: none;
+		overflow: hidden;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		padding: 0;
+
+		&::selection {
+			background: var(--highlight);
+			color: inherit;
+		}
+	}
+
+	.buttons {
+		display: flex;
+		justify-content: space-between;
+		width: 100px;
+
+		& button {
+			position: relative;
+			height: 24px;
+			border: none;
+			cursor: pointer;
+			overflow: visible;
+
+			/* used as placeholder so the icon spacing is consistent even if there only 2/3 of the buttons in the row */
+			&.empty {
+				width: 24px;
+				background: transparent;
+			}
+
+			&.delete {
+				width: 24px;
+				background: no-repeat url("../img/x.svg");
+				&:after {
+					background: var(--red);
+				}
+			}
+
+			&.pause {
+				width: 24px;
+				background: no-repeat url("../img/pause.svg");
+				&:after {
+					background: var(--yellow);
+				}
+			}
+
+			&.resume {
+				width: 24px;
+				background: no-repeat url("../img/resume.svg");
+				&:after {
+					background: var(--yellow);
+				}
+			}
+
+			&.complete {
+				width: 30px;
+				background: no-repeat url("../img/check.svg");
+				&:after {
+					background: var(--green);
+				}
+			}
+
+			&::after {
+				display: block;
+				content: "";
+				position: absolute;
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				border-radius: 100%;
+				width: 0;
+				height: 0;
+				pointer-events: none;
+				z-index: 1;
+			}
+
+			&:focus {
+				outline: 1px solid var(--item-color);
+			}
+
+			&:focus-visible::after {
+				animation: var(--pulse-animation);
+			}
+
+			&:hover::after {
+				animation: var(--pulse-animation);
+			}
+		}
+	}
+}
+
+.dragOverlay {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 20px;
+	width: 100%;
+	min-height: 70px;
+	background: var(--item-color);
+	border: 2px solid transparent;
+	border-radius: 3px;
+	box-sizing: border-box;
+	font-size: var(--item-font-size);
+	color: var(--font-color);
+	cursor: grabbing;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	position: relative;
+	overflow: hidden;
+}
+
+.dragOverlayLabel {
+	position: absolute;
+	padding: 20px;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	background: var(--highlight);
+	font-size: var(--item-font-size);
+	font-weight: bold;
+	pointer-events: none;
+}
+
+.dragOverlayLabel.paused {
+	color: var(--yellow);
+}
+.dragOverlayLabel.completed {
+	color: var(--green);
+}
+
+.completedItem .itemname strong {
+	color: var(--gray);
+	text-decoration: line-through;
+}
+
+.pausedItem {
+	border-left: 3px solid var(--yellow);
+}
+
+.index {
+	display: inline-grid;
+	flex: 0 0 auto;
+	place-items: center;
+	margin-right: 10px;
+	width: 26px;
+	height: 26px;
+	border-radius: 5px;
+	background: var(--input-color);
+	color: var(--gray);
+	font-size: .62rem;
+	font-weight: 800;
+}
+
+.copy {
+	display: grid;
+	min-width: 0;
+	gap: 4px;
+}
+
+.copy strong {
+	overflow: hidden;
+	color: var(--font-color);
+	font-size: inherit;
+	font-weight: 600;
+	letter-spacing: -.02em;
+	line-height: 1.28;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.copy small {
+	color: var(--gray);
+	font-size: .68rem;
+	font-weight: 400;
+}
+
+.questDetails {
+	display: grid;
+	grid-template-rows: 0fr;
+	margin: 0 -20px -20px;
+	opacity: 0;
+	pointer-events: none;
+	transition: grid-template-rows .25s ease, opacity .2s ease, padding .25s ease;
+}
+
+.questDetailsOpen {
+	grid-template-rows: 1fr;
+	padding: 0 20px 20px;
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.questDetails p {
+	min-height: 0;
+	margin: 0 0 9px;
+	overflow: hidden;
+	color: var(--gray);
+	font-size: .72rem;
+	line-height: 1.45;
+}
+
+.doneWhen {
+	border-left: 2px solid var(--green);
+	padding-left: 8px;
+	color: var(--green) !important;
+}
+
+.subquests {
+	display: grid;
+	gap: 6px;
+}
+
+.subquest {
+	display: grid;
+	grid-template-columns: 24px minmax(0, 1fr);
+	gap: 9px;
+	align-items: center;
+	min-height: 43px;
+	border: 1px solid rgb(250 250 250 / 10%);
+	border-radius: 4px;
+	padding: 8px 9px;
+	background: var(--input-color);
+	color: var(--font-color);
+	text-align: left;
+	font-size: .72rem;
+	transition: border-color .16s ease, transform .16s ease, background .16s ease;
+}
+
+.subquest:hover {
+	border-color: var(--green);
+	transform: translateY(-1px);
+}
+
+.subquestCheck {
+	display: grid;
+	width: 22px;
+	height: 22px;
+	place-items: center;
+	border: 1px solid var(--gray);
+	border-radius: 4px;
+	color: var(--bg);
+	font-weight: 900;
+}
+
+.subquestCompleted {
+	background: rgb(98 220 165 / 8%);
+	color: var(--gray);
+	text-decoration: line-through;
+}
+
+.subquestCompleted .subquestCheck {
+	border-color: var(--green);
+	background: var(--green);
+}
+
+.subquestCelebrating .subquestCheck {
+	animation: var(--pulse-animation);
+}
