@@ -1,18 +1,27 @@
-import { useRef } from "react";
+import { useState } from "react";
 import { useAppActions } from "../../AppContext.jsx";
 import styles from "./AddItemForm.module.css";
 
 function AddItemForm() {
-  const inputRef = useRef(null);
-  const { addQuest } = useAppActions();
+  const { refresh } = useAppActions();
+  const [refreshing, setRefreshing] = useState(false);
 
-  function addItem(event) {
-    event.preventDefault();
-    addQuest(inputRef.current?.value ?? "");
-    if (inputRef.current) { inputRef.current.value = ""; inputRef.current.focus(); }
+  async function loadBriefing() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
-  return <form className={styles.form} onSubmit={addItem}><input ref={inputRef} placeholder="Add new quest" aria-label="Add new quest" /><button type="submit" aria-label="Add quest" /></form>;
+  return <div className={styles.form}>
+    <button type="button" className={styles.briefingButton} onClick={() => void loadBriefing()} disabled={refreshing} aria-label="브리핑 불러오기">
+      <span>{refreshing ? "브리핑 불러오는 중…" : "브리핑 불러오기"}</span>
+      <span className={styles.refreshIcon} aria-hidden="true">↻</span>
+    </button>
+  </div>;
 }
 
 export default AddItemForm;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuestGroups, useAppActions } from "../../AppContext.jsx";
+import { useQuestGroups } from "../../AppContext.jsx";
 import AddItemForm from "./AddItemForm.jsx";
 import Item from "./Item.jsx";
 import styles from "./ItemList.module.css";
@@ -15,15 +15,13 @@ function Group({ title, items, group, defaultOpen = false }) {
 
 function ItemList() {
   const { now, next, waiting, completed } = useQuestGroups();
-  const { refresh } = useAppActions();
   return <div className="item-list">
     <AddItemForm />
-    <Group title="Now" items={now} group="now" defaultOpen />
-    <Group title="Next" items={next} group="next" defaultOpen />
-    <Group title="Waiting" items={waiting} group="waiting" />
-    <Group title="Completed" items={completed} group="completed" />
+    <Group title="오늘" items={now} group="now" defaultOpen />
+    <Group title="다음" items={next} group="next" defaultOpen />
+    <Group title="대기" items={waiting} group="waiting" />
+    <Group title="완료" items={completed} group="completed" />
     {!now.length && !next.length && !waiting.length && !completed.length && <div className={styles.alldone}>오늘의 퀘스트가 없습니다.</div>}
-    <div className={styles.bottomButtons}><button type="button" onClick={() => void refresh()}>sync</button></div>
   </div>;
 }
 

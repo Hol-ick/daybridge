@@ -25,7 +25,7 @@ function Item({ quest, index }) {
     const nextStatus = steps.length > 0 && steps.every((current) => current.completed) ? "completed" : "in_progress";
     setCelebratingStep(step.id);
     window.setTimeout(() => setCelebratingStep(""), 520);
-    void reportQuest({ questId: quest.id, status: nextStatus, steps, note: `${steps.filter((current) => current.completed).length}/${steps.length} quest units checked`, nextAction: steps.find((current) => !current.completed)?.label ?? "" });
+    void reportQuest({ questId: quest.id, status: nextStatus, steps, note: `${steps.filter((current) => current.completed).length}/${steps.length}개 작업 완료 처리`, nextAction: steps.find((current) => !current.completed)?.label ?? "" });
   }
 
   return (
@@ -35,9 +35,9 @@ function Item({ quest, index }) {
         <span className={styles.copy}><strong>{quest.title}</strong><small>{done}/{total} · {quest.currentAction || quest.firstStep}</small></span>
       </button>
       <div className={styles.buttons}>
-        {!completed && !waiting && <button type="button" disabled={questLocked} className={styles.pause} onClick={() => deferQuest(quest)} aria-label="Defer quest to tomorrow">↥</button>}
-        {waiting && <button type="button" disabled={questLocked} className={styles.resume} onClick={() => setQuestStatus(quest, "in_progress")} aria-label="Resume quest">▶</button>}
-        {!completed && <button type="button" disabled={questLocked} className={styles.complete} onClick={() => setQuestStatus(quest, "completed")} aria-label="Complete quest">✓</button>}
+        {!completed && !waiting && <button type="button" disabled={questLocked} className={styles.pause} onClick={() => deferQuest(quest)} aria-label="내일로 미루기">↥</button>}
+        {waiting && <button type="button" disabled={questLocked} className={styles.resume} onClick={() => setQuestStatus(quest, "in_progress")} aria-label="퀘스트 다시 시작">▶</button>}
+        {!completed && <button type="button" disabled={questLocked} className={styles.complete} onClick={() => setQuestStatus(quest, "completed")} aria-label="퀘스트 완료">✓</button>}
       </div>
       <div className={`${styles.questDetails} ${open ? styles.questDetailsOpen : ""}`} aria-hidden={!open} data-testid="quest-details" data-open={open ? "true" : "false"}>
         <p>{quest.summary}</p>{questLocked && <p className={styles.lockedNotice}>선행 퀘스트가 완료되면 시작할 수 있어요.</p>}<p className={styles.doneWhen}>{quest.doneWhen}</p>

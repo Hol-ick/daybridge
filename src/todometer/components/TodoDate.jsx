@@ -4,7 +4,7 @@ import styles from "./TodoDate.module.css";
 function TodoDate() {
   const { board } = useAppState();
   const date = new Date(`${board.activityDate}T00:00:00+09:00`);
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", day: "numeric", month: "short", year: "numeric", weekday: "long" }).formatToParts(date);
+  const parts = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", day: "numeric", month: "short", year: "numeric", weekday: "long" }).formatToParts(date);
   const get = (type) => parts.find((part) => part.type === type)?.value ?? "";
 
   return (

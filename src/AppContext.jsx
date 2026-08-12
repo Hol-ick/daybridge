@@ -61,6 +61,7 @@ export function AppStateProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, { board: loadStoredBoard(), expandedQuestId: "" });
   const [loading, setLoading] = useState(true);
   const refresh = useCallback(async () => {
+    setLoading(true);
     try {
       const response = await fetch(`${BRIDGE_URL}/api/board?date=${currentKstDate()}`);
       if (!response.ok) return;
