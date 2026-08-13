@@ -9,9 +9,11 @@ function Item({ quest }) {
   const open = expandedQuestId === quest.id;
   const completed = quest.state === "completed";
   const waiting = ["blocked", "deferred"].includes(quest.state);
+  const blocked = quest.state === "blocked";
   const questLocked = (quest.dependsOn || quest.depends_on || []).some((dependencyId) => board.quests.find((item) => item.id === dependencyId)?.state !== "completed");
   const done = quest.progress?.completed ?? quest.steps.filter((step) => step.completed).length;
   const total = quest.progress?.total ?? quest.steps.length;
+  const progressLabel = blocked ? "응답 대기" : `${done}/${total} 완료`;
 
   function isLocked(step) {
     if (quest.execution !== "sequential") return false;
@@ -31,16 +33,16 @@ function Item({ quest }) {
   return (
     <div className={`${styles.item} ${completed ? styles.completedItem : ""} ${waiting ? styles.pausedItem : ""} ${questLocked ? styles.lockedItem : ""}`} data-testid="quest-item" data-state={quest.state} data-locked={questLocked ? "true" : "false"}>
       <button type="button" className={styles.itemname} onClick={() => toggleQuest(quest.id)} aria-expanded={open} data-testid="quest-toggle">
-        <span className={styles.copy}><strong>{quest.title}</strong><small>{done}/{total} 완료</small></span>
+        <span className={styles.copy}><strong>{quest.title}</strong><small>{progressLabel}</small></span>
       </button>
       <div className={styles.buttons}>
         {!completed && !waiting && <button type="button" disabled={questLocked} className={styles.pause} onClick={() => deferQuest(quest)} aria-label="내일로 미루기">↥</button>}
-        {waiting && <button type="button" disabled={questLocked} className={styles.resume} onClick={() => setQuestStatus(quest, "in_progress")} aria-label="퀘스트 다시 시작">▶</button>}
-        {!completed && <button type="button" disabled={questLocked} className={styles.complete} onClick={() => setQuestStatus(quest, "completed")} aria-label="퀘스트 완료">✓</button>}
+        {waiting && !blocked && <button type="button" disabled={questLocked} className={styles.resume} onClick={() => setQuestStatus(quest, "in_progress")} aria-label="퀘스트 다시 시작">▶</button>}
+        {!completed && !blocked && <button type="button" disabled={questLocked} className={styles.complete} onClick={() => setQuestStatus(quest, "completed")} aria-label="퀘스트 완료">✓</button>}
       </div>
       <div className={`${styles.questDetails} ${open ? styles.questDetailsOpen : ""}`} aria-hidden={!open} data-testid="quest-details" data-open={open ? "true" : "false"}>
         <div className={styles.subquests}>
-          {quest.steps.map((step) => {
+          {blocked ? <div className={styles.blockedNote}>{quest.firstStep || "원본 응답이 확보되면 다시 진행할 수 있어요."}</div> : quest.steps.map((step) => {
             const locked = isLocked(step);
             return <button key={step.id} type="button" disabled={locked} className={`${styles.subquest} ${step.completed ? styles.subquestCompleted : ""} ${locked ? styles.subquestLocked : ""} ${celebratingStep === step.id ? styles.subquestCelebrating : ""}`} onClick={() => toggleStep(step)} aria-pressed={step.completed} aria-disabled={locked} data-testid="subquest"><span className={styles.subquestCheck}>{locked ? "🔒" : step.completed ? "✓" : ""}</span><span>{step.label}</span></button>;
           })}
