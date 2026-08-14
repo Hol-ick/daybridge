@@ -103,6 +103,19 @@
 	animation: noticeIn .26s ease;
 }
 
+.sourceWarning {
+	margin: 12px 4px;
+	padding: 10px 12px;
+	border-left: 3px solid var(--input-color);
+	background: color-mix(in srgb, var(--input-color) 10%, transparent);
+	color: var(--font-color);
+	font-size: .78rem;
+	line-height: 1.45;
+}
+
+.sourceWarning strong { display: block; margin-bottom: 4px; }
+.sourceWarning ul { margin: 0; padding-left: 1.2em; }
+
 .arrow {
 	display: inline-block;
 	width: 18px;

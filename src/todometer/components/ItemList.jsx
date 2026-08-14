@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAppNotice, useQuestGroups } from "../../AppContext.jsx";
+import { useAppNotice, useAppState, useQuestGroups } from "../../AppContext.jsx";
 import AddItemForm from "./AddItemForm.jsx";
 import Item from "./Item.jsx";
 import styles from "./ItemList.module.css";
@@ -14,11 +14,14 @@ function Group({ title, items, group, defaultOpen = false }) {
 }
 
 function ItemList() {
+  const { board } = useAppState();
   const { now, next, waiting, completed } = useQuestGroups();
   const notice = useAppNotice();
+  const warnings = Array.isArray(board.sourceWarnings) ? board.sourceWarnings : [];
   return <div className="item-list">
     <AddItemForm />
     <div className={styles.notice} role="status" aria-live="polite" data-visible={notice ? "true" : "false"}>{notice}</div>
+    {warnings.length > 0 && <aside className={styles.sourceWarning} role="note" data-testid="source-warning"><strong>원본 확인 경계</strong><ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></aside>}
     <Group title="오늘" items={now} group="now" defaultOpen />
     <Group title="다음" items={next} group="next" defaultOpen />
     <Group title="대기" items={waiting} group="waiting" />

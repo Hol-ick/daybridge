@@ -64,6 +64,8 @@ export interface QuestBoard {
   sourceCoverage: "demo" | "connected" | "stale" | "attention";
   sourceQuality?: "aligned" | "attention" | "unknown";
   sourceWarnings?: string[];
+  sourceMetadata?: Record<string, unknown>;
+  excluded?: Array<{ title: string; reason: string; sourceRefs?: string[] }>;
   missions?: Mission[];
   quests: Quest[];
 }

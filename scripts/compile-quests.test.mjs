@@ -30,7 +30,49 @@ test("independent quests do not invent sub-quests", () => {
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("8/13 quest quality keeps source warnings, exclusions, and safe atomic cards", () => {
+  const root = mkdtempSync(join(tmpdir(), "daybridge-quality-")); const planPath = join(root, "plan.json"); const output = join(root, "board.json");
+  try {
+    writeJson(planPath, {
+      artifact_type: "daybridge_quest_plan",
+      status: "ready",
+      source: { quality: "aligned", coverage: "attention", warnings: ["Conversation coverage is unavailable.", "Session archive is blocked."] },
+      excluded: [{ title: "Ask whether the review is complete", reason: "Confirmation question is not an automatic quest." }],
+      quests: [
+        { id: "q-path", title: "Check the old KTH path", summary: "The old path may return.", first_step: "Check the old KTH path", current_action: "Check the old KTH path", execution: "sequential", steps: [
+          { id: "s-check", label: "Check the old KTH process" },
+          { id: "s-recheck", label: "Recheck the path after stopping it", depends_on: ["s-check"] },
+          { id: "s-restart", label: "Restart the project from the current logical root", depends_on: ["s-recheck"] },
+        ] },
+        { id: "q-deploy", title: "Confirm 4f56665 public asset", first_step: "Check the public bundle", steps: [{ id: "s-one", label: "Check the public bundle" }] },
+        { id: "q-thread", title: "Retry Codex conversation coverage", first_step: "Retry bounded list_threads access", steps: [{ id: "s-thread", label: "Retry bounded list_threads access" }] },
+      ],
+    });
+    const board = compile({ questPlan: planPath, sourceDate: "2026-08-13", targetDate: "2026-08-14", output });
+    assert.equal(board.sourceCoverage, "attention");
+    assert.deepEqual(board.sourceWarnings, ["Conversation coverage is unavailable.", "Session archive is blocked."]);
+    assert.equal(board.quests.length, 3);
+    assert.equal(board.quests[0].execution, "sequential");
+    assert.deepEqual(board.quests[0].steps.map((step) => step.dependsOn), [[], ["s-check"], ["s-recheck"]]);
+    assert.equal(board.excluded.length, 1);
+    assert.equal(board.excluded[0].reason, "Confirmation question is not an automatic quest.");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("user cards reject local paths and future source packets", () => {
+  const root = mkdtempSync(join(tmpdir(), "daybridge-boundaries-")); const planPath = join(root, "plan.json"); const output = join(root, "board.json");
+  try {
+    const localPath = ["<drive>:", "fixture", "legacy-root"].join("\\");
+    writeJson(planPath, { artifact_type: "daybridge_quest_plan", status: "ready", quests: [
+      { id: "q-local", title: `Check ${localPath}`, first_step: `Check ${localPath}`, steps: [{ id: "s-local", label: `Check ${localPath}` }] },
+    ] });
+    const board = compile({ questPlan: planPath, sourceDate: "2099-01-01", targetDate: "2026-08-14", output });
+    assert.equal(board.quests.length, 0);
+    assert.ok(board.sourceWarnings.some((warning) => /future/i.test(warning)));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("legacy closeout fallback is visibly attention and future packets are safe", () => {
   const root = mkdtempSync(join(tmpdir(), "daybridge-legacy-")); const system = join(root, "04_Operations_And_Automation", "Memory_System", "reports", "daily", "_system");
-  try { const date = "2099-01-01"; const path = join(system, `${date}_briefing_synthesis.json`); mkdirSync(system, { recursive: true }); writeJson(path, { artifact_type: "aihub_briefing_synthesis", phase: "closeout", status: "ready", coverage: { record_quality: "aligned" }, immediate_actions: [{ title: "Check the source", first_step: "Open it" }] }); const board = compile({ source: "closeout", sourceDate: date, targetDate: "2099-01-02", aihubRoot: root, print: true }); assert.equal(board.sourceCoverage, "attention"); assert.equal(board.quests.length, 0); assert.ok(board.sourceWarnings.some((warning) => /future/i.test(warning))); } finally { rmSync(root, { recursive: true, force: true }); }
+  try { const date = "2099-01-01"; const path = join(system, `${date}_briefing_synthesis.json`); mkdirSync(system, { recursive: true }); writeJson(path, { artifact_type: "aihub_briefing_synthesis", phase: "closeout", status: "ready", coverage: { record_quality: "aligned" }, immediate_actions: [{ title: "Check the source", first_step: "Open it" }] }); const board = compile({ source: "closeout", sourceDate: date, targetDate: "2026-08-14", aihubRoot: root, print: true }); assert.equal(board.sourceCoverage, "attention"); assert.equal(board.quests.length, 0); assert.ok(board.sourceWarnings.some((warning) => /future/i.test(warning))); } finally { rmSync(root, { recursive: true, force: true }); }
 });
