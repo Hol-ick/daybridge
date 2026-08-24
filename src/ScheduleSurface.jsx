@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppActions, useAppState } from "./AppContext.jsx";
-import { currentSurface, openDashboard, placeOverlayInCorner } from "./desktopWindow.js";
+import { bindOverlayMagnet, currentSurface, openDashboard, placeOverlayInCorner } from "./desktopWindow.js";
 import Item from "./todometer/components/Item.jsx";
 import NowFocusOverlay from "./schedule/NowFocusOverlay.jsx";
 import ScheduleDashboard from "./schedule/ScheduleDashboard.jsx";
@@ -90,6 +90,19 @@ export default function ScheduleSurface() {
     return () => window.removeEventListener("storage", syncPrivacyMode);
   }, []);
   useEffect(() => { if (surface === "overlay") void placeOverlayInCorner(); }, [surface]);
+  useEffect(() => {
+    if (surface !== "overlay") return undefined;
+    let disposed = false;
+    let cleanup;
+    void bindOverlayMagnet().then((dispose) => {
+      if (disposed) dispose();
+      else cleanup = dispose;
+    });
+    return () => {
+      disposed = true;
+      cleanup?.();
+    };
+  }, [surface]);
 
   const reportBlock = useCallback(async (blockId, status) => {
     try {

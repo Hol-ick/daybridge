@@ -96,6 +96,7 @@ def check_overlay(browser) -> None:
     assert box and box["width"] <= 260
     assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 1
     assert page.locator('[data-testid="now-focus-overlay-complete"]').count() == 1
+    assert page.locator('[data-testid="now-focus-overlay"] > div').evaluate("element => getComputedStyle(element).cursor") == "grab"
     assert page.locator('[data-testid="schedule-dashboard"]').count() == 0
     assert page.locator('[data-testid="quest-item"]').count() == 0
 

@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { startOverlayDrag } from "../desktopWindow.js";
 import styles from "./NowFocusOverlay.module.css";
 
 function asDate(value) {
@@ -26,6 +28,7 @@ function getFocusBlock(nowFocus) {
  * It owns no timer or state: the host decides which block is current.
  */
 export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete, privateMode = false }) {
+  const dragRef = useRef({ point: null, cleanup: null, suppressClick: false });
   const block = getFocusBlock(nowFocus);
   const blockId = block?.id ?? nowFocus?.blockId;
   const blockKind = block?.kind ?? block?.type ?? block?.blockType;
@@ -42,13 +45,47 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
     if (canComplete) onComplete(blockId);
   };
 
+  const handlePointerDown = (event) => {
+    if (event.button !== 0 || event.target.closest('[data-testid="now-focus-overlay-complete"]')) return;
+    const state = dragRef.current;
+    state.point = { x: event.clientX, y: event.clientY };
+    const cleanup = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", cleanup);
+      state.cleanup = null;
+    };
+    const handleMove = (moveEvent) => {
+      if (!state.point || Math.hypot(moveEvent.clientX - state.point.x, moveEvent.clientY - state.point.y) < 4) return;
+      cleanup();
+      state.suppressClick = true;
+      void startOverlayDrag().then((started) => {
+        if (!started) state.suppressClick = false;
+      });
+      window.setTimeout(() => { state.suppressClick = false; }, 500);
+    };
+    state.cleanup?.();
+    state.cleanup = cleanup;
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", cleanup, { once: true });
+  };
+
+  const handleOpenDashboard = (event) => {
+    if (dragRef.current.suppressClick) {
+      event.preventDefault();
+      event.stopPropagation();
+      dragRef.current.suppressClick = false;
+      return;
+    }
+    onOpenDashboard?.();
+  };
+
   return (
     <aside className={styles.overlay} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
-      <div className={styles.surface}>
+      <div className={styles.surface} onPointerDown={handlePointerDown} data-drag-region="true">
         <button
           className={styles.open}
           type="button"
-          onClick={onOpenDashboard}
+          onClick={handleOpenDashboard}
           data-testid="now-focus-overlay-open"
           aria-label="Daybridge 전체 시간표 열기"
         >

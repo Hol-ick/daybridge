@@ -20,7 +20,11 @@
   color: inherit;
   isolation: isolate;
   transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+  cursor: grab;
+  touch-action: none;
 }
+
+.surface:active { cursor: grabbing; }
 
 .surface::before {
   position: absolute;
