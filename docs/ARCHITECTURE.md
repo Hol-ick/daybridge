@@ -8,8 +8,9 @@ Daybridge is an execution layer over AIHUB, not a second diary or a second calen
 2. **Completion-driven continuation** — the closeout automation invokes the Quest Extractor only after a ready synthesis exists. No fixed 17:40 cron is required.
 3. **Quest Plan** — a sanitized derived artifact. Stable `mission_id` and `quest_id` let a multi-day mission continue without resetting progress.
 4. **Calendar busy reader** — a local, user-authorized, read-only adapter that returns only occupied start/end ranges. It has no calendar write path.
-5. **DailySchedule** — combines task candidates, busy windows, user settings, prior receipts, and carryover into deterministic focus, busy, and buffer blocks.
-6. **Local bridge and widget** — serves the schedule, preserves receipts, mirrors sanitized user interactions back to AIHUB, and shows one current action plus a compact timeline.
+5. **Routine planner** — turns personal, opt-in defaults such as Linux learning into a maximum of two optional candidates. It runs after the briefing board is read and never displaces briefing work.
+6. **DailySchedule** — combines briefing candidates, optional routine candidates, busy windows, user settings, prior receipts, and carryover into deterministic focus, busy, and buffer blocks.
+7. **Local bridge and widget** — serves the schedule, preserves receipts, mirrors sanitized user interactions back to AIHUB, and shows one current action plus a compact timeline.
 
 ## Data flow
 
@@ -34,6 +35,7 @@ The continuation runner writes `daybridge_continuation.json` with `waiting`, `bl
 - A **step** is a mechanical unit. It is locked only when the plan explicitly declares `depends_on` or sequential execution.
 - A **busy block** is a Calendar time constraint. Its event details never enter the schedule.
 - A **focus block** is an executable window for one quest. A **buffer block** protects transitions and is not a task.
+- A **routine candidate** is a personal optional practice block. It is scheduled only after every eligible briefing quest and is not treated as AIHUB evidence or a briefing-generated obligation.
 - `DailySchedule` returns one of `active_focus`, `in_busy_time`, `up_next`, or `free_time` for the present moment.
 - Deferring unfinished work keeps its stable ID and makes it eligible for tomorrow's schedule as carryover.
 

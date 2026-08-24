@@ -56,6 +56,8 @@ export function toTaskCandidate(quest) {
     remainingMinutes: Math.min(remaining, estimateMinutes),
     dependsOn: [...new Set((Array.isArray(quest.dependsOn) ? quest.dependsOn : []).filter((dependency) => typeof dependency === "string" && dependency.trim()).map((dependency) => dependency.trim()))],
     execution: quest.execution === "sequential" ? "sequential" : "independent",
+    sourceKind: quest.sourceKind === "routine" ? "routine" : "briefing",
+    category: typeof quest.category === "string" ? quest.category.slice(0, 40) : null,
     sourceRefs: safeSourceRefs(quest.sourceRefs),
   };
 }

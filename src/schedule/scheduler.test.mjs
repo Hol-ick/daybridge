@@ -45,6 +45,17 @@ test("buildDailySchedule brings a deferred carryover quest back into the next da
   assert.deepEqual(schedule.unscheduled, []);
 });
 
+test("briefing quests always take precedence over optional routine blocks", () => {
+  const routine = { ...candidate("routine-linux", "could", 50), title: "리눅스 학습", sourceKind: "routine" };
+  const schedule = buildDailySchedule({
+    date: DATE,
+    settings: { ...settings, dayEnd: "10:00", bufferMinutes: 0 },
+    taskCandidates: [routine, candidate("briefing-must", "must", 50)],
+  });
+  assert.deepEqual(schedule.blocks.filter((block) => block.type === "focus").map((block) => block.questId), ["briefing-must"]);
+  assert.deepEqual(schedule.unscheduled, [{ questId: "routine-linux", reason: "insufficient_time", remainingMinutes: 50 }]);
+});
+
 test("buildDailySchedule does not place a dependent quest when its prerequisite could not be placed", () => {
   const schedule = buildDailySchedule({
     date: DATE,

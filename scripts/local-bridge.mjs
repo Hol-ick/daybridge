@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { buildDailySchedule, resolveNowFocus } from "../src/schedule/scheduler.js";
+import { buildRoutineCandidates } from "../src/schedule/routine-planner.js";
 import {
   loadSchedule,
   loadScheduleSettings,
@@ -137,7 +138,9 @@ async function rebuildSchedule(activityDate) {
   const settings = await loadScheduleSettings(DATA_DIR);
   const existingSchedule = await loadSchedule(DATA_DIR, activityDate);
   const generatedAt = koreaNow();
-  const tasks = board.quests.map(toTaskCandidate).filter(Boolean);
+  const briefingTasks = board.quests.map(toTaskCandidate).filter(Boolean);
+  const routineTasks = buildRoutineCandidates({ date: activityDate, board });
+  const tasks = [...briefingTasks, ...routineTasks];
   const completedQuestIds = board.quests.filter((quest) => (quest?.state || quest?.status) === "completed").map((quest) => quest.id).filter((id) => typeof id === "string");
   const calendarResult = await readCalendarBusyBlocks(activityDate);
   const coverage = calendarResult.calendar.state === "connected" ? "connected" : "attention";

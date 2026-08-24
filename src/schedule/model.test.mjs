@@ -27,6 +27,8 @@ test("toTaskCandidate converts a Quest without exposing source details", () => {
     remainingMinutes: 55,
     dependsOn: ["quest-auth"],
     execution: "independent",
+    sourceKind: "briefing",
+    category: null,
     sourceRefs: ["aihub://2026-08-23/quest-plan"],
   });
   assert.equal("sourcePath" in candidate, false);

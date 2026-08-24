@@ -86,7 +86,7 @@ function orderedCandidates(candidates, completedQuestIds) {
       blocked.push(...pending);
       break;
     }
-    eligible.sort((left, right) => PRIORITY_WEIGHT[left.priority] - PRIORITY_WEIGHT[right.priority] || left.id.localeCompare(right.id));
+    eligible.sort((left, right) => (left.sourceKind === "routine") - (right.sourceKind === "routine") || PRIORITY_WEIGHT[left.priority] - PRIORITY_WEIGHT[right.priority] || left.id.localeCompare(right.id));
     const next = eligible[0];
     pending.splice(pending.indexOf(next), 1);
     ordered.push(next);
@@ -134,7 +134,7 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
       if (!slot) break;
       focusIndex += 1;
       const [start, end] = slot;
-      blocks.push({ id: `focus-${candidate.id}-${focusIndex}`, type: "focus", questId: candidate.id, title: candidate.title, priority: candidate.priority, startAt: asKstIso(start), endAt: asKstIso(end), locked: false });
+      blocks.push({ id: `focus-${candidate.id}-${focusIndex}`, type: "focus", questId: candidate.id, title: candidate.title, priority: candidate.priority, sourceKind: candidate.sourceKind, category: candidate.category, startAt: asKstIso(start), endAt: asKstIso(end), locked: false });
       blocks.sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));
       remaining = Math.max(0, remaining - duration);
       const laterWorkExists = remaining > 0 || candidateIndex < ordering.ordered.length - 1;
