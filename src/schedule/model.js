@@ -5,6 +5,52 @@ const PRIORITIES = new Set(["must", "should", "could"]);
 const STATES = new Set(["ready", "in_progress", "deferred", "blocked", "completed"]);
 const BLOCK_TYPES = new Set(["focus", "busy", "buffer"]);
 
+const SCHEDULE_TITLE_LIMIT = 32;
+const SCHEDULE_TITLE_RULES = [
+  [/^\s*리눅스(?:\s|$)/i, "리눅스 학습"],
+  [/(?:supabase.*(?:스키마|백업)|(?:스키마|백업).*supabase)/i, "Supabase 백업 확인"],
+  [/(?:kiosk.*(?:e2e|라이브 주문|실행 조건)|(?:e2e|라이브 주문|실행 조건).*kiosk)/i, "Kiosk 주문 검증"],
+  [/(?:kiosk.*(?:migration|저장|고객 반영)|(?:migration|고객 반영).*kiosk)/i, "Kiosk 배포 검증"],
+  [/(?:고객.*(?:택배 접수|매입가 카드)|택배 접수.*고객)/i, "고객 택배 접수 검증"],
+  [/(?:대화|세션).*coverage|coverage.*(?:대화|세션)/i, "대화 coverage 확인"],
+  [/(?:운영\s*db|운영\s*database).*검증|upstream[_ -]?unavailable/i, "운영 DB 검증 확인"],
+  [/(?:일일 보고서|closeout)/i, "일일 보고서 정리"],
+];
+
+function cleanScheduleText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/^\s*(?:\[[^\]]+\]|(?:내일 첫 행동|확인 필요))\s*[:：-]?\s*/i, "")
+    .trim();
+}
+
+/**
+ * Converts briefing prose into a short action label for the time grid.
+ * The original quest remains available on the board; only the schedule
+ * boundary receives this compact, privacy-safe label.
+ */
+export function toScheduleTitle(questOrTitle) {
+  const explicit = typeof questOrTitle === "object" && questOrTitle !== null
+    ? questOrTitle.scheduleTitle || questOrTitle.displayTitle || questOrTitle.title
+    : questOrTitle;
+  const text = cleanScheduleText(explicit);
+  if (!text) return "집중 작업";
+
+  for (const [pattern, replacement] of SCHEDULE_TITLE_RULES) {
+    if (pattern.test(text)) return replacement;
+  }
+
+  if (text.length <= SCHEDULE_TITLE_LIMIT) return text;
+
+  const firstSentence = text.split(/[.!?]/, 1)[0].trim();
+  const actionMatch = firstSentence.match(/^(.{2,40}?(?:학습|확인|검증|정리|작성|기록|준비|확보|점검|실행|연동|배포|수정|테스트|결정|검토))(?:\s|$)/i);
+  const compact = (actionMatch?.[1] || firstSentence)
+    .replace(/(?:해야 한다|해야 함|필요|요청|진행)\s*$/i, "")
+    .trim();
+  if (compact.length <= SCHEDULE_TITLE_LIMIT) return compact;
+  return `${compact.slice(0, SCHEDULE_TITLE_LIMIT - 1).trimEnd()}…`;
+}
+
 function positiveInteger(value) {
   return Number.isInteger(value) && value > 0;
 }
@@ -40,7 +86,10 @@ function cloneBlock(raw) {
 export function toTaskCandidate(quest) {
   if (!quest || typeof quest !== "object") return null;
   const id = typeof quest.id === "string" ? quest.id.trim() : "";
-  const title = typeof quest.title === "string" ? quest.title.trim() : "";
+  const rawTitle = typeof (quest.scheduleTitle || quest.displayTitle || quest.title) === "string"
+    ? (quest.scheduleTitle || quest.displayTitle || quest.title).trim()
+    : "";
+  const title = rawTitle ? toScheduleTitle(quest) : "";
   const state = quest.state || quest.status || "ready";
   const estimateMinutes = Number(quest.estimateMinutes);
   if (!id || !title || state === "completed" || !STATES.has(state) || !positiveInteger(estimateMinutes)) return null;

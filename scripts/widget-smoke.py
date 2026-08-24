@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -15,6 +16,18 @@ DEFAULT_SETTINGS = json.dumps({
     }
 })
 CALENDAR_UNCONFIGURED = json.dumps({"calendar": {"state": "unconfigured", "reason": "oauth_client_missing", "canReadBusyBlocks": False}})
+EMPTY_SCHEDULE = json.dumps({
+    "schedule": {
+        "schemaVersion": 1,
+        "date": "2026-08-24",
+        "timezone": "Asia/Seoul",
+        "generatedAt": "2026-08-24T00:00:00+09:00",
+        "blocks": [],
+        "unscheduled": [],
+        "calendar": {"coverage": "attention"},
+    },
+    "nowFocus": {"state": "free_time", "block": None, "nextFocus": None},
+})
 
 
 def assert_no_page_errors(errors: list[str]) -> None:
@@ -26,6 +39,10 @@ def check_dashboard(browser) -> None:
     context.route(
         "http://127.0.0.1:39393/api/schedule-settings",
         lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=EMPTY_SCHEDULE),
     )
     context.route(
         "http://127.0.0.1:39393/api/calendar/status",

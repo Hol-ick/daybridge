@@ -8,8 +8,9 @@ function atKst(date, time) {
 }
 
 function normalizedSettings(date, supplied = {}) {
-  const focusDurations = [...new Set((Array.isArray(supplied.focusDurations) ? supplied.focusDurations : [50, 25]).map(Number).filter((minutes) => minutes === 25 || minutes === 50))].sort((a, b) => b - a);
-  if (!focusDurations.length) throw new TypeError("focusDurations must include 25 and/or 50 minutes");
+  // The user-facing grid is intentionally one fixed unit: HH:00–HH:50.
+  // Older settings may still contain 25-minute values; they are migrated here.
+  const focusDurations = [50];
   const bufferMinutes = supplied.bufferMinutes == null ? 10 : Number(supplied.bufferMinutes);
   if (!Number.isInteger(bufferMinutes) || bufferMinutes < 0 || bufferMinutes > 30) throw new TypeError("bufferMinutes must be between 0 and 30");
   const dayStart = supplied.dayStart || "09:00";
@@ -50,13 +51,15 @@ function makeConstraints({ date, busyBlocks, lockedBlocks }) {
 }
 
 function availableSlot(occupied, startMs, endMs, durationMinutes) {
-  let cursor = startMs;
+  const hour = 60 * 60_000;
+  const alignToHour = (value) => Math.ceil(value / hour) * hour;
+  let cursor = alignToHour(startMs);
   for (const block of occupied) {
     const blockStart = Date.parse(block.startAt);
     const blockEnd = Date.parse(block.endAt);
     if (blockEnd <= cursor) continue;
     if (blockStart - cursor >= durationMinutes * 60_000) return [cursor, cursor + durationMinutes * 60_000];
-    cursor = Math.max(cursor, blockEnd);
+    cursor = alignToHour(Math.max(cursor, blockEnd));
   }
   return endMs - cursor >= durationMinutes * 60_000 ? [cursor, cursor + durationMinutes * 60_000] : null;
 }
@@ -129,7 +132,7 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
     let remaining = Math.max(0, candidate.remainingMinutes - existingMinutes);
     let focusIndex = 0;
     while (remaining > 0) {
-      const duration = remaining >= 50 && config.focusDurations.includes(50) ? 50 : config.focusDurations.includes(25) ? 25 : 50;
+      const duration = 50;
       const slot = availableSlot(blocks, dayStartMs, dayEndMs, duration);
       if (!slot) break;
       focusIndex += 1;

@@ -3,5 +3,11 @@
   "identifier": "default",
   "description": "Default capability set for the Daybridge desktop widget.",
   "windows": ["overlay", "dashboard"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-position",
+    "core:window:allow-show",
+    "core:window:allow-unminimize",
+    "core:window:allow-set-focus"
+  ]
 }

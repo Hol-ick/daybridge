@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { buildDailySchedule, rebuildRemainingSchedule, resolveNowFocus } from "./scheduler.js";
 
 const DATE = "2026-08-24";
-const settings = { dayStart: "09:00", dayEnd: "13:00", focusDurations: [50, 25], bufferMinutes: 10 };
+const settings = { dayStart: "09:00", dayEnd: "13:00", focusDurations: [25, 50], bufferMinutes: 10 };
 const candidate = (id, priority, estimateMinutes, dependsOn = []) => ({ id, title: id, priority, estimateMinutes, remainingMinutes: estimateMinutes, dependsOn, execution: "independent", state: "ready", sourceRefs: [] });
 
 test("buildDailySchedule gives must work the first available 50-minute block and leaves a transition buffer", () => {
@@ -19,9 +19,9 @@ test("buildDailySchedule gives must work the first available 50-minute block and
     ["focus", "must", "2026-08-24T09:00:00+09:00", "2026-08-24T09:50:00+09:00"],
     ["buffer", "buffer-after-must-1", "2026-08-24T09:50:00+09:00", "2026-08-24T10:00:00+09:00"],
     ["busy", "calendar-busy", "2026-08-24T10:00:00+09:00", "2026-08-24T10:30:00+09:00"],
-    ["focus", "should", "2026-08-24T10:30:00+09:00", "2026-08-24T10:55:00+09:00"],
-    ["buffer", "buffer-after-should-1", "2026-08-24T10:55:00+09:00", "2026-08-24T11:05:00+09:00"],
-    ["focus", "could", "2026-08-24T11:05:00+09:00", "2026-08-24T11:30:00+09:00"],
+    ["focus", "should", "2026-08-24T11:00:00+09:00", "2026-08-24T11:50:00+09:00"],
+    ["buffer", "buffer-after-should-1", "2026-08-24T11:50:00+09:00", "2026-08-24T12:00:00+09:00"],
+    ["focus", "could", "2026-08-24T12:00:00+09:00", "2026-08-24T12:50:00+09:00"],
   ]);
   assert.deepEqual(schedule.unscheduled, []);
 });
@@ -29,7 +29,7 @@ test("buildDailySchedule gives must work the first available 50-minute block and
 test("buildDailySchedule honors dependencies and reports work that cannot fit", () => {
   const schedule = buildDailySchedule({
     date: DATE,
-    settings: { ...settings, dayEnd: "10:30" },
+    settings: { ...settings, dayEnd: "11:00" },
     taskCandidates: [candidate("child", "must", 25, ["parent"]), candidate("parent", "should", 50), candidate("later", "could", 25)],
   });
 
@@ -81,7 +81,22 @@ test("buildDailySchedule retains locked existing focus blocks and never overlaps
 
   assert.equal(schedule.blocks.find((block) => block.id === "locked-focus")?.locked, true);
   const focus = schedule.blocks.find((block) => block.questId === "must");
-  assert.deepEqual([focus.startAt, focus.endAt], ["2026-08-24T09:25:00+09:00", "2026-08-24T10:15:00+09:00"]);
+  assert.deepEqual([focus.startAt, focus.endAt], ["2026-08-24T10:00:00+09:00", "2026-08-24T10:50:00+09:00"]);
+});
+
+test("buildDailySchedule aligns every focus block to the next hourly boundary", () => {
+  const schedule = buildDailySchedule({
+    date: DATE,
+    settings,
+    startAt: "2026-08-24T09:10:00+09:00",
+    taskCandidates: [candidate("first", "must", 15), candidate("second", "should", 15)],
+    busyBlocks: [{ id: "busy", startAt: "2026-08-24T10:15:00+09:00", endAt: "2026-08-24T10:30:00+09:00" }],
+  });
+
+  assert.deepEqual(schedule.blocks.filter((block) => block.type === "focus").map((block) => [block.startAt, block.endAt]), [
+    ["2026-08-24T11:00:00+09:00", "2026-08-24T11:50:00+09:00"],
+    ["2026-08-24T12:00:00+09:00", "2026-08-24T12:50:00+09:00"],
+  ]);
 });
 
 test("resolveNowFocus distinguishes active work, calendar time, upcoming work, and free time", () => {
@@ -105,5 +120,5 @@ test("rebuildRemainingSchedule preserves elapsed and locked blocks while moving 
 
   assert.ok(rebuilt.blocks.some((block) => block.questId === "must" && block.startAt === "2026-08-24T09:00:00+09:00"));
   assert.ok(rebuilt.blocks.some((block) => block.id === "fixed"));
-  assert.ok(rebuilt.blocks.some((block) => block.questId === "should" && block.startAt >= "2026-08-24T10:30:00+09:00"));
+  assert.ok(rebuilt.blocks.some((block) => block.questId === "should" && block.startAt === "2026-08-24T11:00:00+09:00"));
 });

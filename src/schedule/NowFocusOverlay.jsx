@@ -30,7 +30,7 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
   const blockId = block?.id ?? nowFocus?.blockId;
   const blockKind = block?.kind ?? block?.type ?? block?.blockType;
   const isBusy = blockKind === "busy" || blockKind === "calendar";
-  const sourceTitle = isBusy ? "일정 중" : block?.questTitle ?? block?.taskTitle ?? block?.title ?? "다음 집중 시간 준비 중";
+  const sourceTitle = isBusy ? "일정 중" : block?.displayTitle ?? block?.scheduleTitle ?? block?.questTitle ?? block?.taskTitle ?? block?.title ?? "다음 집중 시간 준비 중";
   const title = privateMode && block ? "집중 시간" : sourceTitle;
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
   const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);

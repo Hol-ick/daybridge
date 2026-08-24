@@ -1,6 +1,5 @@
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { PhysicalPosition, currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 export function currentSurface() {
   if (!isTauri()) return new URLSearchParams(window.location.search).get("surface") === "overlay" ? "overlay" : "dashboard";
@@ -14,11 +13,7 @@ export async function openDashboard() {
     window.location.assign(url.toString());
     return;
   }
-  const dashboard = await WebviewWindow.getByLabel("dashboard");
-  if (!dashboard) return;
-  await dashboard.show();
-  await dashboard.unminimize();
-  await dashboard.setFocus();
+  await invoke("open_dashboard");
 }
 
 export async function placeOverlayInCorner() {

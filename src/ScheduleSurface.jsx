@@ -131,7 +131,8 @@ export default function ScheduleSurface() {
     const nextSettings = {
       dayStart: form.get("dayStart"),
       dayEnd: form.get("dayEnd"),
-      defaultFocusMinutes: Number(form.get("defaultFocusMinutes")),
+      focusDurations: [50],
+      defaultFocusMinutes: 50,
       bufferMinutes: Number(form.get("bufferMinutes")),
     };
     try {
@@ -170,7 +171,7 @@ export default function ScheduleSurface() {
         <header><div><p>시간표 설정</p><strong>오늘의 리듬</strong></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="설정 닫기">×</button></header>
         <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} required /></label>
         <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} required /></label>
-        <label>집중 시간<select name="defaultFocusMinutes" defaultValue={String(settings.defaultFocusMinutes)}><option value="25">25분</option><option value="50">50분</option></select></label>
+        <div className={styles.fixedSetting}><span>집중 단위</span><strong>매시 00분–50분</strong></div>
         <label>완충 시간<select name="bufferMinutes" defaultValue={String(settings.bufferMinutes)}><option value="0">없음</option><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option></select></label>
         <label className={styles.checkbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
         <button className={styles.save} type="submit">저장하고 재배치</button>

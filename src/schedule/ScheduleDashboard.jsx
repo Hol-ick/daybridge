@@ -45,7 +45,7 @@ function blockKind(block) {
 function getBlockTitle(block) {
   if (blockKind(block) === "busy") return "일정";
   if (blockKind(block) === "buffer") return "여유 시간";
-  return block?.questTitle ?? block?.taskTitle ?? block?.title ?? "집중 작업";
+  return block?.displayTitle ?? block?.scheduleTitle ?? block?.questTitle ?? block?.taskTitle ?? block?.title ?? "집중 작업";
 }
 
 function getUnscheduledCount(schedule) {
@@ -134,7 +134,7 @@ export default function ScheduleDashboard({
   const focus = getFocusBlock(nowFocus);
   const focusKind = blockKind(focus);
   const focusId = focusKind === "busy" ? "" : focus?.id ?? nowFocus?.blockId;
-  const focusTitle = focusKind === "busy" ? "일정 중" : focus?.questTitle ?? focus?.taskTitle ?? focus?.title ?? "다음 집중 시간 준비 중";
+  const focusTitle = focusKind === "busy" ? "일정 중" : focus?.displayTitle ?? focus?.scheduleTitle ?? focus?.questTitle ?? focus?.taskTitle ?? focus?.title ?? "다음 집중 시간 준비 중";
   const focusStart = formatTime(focus?.startAt ?? focus?.start ?? focus?.startTime);
   const focusEnd = formatTime(focus?.endAt ?? focus?.end ?? focus?.endTime);
   const blocks = normalizeBlocks(schedule);

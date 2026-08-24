@@ -3,7 +3,7 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
+    Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 
 fn show_overlay(app: &tauri::AppHandle) {
@@ -13,13 +13,37 @@ fn show_overlay(app: &tauri::AppHandle) {
     }
 }
 
-fn show_dashboard(app: &tauri::AppHandle) {
-    show_overlay(app);
+fn dashboard_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
     if let Some(window) = app.get_webview_window("dashboard") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
+        return Ok(window);
     }
+
+    WebviewWindowBuilder::new(
+        app,
+        "dashboard",
+        WebviewUrl::App("index.html?surface=dashboard".into()),
+    )
+    .title("Daybridge 관리")
+    .inner_size(960.0, 760.0)
+    .min_inner_size(660.0, 540.0)
+    .resizable(true)
+    .visible(false)
+    .background_color(tauri::window::Color(37, 37, 49, 255))
+    .build()
+}
+
+fn show_dashboard(app: &tauri::AppHandle) -> tauri::Result<()> {
+    show_overlay(app);
+    let window = dashboard_window(app)?;
+    window.unminimize()?;
+    window.show()?;
+    window.set_focus()?;
+    Ok(())
+}
+
+#[tauri::command]
+fn open_dashboard(app: tauri::AppHandle) -> Result<(), String> {
+    show_dashboard(&app).map_err(|error| error.to_string())
 }
 
 fn main() {
@@ -35,7 +59,9 @@ fn main() {
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => show_dashboard(app),
+                    "show" => {
+                        let _ = show_dashboard(app);
+                    }
                     "hide" => {
                         if let Some(window) = app.get_webview_window("dashboard") {
                             let _ = window.hide();
@@ -51,13 +77,14 @@ fn main() {
                         ..
                     } = event
                     {
-                    show_dashboard(&tray.app_handle());
+                    let _ = show_dashboard(&tray.app_handle());
                     }
                 })
                 .build(app)?;
 
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![open_dashboard])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let _ = window.hide();

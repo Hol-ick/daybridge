@@ -30,7 +30,8 @@ test("settings persist atomically in the injected data directory", async () => {
   try {
     const settings = await saveScheduleSettings(dataDir, { dayStart: "08:30", dayEnd: "21:30", focusDurations: [25, 50], defaultFocusMinutes: 25, bufferMinutes: 5 });
     assert.deepEqual(await loadScheduleSettings(dataDir), settings);
-    assert.equal(settings.defaultFocusMinutes, 25);
+    assert.equal(settings.defaultFocusMinutes, 50);
+    assert.deepEqual(settings.focusDurations, [50]);
     await assert.rejects(saveScheduleSettings(dataDir, { dayStart: "22:00", dayEnd: "09:00" }), /dayStart/);
   } finally { remove(dataDir); }
 });

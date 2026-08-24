@@ -67,6 +67,21 @@
 
 .settingsSheet label { display: grid; gap: 7px; color: #b5b7c1; font-size: 12px; font-weight: 650; }
 
+.fixedSetting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid rgb(98 220 165 / 16%);
+  border-radius: 7px;
+  background: rgb(20 21 26 / 48%);
+  color: #b5b7c1;
+  font-size: 12px;
+}
+
+.fixedSetting strong { color: var(--green, #62dca5); font-size: 13px; font-weight: 720; }
+
 .settingsSheet input:not([type="checkbox"]),
 .settingsSheet select {
   width: 100%;

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createScheduleShell, normalizeSchedule, toTaskCandidate } from "./model.js";
+import { createScheduleShell, normalizeSchedule, toScheduleTitle, toTaskCandidate } from "./model.js";
 
 const DATE = "2026-08-24";
 
@@ -32,6 +32,12 @@ test("toTaskCandidate converts a Quest without exposing source details", () => {
     sourceRefs: ["aihub://2026-08-23/quest-plan"],
   });
   assert.equal("sourcePath" in candidate, false);
+});
+
+test("toScheduleTitle turns briefing prose into a short action label", () => {
+  assert.equal(toScheduleTitle("고객이 페이지를 강력 새로고침한 후 최신 매입가 카드 1건으로 택배 접수를 다시 시도하고, 관리자 수신·사진 표시·접수번호·상태조회를 한 번 확인해야 한다."), "고객 택배 접수 검증");
+  assert.equal(toScheduleTitle("리눅스 학습"), "리눅스 학습");
+  assert.equal(toScheduleTitle({ title: "긴 원문", scheduleTitle: "짧은 확인" }), "짧은 확인");
 });
 
 test("toTaskCandidate rejects malformed or already-completed quests", () => {

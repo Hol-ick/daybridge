@@ -105,6 +105,7 @@ function toTaskCandidate(quest) {
     id: quest.id,
     questId: quest.id,
     missionId: typeof quest.missionId === "string" ? quest.missionId : null,
+    scheduleTitle: sanitizeText(quest.scheduleTitle || quest.displayTitle || quest.title, 180),
     title: sanitizeText(quest.title, 180),
     project: sanitizeText(quest.project, 100),
     priority: ["must", "should", "could"].includes(quest.priority) ? quest.priority : "should",

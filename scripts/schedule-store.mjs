@@ -16,7 +16,7 @@ export const DEFAULT_SCHEDULE_SETTINGS = Object.freeze({
   timeZone: "Asia/Seoul",
   dayStart: "09:00",
   dayEnd: "22:00",
-  focusDurations: [25, 50],
+  focusDurations: [50],
   defaultFocusMinutes: 50,
   bufferMinutes: 10,
 });
@@ -57,10 +57,10 @@ function normalizeSettings(input = {}) {
   const dayStart = TIME.test(candidate.dayStart) ? candidate.dayStart : DEFAULT_SCHEDULE_SETTINGS.dayStart;
   const dayEnd = TIME.test(candidate.dayEnd) ? candidate.dayEnd : DEFAULT_SCHEDULE_SETTINGS.dayEnd;
   if (minutes(dayStart) >= minutes(dayEnd)) throw new TypeError("dayStart must be earlier than dayEnd.");
-  const focusDurations = arrayOfPositiveIntegers(candidate.focusDurations ?? candidate.focusDurationsMinutes, DEFAULT_SCHEDULE_SETTINGS.focusDurations).filter((item) => item === 25 || item === 50);
-  if (!focusDurations.length) throw new TypeError("focusDurations must include 25 and/or 50 minutes.");
-  const requestedDefault = Number(candidate.defaultFocusMinutes);
-  const defaultFocusMinutes = focusDurations.includes(requestedDefault) ? requestedDefault : DEFAULT_SCHEDULE_SETTINGS.defaultFocusMinutes;
+  // Keep the persisted shape for compatibility, but migrate every old setting
+  // to the single user-facing HH:00–HH:50 focus unit.
+  const focusDurations = [50];
+  const defaultFocusMinutes = 50;
   const requestedBuffer = Number(candidate.bufferMinutes);
   const bufferMinutes = Number.isInteger(requestedBuffer) && requestedBuffer >= 0 && requestedBuffer <= 60 ? requestedBuffer : DEFAULT_SCHEDULE_SETTINGS.bufferMinutes;
   return {
@@ -69,7 +69,7 @@ function normalizeSettings(input = {}) {
     dayStart,
     dayEnd,
     focusDurations,
-    defaultFocusMinutes: focusDurations.includes(defaultFocusMinutes) ? defaultFocusMinutes : focusDurations[focusDurations.length - 1],
+    defaultFocusMinutes,
     bufferMinutes,
   };
 }
