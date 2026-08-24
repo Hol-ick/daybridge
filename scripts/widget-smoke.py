@@ -232,6 +232,8 @@ def check_overlay(browser) -> None:
     assert page.locator('[data-testid="now-focus-overlay-expanded"]').is_visible()
     transition_duration = page.locator('[data-testid="now-focus-overlay-expanded"]').evaluate("element => parseFloat(getComputedStyle(element).transitionDuration)")
     assert transition_duration > 0
+    transform_origin = page.locator('[data-testid="now-focus-overlay-expanded"]').evaluate("element => getComputedStyle(element).transformOrigin")
+    assert transform_origin.split()[-1].startswith("456") or transform_origin.split()[-1].startswith("100%"), transform_origin
     assert page.get_by_text("여유 시간", exact=True).count() == 0
     compact_block = page.locator('[data-testid^="now-focus-overlay-block-"]').first
     if compact_block.count():
