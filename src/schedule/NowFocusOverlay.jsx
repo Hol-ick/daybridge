@@ -23,16 +23,15 @@ function getFocusBlock(nowFocus) {
   return nowFocus?.block ?? nowFocus?.focusBlock ?? nowFocus ?? null;
 }
 
-function formatLeaveCountdown(value) {
+function formatLeaveTimer(value) {
   const now = value instanceof Date ? value : new Date(value);
   const deadline = new Date(now);
   deadline.setHours(18, 0, 0, 0);
   const remainingMinutes = Math.ceil((deadline.getTime() - now.getTime()) / 60_000);
-  if (remainingMinutes <= 0) return "퇴근 시간 지남";
-  const hours = Math.floor(remainingMinutes / 60);
-  const minutes = remainingMinutes % 60;
-  const duration = hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
-  return `18:00까지 ${duration}`;
+  const safeMinutes = Math.max(0, remainingMinutes);
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
 /**
@@ -61,7 +60,7 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
   const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "시간표 확인";
-  const leaveLabel = formatLeaveCountdown(currentTime);
+  const leaveTimer = formatLeaveTimer(currentTime);
   const canComplete = Boolean(!isBusy && blockId && typeof onComplete === "function");
 
   const handleComplete = async (event) => {
@@ -145,21 +144,30 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
         >
           <span className={styles.meta}>
             <span className={styles.time} data-testid="now-focus-overlay-time">{timeLabel}</span>
-            <span className={styles.leave} data-testid="now-focus-overlay-leave-time">{leaveLabel}</span>
           </span>
           <strong className={styles.title} data-testid="now-focus-overlay-title">{feedback || title}</strong>
         </button>
-        <button
-          className={styles.complete}
-          type="button"
-          onClick={handleActionClick}
-          disabled={completing}
-          data-tauri-drag-region="false"
-          data-testid="now-focus-overlay-complete"
-          aria-label={canComplete ? `${title} 완료` : "시간표 열기"}
-        >
-          {completing ? "저장" : feedback || (canComplete ? "완료" : "열기")}
-        </button>
+        {canComplete ? (
+          <button
+            className={styles.complete}
+            type="button"
+            onClick={handleActionClick}
+            disabled={completing}
+            data-tauri-drag-region="false"
+            data-testid="now-focus-overlay-complete"
+            aria-label={`${title} 완료`}
+          >
+            {completing ? "저장" : feedback || "완료"}
+          </button>
+        ) : (
+          <time
+            className={styles.timer}
+            data-testid="now-focus-overlay-leave-time"
+            aria-label={`퇴근까지 ${leaveTimer}`}
+          >
+            {leaveTimer}
+          </time>
+        )}
       </div>
     </aside>
   );

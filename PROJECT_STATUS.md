@@ -29,13 +29,12 @@ The schedule-first web foundation is implemented: detailed closeout → Quest Pl
 - `DailySchedule` now has a tested Korea-time scheduler: must/should/could ordering, explicit dependencies, fixed hourly focus blocks (`HH:00–HH:50`), transition buffers, carryover, locked work, unscheduled reasons, and current-focus resolution.
 - The schedule boundary compacts briefing prose into short action labels such as `리눅스 학습`, `Kiosk 주문 검증`, and `고객 택배 접수 검증`; source quest detail remains on the board.
 - The local bridge lazily creates and atomically stores daily schedules, exposes schedule/rebuild/settings/block-report endpoints, and mirrors only sanitized block receipts to AIHUB.
-- The desktop surface is split into a quiet 252×52 always-on-top overlay and a separately opened management dashboard. The overlay contains only the focus time, task title (or a privacy-safe generic label), and completion. Its transparent, shadowless host no longer paints a larger background rectangle around the card, and the card can be dragged with magnetic corner snapping. The dashboard contains timeline, rebalancing, settings, and task detail.
+- The desktop surface is split into a quiet 288×64 always-on-top overlay and a separately opened management dashboard. The overlay contains only the focus time, task title (or a privacy-safe generic label), a large `HH:MM` leave-time timer when no focus block is active, and completion while work is active. Its transparent, shadowless host no longer paints a larger background rectangle around the card, and the card can be dragged with magnetic corner snapping. The dashboard contains timeline, rebalancing, settings, and task detail.
 - Web production build, 41 Node tests, and the dashboard/overlay Playwright smoke flow passed. The smoke flow now exercises the real dashboard command paths for completing a focus block and saving/rebuilding schedule settings, plus the compact overlay's completion acknowledgement. Completed/skipped/deferred blocks are excluded from current-focus resolution, so a successful report immediately advances the card. Rust/Cargo, MSVC, Windows SDK, WebView2가 모두 Tauri 진단에서 확인됐고 `cargo check`가 통과했다. 실제 브리지 재생성 결과도 정각 시작·50분 종료와 짧은 제목을 확인했다.
-- 로컬 개발 환경은 설치 프로그램 없이 `pnpm dev:all`로 UI와 bridge를 함께 실행한다. VS Code task/launch 설정은 UI 브라우저 디버그와 Node bridge attach를 제공하며, bridge debugger는 평소 개발 환경과 동시에 실행하지 않는다. 오버레이 카드는 252×52px로 창과 같은 크기이며 모니터 작업 영역 모서리에 여백 없이 정렬된다.
+- 로컬 개발 환경은 설치 프로그램 없이 `pnpm dev:all`로 UI와 bridge를 함께 실행한다. VS Code task/launch 설정은 UI 브라우저 디버그와 Node bridge attach를 제공하며, bridge debugger는 평소 개발 환경과 동시에 실행하지 않는다. 오버레이 카드는 288×64px로 창과 같은 크기이며 모니터 작업 영역 모서리에 여백 없이 정렬된다.
 - 오버레이 위치는 Tauri 네이티브 `Moved` 이벤트로 앱 데이터에 저장되고 재실행 때 복원된다. 최초 pointerdown에서 native drag를 시작하며, 저장된 임의 위치는 작업 영역 안으로 보정되고 모서리 64px 이내에서만 자석 정렬된다. 실제 Windows 창 이동·재실행 복원을 확인했다.
-- 오버레이 카드는 native 창과 동일한 252×52px로 렌더링한다. `100vw - 16px` 제한으로 생기던 오른쪽 빈 영역을 제거해 모서리 정렬이 시각적으로도 창 끝과 일치한다.
-- 오버레이 제목 버튼은 native drag와 분리되어 클릭 시 관리 화면을 연다. 실제 이동 때만 드래그를 시작하며, 메타 줄에는 로컬 기준 `18:00까지` 남은 시간이 30초 주기로 갱신된다.
-- 활성 집중 블록이 없을 때 오른쪽 액션은 비활성 `완료`가 아니라 `열기`로 관리 화면을 연다.
+- 오버레이 카드는 native 창과 동일한 288×64px로 렌더링한다. 카드와 창의 크기를 일치시켜 모서리 정렬이 시각적으로도 창 끝과 일치한다.
+- 오버레이 제목 버튼은 native drag와 분리되어 클릭 시 관리 화면을 연다. 실제 이동 때만 드래그를 시작하며, 활성 집중 블록이 없을 때 오른쪽 `열기` 버튼 대신 퇴근까지 남은 시간을 `HH:MM` 형식으로 크게 표시한다. 타이머는 30초 주기로 갱신된다.
 
 ## Current blocker
 

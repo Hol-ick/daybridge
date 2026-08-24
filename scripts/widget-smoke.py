@@ -195,11 +195,25 @@ def check_overlay(browser) -> None:
     overlay = page.locator('[data-testid="now-focus-overlay"]')
     assert overlay.count() == 1
     box = overlay.bounding_box()
-    assert box and round(box["width"]) == 252 and round(box["height"]) == 52
+    assert box and round(box["width"]) == 288 and round(box["height"]) == 64
     assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 1
-    assert page.locator('[data-testid="now-focus-overlay-complete"]').count() == 1
-    assert not page.locator('[data-testid="now-focus-overlay-complete"]').is_disabled()
-    assert page.locator('[data-testid="now-focus-overlay-leave-time"]').text_content() in {"퇴근 시간 지남"} or page.locator('[data-testid="now-focus-overlay-leave-time"]').text_content().startswith("18:00까지 ")
+    complete = page.locator('[data-testid="now-focus-overlay-complete"]')
+    leave_timer = page.locator('[data-testid="now-focus-overlay-leave-time"]')
+    assert complete.count() + leave_timer.count() == 1
+    if complete.count():
+        assert not complete.is_disabled()
+        assert complete.text_content() != "열기"
+    else:
+        assert re.fullmatch(r"\d{2}:\d{2}", leave_timer.text_content() or "")
+    title_style = page.locator('[data-testid="now-focus-overlay-title"]').evaluate(
+        "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
+    )
+    assert title_style["fontSize"] >= 14 and title_style["fontWeight"] >= 700, title_style
+    if leave_timer.count():
+        leave_style = leave_timer.evaluate(
+            "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
+        )
+        assert leave_style["fontSize"] >= 22 and leave_style["fontWeight"] >= 700, leave_style
     assert page.locator('[data-testid="now-focus-overlay"] > div').evaluate("element => getComputedStyle(element).cursor") == "grab"
     assert page.locator('[data-testid="schedule-dashboard"]').count() == 0
     assert page.locator('[data-testid="quest-item"]').count() == 0
