@@ -78,6 +78,15 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
     feedbackTimerRef.current = window.setTimeout(() => setFeedback(""), succeeded ? 900 : 1800);
   };
 
+  const handleActionClick = (event) => {
+    if (canComplete) {
+      void handleComplete(event);
+      return;
+    }
+    event.stopPropagation();
+    onOpenDashboard?.();
+  };
+
   const handlePointerDown = (event) => {
     const target = event.target instanceof Element ? event.target : null;
     const completeButton = target?.closest('[data-testid="now-focus-overlay-complete"]');
@@ -143,13 +152,13 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
         <button
           className={styles.complete}
           type="button"
-          onClick={handleComplete}
-          disabled={!canComplete || completing}
+          onClick={handleActionClick}
+          disabled={completing}
           data-tauri-drag-region="false"
           data-testid="now-focus-overlay-complete"
-          aria-label={canComplete ? `${title} 완료` : "완료할 집중 시간이 없습니다"}
+          aria-label={canComplete ? `${title} 완료` : "시간표 열기"}
         >
-          {completing ? "저장" : feedback || "완료"}
+          {completing ? "저장" : feedback || (canComplete ? "완료" : "열기")}
         </button>
       </div>
     </aside>

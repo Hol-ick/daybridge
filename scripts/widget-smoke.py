@@ -198,6 +198,7 @@ def check_overlay(browser) -> None:
     assert box and round(box["width"]) == 252 and round(box["height"]) == 52
     assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 1
     assert page.locator('[data-testid="now-focus-overlay-complete"]').count() == 1
+    assert not page.locator('[data-testid="now-focus-overlay-complete"]').is_disabled()
     assert page.locator('[data-testid="now-focus-overlay-leave-time"]').text_content() in {"퇴근 시간 지남"} or page.locator('[data-testid="now-focus-overlay-leave-time"]').text_content().startswith("18:00까지 ")
     assert page.locator('[data-testid="now-focus-overlay"] > div').evaluate("element => getComputedStyle(element).cursor") == "grab"
     assert page.locator('[data-testid="schedule-dashboard"]').count() == 0
