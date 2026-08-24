@@ -39,7 +39,7 @@ The Google Calendar runtime connection still requires a user-authorized local OA
 ## Next actions
 
 1. Add the read-only Google Calendar OAuth busy-window adapter after the user authorizes a local OAuth client; retain the existing `attention` fallback until then.
-2. Start the existing UI/bridge development environment, then verify the two Tauri windows, tray actions, lower-right placement, and always-on-top overlay with `pnpm dev:widget`.
+2. Start `pnpm bridge` in one terminal and `pnpm dev:widget` in another, then verify the two Tauri windows, tray actions, lower-right placement, and always-on-top overlay.
 3. Observe the next actual AIHUB daily Quest Plan and verify that its current-date tasks create an actionable schedule rather than the empty-state fallback.
 
 ## Boundaries and risks

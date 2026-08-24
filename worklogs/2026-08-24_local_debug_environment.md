@@ -18,6 +18,7 @@
 - 일반 UI·데이터 흐름 확인은 `pnpm dev:all`만 사용한다.
 - bridge에 breakpoint가 필요할 때만 `pnpm bridge:inspect`와 9229 attach를 사용한다.
 - `pnpm build:widget`은 릴리스 후보용이며 일상 디버깅에서는 실행하지 않는다.
+- native 위젯 확인은 `pnpm bridge`와 `pnpm dev:widget`의 두 프로세스로 구성한다. `dev:widget`은 Vite를 자체 실행하므로 `dev:all`과 동시에 실행하지 않는다.
 
 ## 검증 경계
 

@@ -79,6 +79,8 @@ pnpm bridge
 pnpm dev:widget
 ```
 
+`dev:widget`은 UI 개발 서버를 자체적으로 시작한다. 네이티브 위젯에서도 실제 board·status bridge가 필요하면 별도 터미널에 `pnpm bridge`만 실행한다. 이때 `pnpm dev:all`을 함께 실행하면 UI 포트가 겹치므로 사용하지 않는다.
+
 `pnpm build:widget`은 설치 파일을 만들기 때문에 기능을 바꿀 때마다 실행하지 않는다. 릴리스 후보를 만들 때만 실행한다.
 
 bridge 코드 자체를 단계별로 확인해야 하면 다음 명령으로 Node inspector를 연다. Chrome/Edge의 `edge://inspect` 또는 VS Code의 Node attach에서 포트 `9229`에 붙인다.
