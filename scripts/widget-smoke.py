@@ -232,6 +232,13 @@ def check_overlay(browser) -> None:
     assert page.locator('[data-testid="now-focus-overlay-expanded"]').is_visible()
     transition_duration = page.locator('[data-testid="now-focus-overlay-expanded"]').evaluate("element => parseFloat(getComputedStyle(element).transitionDuration)")
     assert transition_duration > 0
+    assert page.get_by_text("여유 시간", exact=True).count() == 0
+    compact_block = page.locator('[data-testid^="now-focus-overlay-block-"]').first
+    if compact_block.count():
+        row_style = compact_block.evaluate(
+            "element => { const style = getComputedStyle(element); const title = element.querySelector('[class*=compactBlockTitle]'); const time = element.querySelector('[class*=compactBlockTime]'); return { display: style.display, columns: style.gridTemplateColumns, titleSize: parseFloat(getComputedStyle(title).fontSize), timeSize: parseFloat(getComputedStyle(time).fontSize) }; }"
+        )
+        assert row_style["display"] == "grid" and row_style["titleSize"] >= 15 and row_style["timeSize"] >= 12, row_style
     assert page.locator('[data-testid="now-focus-overlay-collapse"]').count() == 1
     page.locator('[data-testid="now-focus-overlay-collapse"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")

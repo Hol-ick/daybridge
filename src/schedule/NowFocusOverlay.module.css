@@ -68,6 +68,7 @@
   flex: 0 0 auto;
   flex-direction: column;
   min-height: 0;
+  box-sizing: border-box;
   max-height: 0;
   padding: 0 10px;
   overflow: hidden;
@@ -78,6 +79,7 @@
 }
 
 .surface.expanded .expandedPanel {
+  height: 456px;
   max-height: 456px;
   padding: 10px 10px 0;
   opacity: 1;
@@ -128,10 +130,10 @@
 
 .compactBlock {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px;
-  min-height: 40px;
+  gap: 9px;
+  min-height: 52px;
   box-sizing: border-box;
   padding: 6px 7px;
   border: 1px solid rgb(255 255 255 / 9%);
@@ -142,13 +144,11 @@
 .compactBlock.busy,
 .compactBlock.buffer { background: rgb(0 0 0 / 10%); color: #9da0ab; }
 .compactBlock.completed { opacity: .58; }
-.compactBlockMain { display: grid; min-width: 0; gap: 2px; }
-.compactBlockTime { color: #aeb2bf; font-family: "Cascadia Mono", Consolas, monospace; font-size: 9px; font-weight: 700; line-height: 1.1; }
-.compactBlockMain strong { overflow: hidden; color: #f4f7f5; font-family: "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif; font-size: 12px; font-weight: 750; letter-spacing: -.035em; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-.busy .compactBlockMain strong,
-.buffer .compactBlockMain strong { color: #aeb1bc; }
+.compactBlockTime { color: #cbd0dc; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; white-space: nowrap; }
+.compactBlockTitle { min-width: 0; overflow: hidden; color: #f4f7f5; font-family: "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif; font-size: 15px; font-weight: 800; letter-spacing: -.04em; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.busy .compactBlockTitle { color: #aeb1bc; }
 .compactActions { display: flex; flex: 0 0 auto; gap: 3px; }
-.compactActions button { min-height: 23px; padding: 0 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8f93a0; cursor: pointer; font: inherit; font-size: 9px; font-weight: 800; }
+.compactActions button { min-height: 25px; padding: 0 7px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8f93a0; cursor: pointer; font: inherit; font-size: 10px; font-weight: 800; }
 .compactActions button:last-child { border-color: rgb(98 220 165 / 30%); background: rgb(98 220 165 / 9%); color: #bfffe0; }
 .compactActions button:hover:not(:disabled) { border-color: rgb(98 220 165 / 58%); background: rgb(98 220 165 / 18%); color: #eafff3; }
 .compactActions button:disabled { cursor: wait; opacity: .45; }

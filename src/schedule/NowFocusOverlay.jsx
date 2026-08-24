@@ -29,7 +29,7 @@ function getScheduleBlocks(schedule) {
   const busy = schedule?.busyBlocks ?? [];
   const buffer = schedule?.bufferBlocks ?? [];
   const blocks = direct.length ? direct : [...busy, ...focus, ...buffer];
-  return [...blocks].sort((left, right) => {
+  return [...blocks].filter((block) => scheduleBlockKind(block) !== "buffer").sort((left, right) => {
     const leftTime = asDate(left.startAt ?? left.start)?.getTime() ?? 0;
     const rightTime = asDate(right.startAt ?? right.start)?.getTime() ?? 0;
     return leftTime - rightTime;
@@ -61,10 +61,8 @@ function OverlayScheduleItem({ block, privateMode, actionId, onComplete, onDefer
 
   return (
     <li className={[styles.compactBlock, styles[kind], status === "completed" ? styles.completed : ""].filter(Boolean).join(" ")} data-testid={`now-focus-overlay-block-${block?.id ?? "unknown"}`}>
-      <div className={styles.compactBlockMain}>
-        <span className={styles.compactBlockTime}>{label}</span>
-        <strong title={title}>{title}</strong>
-      </div>
+      <span className={styles.compactBlockTime}>{label}</span>
+      <strong className={styles.compactBlockTitle} title={title}>{title}</strong>
       {actionable ? (
         <div className={styles.compactActions}>
           <button type="button" disabled={Boolean(actionId)} onClick={(event) => onDefer(block.id, event)} data-tauri-drag-region="false" data-testid={`now-focus-overlay-defer-${block.id}`}>미룸</button>
