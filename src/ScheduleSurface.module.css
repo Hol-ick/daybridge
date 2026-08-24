@@ -3,6 +3,17 @@
   margin: 42px auto 64px;
 }
 
+:global(body[data-surface="overlay"]) {
+  overflow: hidden;
+  background: transparent;
+}
+
+:global(body[data-surface="overlay"] #root) {
+  width: max-content;
+  min-width: 0;
+  min-height: 0;
+}
+
 .notice {
   min-height: 20px;
   margin: 13px 4px 0;

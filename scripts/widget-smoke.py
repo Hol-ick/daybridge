@@ -93,7 +93,7 @@ def check_overlay(browser) -> None:
     overlay = page.locator('[data-testid="now-focus-overlay"]')
     assert overlay.count() == 1
     box = overlay.bounding_box()
-    assert box and box["width"] <= 272
+    assert box and box["width"] <= 260
     assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 1
     assert page.locator('[data-testid="now-focus-overlay-complete"]').count() == 1
     assert page.locator('[data-testid="schedule-dashboard"]').count() == 0

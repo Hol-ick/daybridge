@@ -1,5 +1,5 @@
 .overlay {
-  width: min(272px, calc(100vw - 24px));
+  width: min(252px, calc(100vw - 16px));
   color: var(--font-color, #fafafa);
   font-family: "Segoe UI Variable", "Pretendard", "SUIT", "Noto Sans KR", "Malgun Gothic", sans-serif;
 }
@@ -8,10 +8,10 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
   box-sizing: border-box;
-  padding: 11px 11px 11px 13px;
+  padding: 9px 9px 9px 11px;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 9px;
@@ -55,7 +55,7 @@
   min-width: 0;
   color: #a9abb7;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 750;
   letter-spacing: .075em;
   line-height: 1.2;
@@ -64,7 +64,7 @@
 .title {
   overflow: hidden;
   color: var(--font-color, #fafafa);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 640;
   letter-spacing: -.025em;
   line-height: 1.35;
@@ -77,15 +77,15 @@
 
 .complete {
   align-self: center;
-  min-height: 27px;
-  padding: 0 7px;
+  min-height: 25px;
+  padding: 0 6px;
   border: 1px solid rgb(98 220 165 / 22%);
   border-radius: 5px;
   background: rgb(98 220 165 / 7%);
   color: var(--green, #62dca5);
   cursor: pointer;
   font: inherit;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 740;
   letter-spacing: -.02em;
   transition: background-color .16s ease, border-color .16s ease, color .16s ease;

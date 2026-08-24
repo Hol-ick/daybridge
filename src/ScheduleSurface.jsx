@@ -36,6 +36,11 @@ export default function ScheduleSurface() {
   const [notice, setNotice] = useState("");
   const activityDate = board?.activityDate || kstDate();
 
+  useEffect(() => {
+    document.body.dataset.surface = surface;
+    return () => { delete document.body.dataset.surface; };
+  }, [surface]);
+
   const loadSchedule = useCallback(async ({ rebuild = false, quiet = false } = {}) => {
     const request = rebuild
       ? fetch(`${BRIDGE_URL}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate }) })
