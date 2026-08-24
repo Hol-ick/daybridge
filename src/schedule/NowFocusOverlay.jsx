@@ -148,6 +148,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
   };
 
   const handlePointerDown = (event) => {
+    window.getSelection?.()?.removeAllRanges();
     const target = event.target instanceof Element ? event.target : null;
     const openButton = target?.closest('[data-testid="now-focus-overlay-open"]');
     const interactive = target?.closest('[data-tauri-drag-region="false"]');

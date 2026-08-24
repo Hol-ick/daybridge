@@ -201,6 +201,7 @@ def check_overlay(browser) -> None:
     assert box and round(box["width"]) == 288 and round(box["height"]) == 64
     assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 1
     assert page.get_by_text("시간표 확인", exact=True).count() == 0
+    assert page.locator('[data-testid="now-focus-overlay-title"]').evaluate("element => getComputedStyle(element).userSelect") == "none"
     complete = page.locator('[data-testid="now-focus-overlay-complete"]')
     leave_timer = page.locator('[data-testid="now-focus-overlay-leave-time"]')
     assert complete.count() + leave_timer.count() == 1
@@ -226,7 +227,17 @@ def check_overlay(browser) -> None:
     artifact = Path("test-artifacts/daybridge-schedule-overlay.png")
     artifact.parent.mkdir(exist_ok=True)
     page.screenshot(path=str(artifact), full_page=True)
+    page.evaluate("""() => {
+        const element = document.querySelector('[data-testid="now-focus-overlay-title"]');
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }""")
+    assert page.evaluate("window.getSelection().rangeCount") == 1
     page.locator('[data-testid="now-focus-overlay-open"]').click()
+    assert page.evaluate("window.getSelection().rangeCount") == 0
     page.wait_for_timeout(100)
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-animation-mid.png", full_page=True)
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
