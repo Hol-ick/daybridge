@@ -1,5 +1,10 @@
 .overlay {
-  width: min(252px, calc(100vw - 16px));
+  /* The native Tauri window is exactly 252px wide. Keep the card flush with
+     that window; the previous `100vw - 16px` cap left a visible 16px strip
+     beside the card and made a corner snap look offset. */
+  width: 252px;
+  max-width: 100vw;
+  box-sizing: border-box;
   color: var(--font-color, #fafafa);
   font-family: "Segoe UI Variable", "Pretendard", "SUIT", "Noto Sans KR", "Malgun Gothic", sans-serif;
 }

@@ -195,7 +195,7 @@ def check_overlay(browser) -> None:
     overlay = page.locator('[data-testid="now-focus-overlay"]')
     assert overlay.count() == 1
     box = overlay.bounding_box()
-    assert box and box["width"] <= 260
+    assert box and round(box["width"]) == 252 and round(box["height"]) == 52
     assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 1
     assert page.locator('[data-testid="now-focus-overlay-complete"]').count() == 1
     assert page.locator('[data-testid="now-focus-overlay"] > div').evaluate("element => getComputedStyle(element).cursor") == "grab"
