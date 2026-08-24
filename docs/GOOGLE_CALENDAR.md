@@ -2,6 +2,15 @@
 
 Daybridge는 Google Calendar에 **읽기 전용**으로 연결한다. 일정의 제목, 설명, 참석자, 장소, 링크는 요청·표시·저장하지 않는다. 시간표에는 “바쁜 시작·종료 시각”만 익명 일정 블록으로 반영된다.
 
+## 이미 연결한 Codex Calendar 재사용
+
+Codex에 이미 연결된 Google Calendar는 OAuth token을 Daybridge로 복사하지 않는다. 대신 Codex가 Google의 availability API에서 **바쁜 시작·종료 시각만** 읽어 Daybridge의 local relay cache에 전달할 수 있다. 이 컴퓨터에서는 이 relay를 연결했고, 오늘의 cache를 실제로 갱신했다.
+
+- Daybridge는 cache가 2시간 이내일 때만 `Codex Calendar 연결됨`으로 사용한다.
+- cache에는 OAuth token·Google 계정 정보·일정 제목·설명·참석자·장소·이벤트 ID가 남지 않는다.
+- Codex가 열려 있지 않은 환경에서도 마지막 cache는 시간표에 쓰이지만, 2시간이 지나면 다시 확인 필요 상태가 된다.
+- 지속적인 자동 갱신이 필요하면 Daybridge 전용 Codex 자동화가 availability만 relay하도록 별도로 구성한다. Calendar 일정 자체를 만들거나 바꾸지 않는다.
+
 ## 한 번만 준비할 것
 
 Daybridge는 아직 개인용 Google OAuth 클라이언트를 사용한다. Google Cloud Console에서 다음을 준비한다.

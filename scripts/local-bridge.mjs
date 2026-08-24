@@ -11,7 +11,7 @@ import {
   saveSchedule,
   saveScheduleSettings,
 } from "./schedule-store.mjs";
-import { inspectGoogleCalendarConnection, readGoogleCalendarBusyBlocks } from "./calendar/google-calendar-reader.mjs";
+import { calendarEventsToBusyBlocks, inspectGoogleCalendarConnection, readGoogleCalendarBusyBlocks } from "./calendar/google-calendar-reader.mjs";
 import { createGoogleCalendarAdapter } from "./calendar/googleapis-adapter.mjs";
 import { beginGoogleCalendarAuthorization, finishGoogleCalendarAuthorization, unprotectTokenWithDpapi } from "./calendar/google-oauth.mjs";
 
@@ -25,6 +25,7 @@ const phonePattern = /(?<!\d)01[016789][ -]?\d{3,4}[ -]?\d{4}(?!\d)/g;
 const secretPattern = /(\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|client[_ -]?secret|cookie|session[_ -]?token|private[_ -]?key)\b\s*[:=]\s*)(['"]?)[^\s'"]{8,}/gi;
 const localPathPattern = /\b[A-Z]:\\[^\s|]+/gi;
 const calendarAuthorizationStates = new Map();
+const CODEX_CALENDAR_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
 
 function now() { return new Date().toISOString(); }
 function safeDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value || "") ? value : null; }
@@ -33,6 +34,7 @@ function sanitizeText(value, limit = 600) {
   return text.length > limit ? text.slice(0, limit - 1).trimEnd() + "…" : text;
 }
 function boardPath(activityDate) { return join(DATA_DIR, "boards", activityDate + ".json"); }
+function codexCalendarCachePath(activityDate) { return join(DATA_DIR, "calendar-codex-busy", activityDate + ".json"); }
 async function readJson(path) { try { return JSON.parse(await readFile(path, "utf8")); } catch { return null; } }
 async function atomicWrite(path, value) {
   await mkdir(dirname(path), { recursive: true });
@@ -137,7 +139,7 @@ async function rebuildSchedule(activityDate) {
   const generatedAt = koreaNow();
   const tasks = board.quests.map(toTaskCandidate).filter(Boolean);
   const completedQuestIds = board.quests.filter((quest) => (quest?.state || quest?.status) === "completed").map((quest) => quest.id).filter((id) => typeof id === "string");
-  const calendarResult = await readGoogleCalendarBusyBlocks({ date: activityDate, dataDir: DATA_DIR, adapter: createGoogleCalendarAdapter(), unprotectToken: unprotectTokenWithDpapi });
+  const calendarResult = await readCalendarBusyBlocks(activityDate);
   const coverage = calendarResult.calendar.state === "connected" ? "connected" : "attention";
   const generated = buildDailySchedule({ date: activityDate, settings, taskCandidates: tasks, busyBlocks: calendarResult.busyBlocks, lockedBlocks: retainedScheduleBlocks(existingSchedule, generatedAt), completedQuestIds, startAt: generatedAt, generatedAt });
   return saveSchedule(DATA_DIR, activityDate, { ...generated, date: activityDate, timezone: "Asia/Seoul", calendar: { coverage }, busyBlocks: [] });
@@ -167,18 +169,45 @@ async function handleScheduleBlockReport(body) {
   return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
 }
 function calendarRedirectUri() { return `http://127.0.0.1:${PORT}/api/calendar/oauth/callback`; }
+async function readCodexCalendarCache(activityDate) {
+  const cache = await readJson(codexCalendarCachePath(activityDate));
+  const fetchedAt = Date.parse(cache?.fetchedAt || "");
+  if (!cache || cache.date !== activityDate || !Number.isFinite(fetchedAt) || (Date.now() - fetchedAt) > CODEX_CALENDAR_CACHE_TTL_MS || !Array.isArray(cache.busyBlocks)) return null;
+  const busyBlocks = cache.busyBlocks.filter((block) => block?.type === "busy" && typeof block.id === "string" && typeof block.startAt === "string" && typeof block.endAt === "string").map((block) => ({ id: block.id, type: "busy", startAt: block.startAt, endAt: block.endAt, locked: true }));
+  return { calendar: { state: "connected", reason: "codex_relay", canReadBusyBlocks: true }, busyBlocks };
+}
+async function readCalendarBusyBlocks(activityDate) {
+  const direct = await readGoogleCalendarBusyBlocks({ date: activityDate, dataDir: DATA_DIR, adapter: createGoogleCalendarAdapter(), unprotectToken: unprotectTokenWithDpapi });
+  if (direct.calendar.state === "connected") return direct;
+  return (await readCodexCalendarCache(activityDate)) || direct;
+}
 function removeExpiredCalendarAuthorizations(at = Date.now()) {
   for (const [state, expiresAt] of calendarAuthorizationStates) if (expiresAt <= at) calendarAuthorizationStates.delete(state);
 }
 async function handleCalendarStatus() {
-  return { status: 200, body: { calendar: await inspectGoogleCalendarConnection({ dataDir: DATA_DIR }) } };
+  const direct = await inspectGoogleCalendarConnection({ dataDir: DATA_DIR });
+  if (direct.state === "connected") return { status: 200, body: { calendar: direct } };
+  const activityDate = koreaNow().slice(0, 10);
+  const cached = await readCodexCalendarCache(activityDate);
+  return { status: 200, body: { calendar: cached?.calendar || direct } };
 }
 async function handleCalendarConnect() {
+  const status = await handleCalendarStatus();
+  if (status.body.calendar.reason === "codex_relay") return status;
   removeExpiredCalendarAuthorizations();
   const state = randomUUID();
   const result = await beginGoogleCalendarAuthorization({ dataDir: DATA_DIR, redirectUri: calendarRedirectUri(), state });
   if (result.state === "needs_authorization" && result.authorizationUrl) calendarAuthorizationStates.set(state, Date.now() + (10 * 60 * 1000));
   return { status: result.state === "attention" ? 400 : 200, body: { calendar: { state: result.state, reason: result.reason }, authorizationUrl: result.authorizationUrl || null } };
+}
+async function handleCodexCalendarBusy(body) {
+  const activityDate = safeDate(body.date || body.activityDate);
+  if (!activityDate || !Array.isArray(body.busy)) return { status: 400, body: { error: "date and busy time ranges are required." } };
+  const events = body.busy.slice(0, 250).map((item) => ({ start: { dateTime: item?.start }, end: { dateTime: item?.end } }));
+  let busyBlocks;
+  try { busyBlocks = calendarEventsToBusyBlocks({ date: activityDate, events }); } catch { return { status: 400, body: { error: "busy ranges must be valid calendar timestamps." } }; }
+  await atomicWrite(codexCalendarCachePath(activityDate), { schemaVersion: 1, source: "codex_calendar_connector", date: activityDate, fetchedAt: now(), busyBlocks });
+  return { status: 200, body: { calendar: { state: "connected", reason: "codex_relay", canReadBusyBlocks: true }, busyBlockCount: busyBlocks.length } };
 }
 async function handleCalendarCallback(url, response) {
   removeExpiredCalendarAuthorizations();
@@ -203,6 +232,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/calendar/oauth/callback") { await handleCalendarCallback(url, response); return; }
     if (request.method === "GET" && url.pathname === "/api/calendar/status") { const result = await handleCalendarStatus(); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/calendar/connect") { const result = await handleCalendarConnect(); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/calendar/codex-busy") { const result = await handleCodexCalendarBusy(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/board") { const result = await handleBoard(url); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/report") { const result = await handleReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule") { const result = await handleSchedule(url); send(response, result.status, result.body, origin); return; }

@@ -115,6 +115,8 @@ export default function ScheduleSurface() {
         window.setTimeout(() => { void loadCalendarStatus({ quiet: true }); }, 1_500);
       } else if (result.calendar?.state === "unconfigured") {
         setNotice("Google Calendar 연결 준비가 필요해요");
+      } else if (result.calendar?.state === "connected" && result.calendar?.reason === "codex_relay") {
+        setNotice("Codex Calendar의 바쁜 시간을 사용 중이에요");
       } else {
         setNotice("캘린더 연결을 시작하지 못했어요");
       }
