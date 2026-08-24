@@ -12,13 +12,13 @@
 
 .surface {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   width: 100%;
   height: 64px;
   box-sizing: border-box;
-  padding: 10px 10px 10px 12px;
+  padding: 0;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 9px;
@@ -26,12 +26,13 @@
   box-shadow: 0 8px 22px rgb(0 0 0 / 18%), 0 1px 0 rgb(255 255 255 / 4%) inset;
   color: inherit;
   isolation: isolate;
-  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+  transition: height .28s cubic-bezier(.22, 1, .36, 1), border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
   cursor: grab;
   touch-action: none;
 }
 
 .surface:active { cursor: grabbing; }
+.surface.expanded { height: 520px; }
 
 .surface::before {
   position: absolute;
@@ -48,7 +49,114 @@
 }
 
 .open:focus-visible,
-.complete:focus-visible { outline: 2px solid var(--green, #62dca5); outline-offset: 3px; }
+.complete:focus-visible,
+.expandedPanel button:focus-visible { outline: 2px solid var(--green, #62dca5); outline-offset: 3px; }
+
+.summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  flex: 0 0 64px;
+  width: 100%;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 10px 10px 10px 12px;
+}
+
+.expandedPanel {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: max-height .28s cubic-bezier(.22, 1, .36, 1), opacity .16s ease, padding .28s cubic-bezier(.22, 1, .36, 1), transform .28s cubic-bezier(.22, 1, .36, 1);
+}
+
+.surface.expanded .expandedPanel {
+  max-height: 456px;
+  padding: 10px 10px 0;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.expandedHeader,
+.expandedHeader > div,
+.expandedFooter {
+  display: flex;
+  align-items: center;
+}
+
+.expandedHeader { justify-content: space-between; gap: 8px; min-height: 23px; margin-bottom: 8px; }
+.expandedHeader > div { min-width: 0; gap: 8px; }
+.expandedHeader span { color: var(--green, #62dca5); font-size: 10px; font-weight: 800; letter-spacing: -.02em; }
+.expandedHeader strong { color: #d8ffe9; font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px; font-weight: 800; }
+.expandedHeader button,
+.expandedFooter button {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 4%);
+  color: #b7bac5;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: -.02em;
+}
+.expandedHeader button:hover,
+.expandedFooter button:hover { border-color: rgb(98 220 165 / 45%); background: rgb(98 220 165 / 10%); color: #eafff3; }
+
+.compactList {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 5px;
+  margin: 0;
+  padding: 0 2px 0 0;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-color: rgb(255 255 255 / 24%) transparent;
+  scrollbar-width: thin;
+}
+
+.compactBlock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 6px 7px;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 5%);
+}
+.compactBlock.focus { border-color: rgb(98 220 165 / 18%); }
+.compactBlock.busy,
+.compactBlock.buffer { background: rgb(0 0 0 / 10%); color: #9da0ab; }
+.compactBlock.completed { opacity: .58; }
+.compactBlockMain { display: grid; min-width: 0; gap: 2px; }
+.compactBlockTime { color: #aeb2bf; font-family: "Cascadia Mono", Consolas, monospace; font-size: 9px; font-weight: 700; line-height: 1.1; }
+.compactBlockMain strong { overflow: hidden; color: #f4f7f5; font-family: "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif; font-size: 12px; font-weight: 750; letter-spacing: -.035em; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.busy .compactBlockMain strong,
+.buffer .compactBlockMain strong { color: #aeb1bc; }
+.compactActions { display: flex; flex: 0 0 auto; gap: 3px; }
+.compactActions button { min-height: 23px; padding: 0 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8f93a0; cursor: pointer; font: inherit; font-size: 9px; font-weight: 800; }
+.compactActions button:last-child { border-color: rgb(98 220 165 / 30%); background: rgb(98 220 165 / 9%); color: #bfffe0; }
+.compactActions button:hover:not(:disabled) { border-color: rgb(98 220 165 / 58%); background: rgb(98 220 165 / 18%); color: #eafff3; }
+.compactActions button:disabled { cursor: wait; opacity: .45; }
+.compactStatus { flex: 0 0 auto; color: #9ca0ad; font-size: 9px; font-weight: 750; }
+.focus .compactStatus { color: #bfffe0; }
+.compactEmpty { margin: auto 0; padding: 20px 8px; color: #aeb1bc; font-size: 11px; text-align: center; }
+.expandedFooter { gap: 5px; margin-top: 8px; padding: 8px 0 10px; border-top: 1px solid rgb(255 255 255 / 8%); }
+.expandedFooter button { flex: 1; }
 
 .open {
   display: grid;
@@ -130,5 +238,5 @@
 .complete:disabled { border-color: transparent; background: transparent; color: #777a85; cursor: default; }
 
 @media (prefers-reduced-motion: reduce) {
-  .surface, .title, .complete { transition: none; }
+  .surface, .expandedPanel, .title, .complete { transition: none; }
 }

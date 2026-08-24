@@ -40,66 +40,70 @@
 
 .settingsSheet {
   display: grid;
-  width: min(372px, 100%);
-  gap: 15px;
+  width: min(288px, 100%);
+  gap: 9px;
+  box-sizing: border-box;
   border: 1px solid rgb(250 250 250 / 13%);
-  border-radius: 13px;
-  padding: 21px;
+  border-radius: 10px;
+  padding: 12px;
   background: linear-gradient(145deg, #363842, #292a31);
   box-shadow: 0 28px 72px rgb(0 0 0 / 40%), 0 1px 0 rgb(255 255 255 / 4%) inset;
 }
 
-.settingsSheet header { display: flex; align-items: start; justify-content: space-between; padding-bottom: 2px; }
+.settingsSheet header { display: flex; align-items: start; justify-content: space-between; padding-bottom: 1px; }
 
 .settingsSheet header p {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   color: var(--green, #62dca5);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 750;
   letter-spacing: .095em;
 }
 
-.settingsSheet header strong { font-size: 21px; font-weight: 680; letter-spacing: -.045em; }
+.settingsSheet header strong { font-size: 17px; font-weight: 750; letter-spacing: -.045em; }
 
 .settingsSheet header button {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: var(--gray, #a7a5ae);
   cursor: pointer;
-  font-size: 22px;
+  font-size: 19px;
   line-height: 1;
 }
 
 .settingsSheet header button:hover { border-color: rgb(250 250 250 / 11%); background: rgb(250 250 250 / 5%); color: var(--font-color, #fafafa); }
 
-.settingsSheet label { display: grid; gap: 7px; color: #b5b7c1; font-size: 12px; font-weight: 650; }
+.settingsRow { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; min-width: 0; }
+.settingsSheet label { display: grid; gap: 4px; min-width: 0; color: #b5b7c1; font-size: 10px; font-weight: 700; }
 
 .fixedSetting {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 40px;
-  padding: 0 11px;
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 0 7px;
   border: 1px solid rgb(98 220 165 / 16%);
   border-radius: 7px;
   background: rgb(20 21 26 / 48%);
   color: #b5b7c1;
-  font-size: 12px;
+  font-size: 10px;
 }
 
-.fixedSetting strong { color: var(--green, #62dca5); font-size: 13px; font-weight: 720; }
+.fixedSetting strong { color: var(--green, #62dca5); font-size: 10px; font-weight: 800; }
 
 .settingsSheet input:not([type="checkbox"]),
 .settingsSheet select {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid rgb(250 250 250 / 11%);
-  border-radius: 7px;
-  padding: 10px 11px;
+  min-height: 32px;
+  border-radius: 6px;
+  padding: 6px 7px;
   background: rgb(20 21 26 / 64%);
   color: var(--font-color, #fafafa);
   font: inherit;
@@ -109,19 +113,19 @@
 .settingsSheet input:not([type="checkbox"]):focus,
 .settingsSheet select:focus { border-color: rgb(98 220 165 / 68%); outline: 0; background: rgb(20 21 26 / 90%); }
 
-.settingsSheet .checkbox { display: flex; align-items: center; gap: 9px; color: var(--font-color, #fafafa); font-size: 13px; }
+.settingsSheet .checkbox { display: flex; align-items: center; gap: 7px; color: var(--font-color, #fafafa); font-size: 10px; }
 .settingsSheet .checkbox input { accent-color: var(--green, #62dca5); }
 
 .save {
-  min-height: 40px;
-  margin-top: 3px;
+  min-height: 34px;
+  margin-top: 1px;
   border: 1px solid rgb(98 220 165 / 55%);
   border-radius: 7px;
   background: var(--green, #62dca5);
   color: #17231d;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 790;
   letter-spacing: -.02em;
   transition: background-color .16s ease, transform .16s ease;

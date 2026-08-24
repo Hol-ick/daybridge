@@ -167,7 +167,15 @@ export default function ScheduleSurface() {
 
   const selectedQuest = useMemo(() => board?.quests?.find((quest) => quest.id === expandedQuestId) || null, [board?.quests, expandedQuestId]);
   if (surface === "overlay") {
-    return <NowFocusOverlay nowFocus={nowFocus} privateMode={privateMode} onOpenDashboard={() => { void openDashboard(); }} onComplete={(blockId) => reportBlock(blockId, "completed")} />;
+    return <NowFocusOverlay
+      schedule={schedule}
+      nowFocus={nowFocus}
+      privateMode={privateMode}
+      onOpenDashboard={() => { void openDashboard(); }}
+      onComplete={(blockId) => reportBlock(blockId, "completed")}
+      onDefer={(blockId) => reportBlock(blockId, "deferred")}
+      onRebuild={() => loadSchedule({ rebuild: true })}
+    />;
   }
 
   return <div className={styles.shell}>
@@ -188,10 +196,14 @@ export default function ScheduleSurface() {
     {settingsOpen && settings ? <div className={styles.settingsBackdrop} role="presentation">
       <form className={styles.settingsSheet} onSubmit={saveSettings} aria-label="시간표 설정">
         <header><div><p>시간표 설정</p><strong>오늘의 리듬</strong></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="설정 닫기">×</button></header>
-        <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} required /></label>
-        <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} required /></label>
-        <div className={styles.fixedSetting}><span>집중 단위</span><strong>매시 00분–50분</strong></div>
-        <label>완충 시간<select name="bufferMinutes" defaultValue={String(settings.bufferMinutes)}><option value="0">없음</option><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option></select></label>
+        <div className={styles.settingsRow}>
+          <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} required /></label>
+          <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} required /></label>
+        </div>
+        <div className={styles.settingsRow}>
+          <div className={styles.fixedSetting}><span>집중 단위</span><strong>00–50분</strong></div>
+          <label>완충 시간<select name="bufferMinutes" defaultValue={String(settings.bufferMinutes)}><option value="0">없음</option><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option></select></label>
+        </div>
         <label className={styles.checkbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
         <button className={styles.save} type="submit">저장하고 재배치</button>
       </form>

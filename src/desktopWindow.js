@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { PhysicalPosition, currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
+import { PhysicalPosition, PhysicalSize, currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 
 const OVERLAY_POSITION_KEY = "daybridge.overlay-position.v1";
 // The overlay is deliberately flush with the monitor work-area edge. The
@@ -7,6 +7,8 @@ const OVERLAY_POSITION_KEY = "daybridge.overlay-position.v1";
 // widget look as if it stopped short of the corner.
 const OVERLAY_EDGE_GAP = 0;
 const OVERLAY_SNAP_DISTANCE = 64;
+export const OVERLAY_COLLAPSED_HEIGHT = 64;
+export const OVERLAY_EXPANDED_HEIGHT = 520;
 
 function readOverlayPosition() {
   try {
@@ -60,6 +62,28 @@ export async function openDashboard() {
 export async function startOverlayDrag() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
   await getCurrentWindow().startDragging();
+  return true;
+}
+
+/** Resize the overlay while keeping its bottom edge anchored in place. */
+export async function resizeOverlay(height) {
+  if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
+  const windowHandle = getCurrentWindow();
+  const targetHeight = Math.max(OVERLAY_COLLAPSED_HEIGHT, Math.round(height));
+  const [monitor, position, size] = await Promise.all([
+    currentMonitor(),
+    windowHandle.outerPosition(),
+    windowHandle.outerSize(),
+  ]);
+  if (!monitor) return false;
+  const bottom = position.y + size.height;
+  const bounds = overlayBounds(monitor, { width: size.width, height: targetHeight });
+  const nextX = Math.min(bounds.maxX, Math.max(bounds.minX, position.x));
+  const nextY = Math.min(bounds.maxY, Math.max(bounds.minY, bottom - targetHeight));
+  await windowHandle.setSize(new PhysicalSize(size.width, targetHeight));
+  await windowHandle.setPosition(new PhysicalPosition(nextX, nextY));
+  rememberOverlayPosition({ x: nextX, y: nextY });
+  await invoke("save_overlay_position", { x: Math.round(nextX), y: Math.round(nextY) });
   return true;
 }
 

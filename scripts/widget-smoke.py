@@ -117,6 +117,8 @@ def check_dashboard(browser) -> None:
     assert page.get_by_label("시작 시간").input_value() == "09:00"
     assert page.get_by_label("마감 시간").input_value() == "22:00"
     assert page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
+    settings_box = page.locator('form[aria-label="시간표 설정"]').bounding_box()
+    assert settings_box and round(settings_box["width"]) == 288
 
     artifact = Path("test-artifacts/daybridge-schedule-dashboard.png")
     artifact.parent.mkdir(exist_ok=True)
@@ -222,8 +224,24 @@ def check_overlay(browser) -> None:
     artifact = Path("test-artifacts/daybridge-schedule-overlay.png")
     artifact.parent.mkdir(exist_ok=True)
     page.screenshot(path=str(artifact), full_page=True)
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay]').getBoundingClientRect().height) === 520")
+    expanded_box = overlay.bounding_box()
+    assert expanded_box and round(expanded_box["height"]) == 520
+    assert page.locator('[data-testid="now-focus-overlay-expanded"]').is_visible()
+    transition_duration = page.locator('[data-testid="now-focus-overlay-expanded"]').evaluate("element => parseFloat(getComputedStyle(element).transitionDuration)")
+    assert transition_duration > 0
+    assert page.locator('[data-testid="now-focus-overlay-collapse"]').count() == 1
+    page.locator('[data-testid="now-focus-overlay-collapse"]').click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay]').getBoundingClientRect().height) === 64")
+    collapsed_box = overlay.bounding_box()
+    assert collapsed_box and round(collapsed_box["height"]) == 64
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
     with page.expect_navigation(wait_until="domcontentloaded"):
-        page.locator('[data-testid="now-focus-overlay-open"]').click()
+        page.locator('[data-testid="now-focus-overlay-expanded"]').get_by_role("button", name="전체 시간표").click()
     assert "surface=dashboard" in page.url
     assert page.locator('[data-testid="schedule-dashboard"]').count() == 1
     assert_no_page_errors(errors)
