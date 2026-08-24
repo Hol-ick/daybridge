@@ -12,18 +12,36 @@
   "app": {
     "windows": [
       {
-        "label": "main",
+        "label": "overlay",
         "title": "Daybridge",
-        "width": 456,
-        "height": 690,
-        "minWidth": 330,
-        "minHeight": 340,
-        "resizable": true,
+        "width": 276,
+        "height": 112,
+        "minWidth": 276,
+        "minHeight": 112,
+        "maxWidth": 276,
+        "maxHeight": 112,
+        "resizable": false,
         "alwaysOnTop": true,
         "decorations": false,
         "transparent": true,
         "shadow": true,
+        "skipTaskbar": true,
         "backgroundColor": "#00000000"
+      },
+      {
+        "label": "dashboard",
+        "title": "Daybridge 관리",
+        "width": 960,
+        "height": 760,
+        "minWidth": 660,
+        "minHeight": 540,
+        "resizable": true,
+        "alwaysOnTop": false,
+        "decorations": true,
+        "transparent": false,
+        "shadow": true,
+        "visible": false,
+        "backgroundColor": "#252531"
       }
     ],
     "security": {

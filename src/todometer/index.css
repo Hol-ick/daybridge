@@ -10,9 +10,9 @@ body {
 	-moz-osx-font-smoothing: grayscale;
 	.App {
 		position: relative;
-		margin: 40px auto;
-		width: 550px;
-		padding-bottom: 60px;
+		margin: 0;
+		width: 100%;
+		padding-bottom: 0;
 
 		@media (max-width: 600px) {
 			width: 95%;

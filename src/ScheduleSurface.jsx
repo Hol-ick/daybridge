@@ -1,0 +1,147 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAppActions, useAppState } from "./AppContext.jsx";
+import { currentSurface, openDashboard, placeOverlayInCorner } from "./desktopWindow.js";
+import Item from "./todometer/components/Item.jsx";
+import NowFocusOverlay from "./schedule/NowFocusOverlay.jsx";
+import ScheduleDashboard from "./schedule/ScheduleDashboard.jsx";
+import styles from "./ScheduleSurface.module.css";
+
+const BRIDGE_URL = "http://127.0.0.1:39393";
+const OVERLAY_PRIVACY_KEY = "daybridge.overlay-private.v1";
+
+function kstDate() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+}
+
+function initialPrivateMode() {
+  try { return localStorage.getItem(OVERLAY_PRIVACY_KEY) === "true"; } catch { return false; }
+}
+
+async function readJson(response) {
+  if (!response.ok) throw new Error(`bridge request failed (${response.status})`);
+  return response.json();
+}
+
+export default function ScheduleSurface() {
+  const { board, expandedQuestId } = useAppState();
+  const { toggleQuest, refresh } = useAppActions();
+  const [surface] = useState(currentSurface);
+  const [schedule, setSchedule] = useState(null);
+  const [nowFocus, setNowFocus] = useState(null);
+  const [calendarCoverage, setCalendarCoverage] = useState("attention");
+  const [settings, setSettings] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [privateMode, setPrivateMode] = useState(initialPrivateMode);
+  const [notice, setNotice] = useState("");
+  const activityDate = board?.activityDate || kstDate();
+
+  const loadSchedule = useCallback(async ({ rebuild = false, quiet = false } = {}) => {
+    const request = rebuild
+      ? fetch(`${BRIDGE_URL}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate }) })
+      : fetch(`${BRIDGE_URL}/api/schedule?date=${activityDate}`);
+    try {
+      const result = await readJson(await request);
+      setSchedule(result.schedule);
+      setNowFocus(result.nowFocus);
+      setCalendarCoverage(result.schedule?.calendar?.coverage || "attention");
+      if (!quiet) setNotice(rebuild ? "오늘 남은 시간을 다시 배치했어요" : "");
+      return result;
+    } catch {
+      if (!quiet) setNotice("시간표를 불러오지 못했어요");
+      return null;
+    }
+  }, [activityDate]);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule-settings`));
+      setSettings(result.settings);
+    } catch { setNotice("시간표 설정을 불러오지 못했어요"); }
+  }, []);
+
+  useEffect(() => { void loadSchedule({ quiet: true }); }, [loadSchedule]);
+  useEffect(() => {
+    const interval = window.setInterval(() => { void loadSchedule({ quiet: true }); }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [loadSchedule]);
+  useEffect(() => {
+    const syncPrivacyMode = (event) => {
+      if (event.key === OVERLAY_PRIVACY_KEY) setPrivateMode(event.newValue === "true");
+    };
+    window.addEventListener("storage", syncPrivacyMode);
+    return () => window.removeEventListener("storage", syncPrivacyMode);
+  }, []);
+  useEffect(() => { if (surface === "overlay") void placeOverlayInCorner(); }, [surface]);
+
+  const reportBlock = useCallback(async (blockId, status) => {
+    try {
+      const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule/block-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityDate, blockId, status, note: status === "completed" ? "집중 블록 완료" : "집중 블록을 다음으로 미룸" }),
+      }));
+      setSchedule(result.schedule);
+      setNowFocus(result.nowFocus);
+      setNotice(status === "completed" ? "집중 시간을 완료했어요" : "이 작업은 다음 계획으로 넘겼어요");
+      void refresh();
+    } catch { setNotice("진행 상태를 저장하지 못했어요"); }
+  }, [activityDate, refresh]);
+
+  const openSettings = useCallback(() => {
+    setSettingsOpen(true);
+    void loadSettings();
+  }, [loadSettings]);
+
+  const saveSettings = useCallback(async (event) => {
+    event.preventDefault();
+    if (!settings) return;
+    const form = new FormData(event.currentTarget);
+    const nextPrivateMode = form.get("privateOverlay") === "on";
+    const nextSettings = {
+      dayStart: form.get("dayStart"),
+      dayEnd: form.get("dayEnd"),
+      defaultFocusMinutes: Number(form.get("defaultFocusMinutes")),
+      bufferMinutes: Number(form.get("bufferMinutes")),
+    };
+    try {
+      const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule-settings`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nextSettings) }));
+      setSettings(result.settings);
+      setPrivateMode(nextPrivateMode);
+      try { localStorage.setItem(OVERLAY_PRIVACY_KEY, String(nextPrivateMode)); } catch { /* local privacy preference is optional */ }
+      setSettingsOpen(false);
+      await loadSchedule({ rebuild: true, quiet: true });
+      setNotice("시간표 설정을 저장했어요");
+    } catch { setNotice("설정 값을 확인해 주세요"); }
+  }, [loadSchedule, settings]);
+
+  const selectedQuest = useMemo(() => board?.quests?.find((quest) => quest.id === expandedQuestId) || null, [board?.quests, expandedQuestId]);
+  if (surface === "overlay") {
+    return <NowFocusOverlay nowFocus={nowFocus} privateMode={privateMode} onOpenDashboard={() => { void openDashboard(); }} onComplete={(blockId) => { void reportBlock(blockId, "completed"); }} />;
+  }
+
+  return <div className={styles.shell}>
+    <ScheduleDashboard
+      schedule={schedule}
+      nowFocus={nowFocus}
+      calendarCoverage={calendarCoverage}
+      onOpenQuest={toggleQuest}
+      onCompleteBlock={(blockId) => { void reportBlock(blockId, "completed"); }}
+      onDeferBlock={(blockId) => { void reportBlock(blockId, "deferred"); }}
+      onRebuild={() => { void loadSchedule({ rebuild: true }); }}
+      onOpenSettings={openSettings}
+    />
+    <p className={styles.notice} role="status" data-visible={notice ? "true" : "false"}>{notice}</p>
+    {selectedQuest ? <section className={styles.questDetail} aria-label="선택한 작업 상세"><Item quest={selectedQuest} /></section> : null}
+    {settingsOpen && settings ? <div className={styles.settingsBackdrop} role="presentation">
+      <form className={styles.settingsSheet} onSubmit={saveSettings} aria-label="시간표 설정">
+        <header><div><p>시간표 설정</p><strong>오늘의 리듬</strong></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="설정 닫기">×</button></header>
+        <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} required /></label>
+        <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} required /></label>
+        <label>집중 시간<select name="defaultFocusMinutes" defaultValue={String(settings.defaultFocusMinutes)}><option value="25">25분</option><option value="50">50분</option></select></label>
+        <label>완충 시간<select name="bufferMinutes" defaultValue={String(settings.bufferMinutes)}><option value="0">없음</option><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option></select></label>
+        <label className={styles.checkbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
+        <button className={styles.save} type="submit">저장하고 재배치</button>
+      </form>
+    </div> : null}
+  </div>;
+}

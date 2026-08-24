@@ -6,8 +6,16 @@ use tauri::{
     Manager, WindowEvent,
 };
 
-fn show_main_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
+fn show_overlay(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("overlay") {
+        let _ = window.unminimize();
+        let _ = window.show();
+    }
+}
+
+fn show_dashboard(app: &tauri::AppHandle) {
+    show_overlay(app);
+    if let Some(window) = app.get_webview_window("dashboard") {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
@@ -27,9 +35,9 @@ fn main() {
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => show_main_window(app),
+                    "show" => show_dashboard(app),
                     "hide" => {
-                        if let Some(window) = app.get_webview_window("main") {
+                        if let Some(window) = app.get_webview_window("dashboard") {
                             let _ = window.hide();
                         }
                     }
@@ -43,7 +51,7 @@ fn main() {
                         ..
                     } = event
                     {
-                        show_main_window(&tray.app_handle());
+                    show_dashboard(&tray.app_handle());
                     }
                 })
                 .build(app)?;

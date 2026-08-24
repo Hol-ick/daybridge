@@ -1,12 +1,80 @@
-"""Small Playwright smoke check for the Daybridge widget UI."""
+"""Playwright smoke checks for Daybridge's discreet overlay and dashboard."""
 
+import json
 import os
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+DEFAULT_SETTINGS = json.dumps({
+    "settings": {
+        "dayStart": "09:00",
+        "dayEnd": "22:00",
+        "defaultFocusMinutes": 50,
+        "bufferMinutes": 10,
+    }
+})
 
-ARTIFACT = Path("test-artifacts/daybridge-todometer-ui.png")
+
+def assert_no_page_errors(errors: list[str]) -> None:
+    assert not errors, errors
+
+
+def check_dashboard(browser) -> None:
+    context = browser.new_context(viewport={"width": 960, "height": 760}, device_scale_factor=1)
+    context.route(
+        "http://127.0.0.1:39393/api/schedule-settings",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+
+    page.goto("http://127.0.0.1:5173", wait_until="domcontentloaded")
+    assert page.locator('[data-testid="schedule-dashboard"]').count() == 1
+    assert page.locator('[data-testid="schedule-now-focus"]').count() == 1
+    assert page.locator('[data-testid="schedule-timeline"]').count() == 0
+    assert page.locator('[data-testid="schedule-empty"]').count() == 1
+    assert page.locator('[data-testid="quest-item"]').count() == 0
+
+    page.locator('[data-testid="schedule-settings"]').click()
+    page.wait_for_selector('form[aria-label="시간표 설정"]')
+    assert page.get_by_label("시작 시간").input_value() == "09:00"
+    assert page.get_by_label("마감 시간").input_value() == "22:00"
+    assert page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
+
+    artifact = Path("test-artifacts/daybridge-schedule-dashboard.png")
+    artifact.parent.mkdir(exist_ok=True)
+    page.screenshot(path=str(artifact), full_page=True)
+    assert_no_page_errors(errors)
+    context.close()
+
+
+def check_overlay(browser) -> None:
+    context = browser.new_context(viewport={"width": 320, "height": 140}, device_scale_factor=1)
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+
+    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    overlay = page.locator('[data-testid="now-focus-overlay"]')
+    assert overlay.count() == 1
+    box = overlay.bounding_box()
+    assert box and box["width"] <= 272
+    assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 1
+    assert page.locator('[data-testid="now-focus-overlay-complete"]').count() == 1
+    assert page.locator('[data-testid="schedule-dashboard"]').count() == 0
+    assert page.locator('[data-testid="quest-item"]').count() == 0
+
+    artifact = Path("test-artifacts/daybridge-schedule-overlay.png")
+    artifact.parent.mkdir(exist_ok=True)
+    page.screenshot(path=str(artifact), full_page=True)
+    with page.expect_navigation(wait_until="domcontentloaded"):
+        page.locator('[data-testid="now-focus-overlay-open"]').click()
+    assert "surface=dashboard" in page.url
+    assert page.locator('[data-testid="schedule-dashboard"]').count() == 1
+    assert_no_page_errors(errors)
+    context.close()
 
 
 def main() -> None:
@@ -16,44 +84,8 @@ def main() -> None:
         if chrome_path:
             launch_options["executable_path"] = chrome_path
         browser = playwright.chromium.launch(**launch_options)
-        context = browser.new_context(viewport={"width": 456, "height": 760}, device_scale_factor=1)
-        context.route("http://127.0.0.1:39393/**", lambda route: route.abort())
-        page = context.new_page()
-        errors: list[str] = []
-        page.on("pageerror", lambda error: errors.append(str(error)))
-
-        page.goto("http://127.0.0.1:5173", wait_until="networkidle")
-        quest_cards = page.locator('[data-testid="quest-item"]')
-        assert quest_cards.count() >= 2
-        assert page.locator('[data-testid="quest-toggle"][aria-expanded="true"]').count() == 0
-
-        first_card = quest_cards.first
-        first_card.locator('[data-testid="quest-toggle"]').click()
-        page.wait_for_selector('[data-testid="quest-details"][data-open="true"] [data-testid="subquest"]')
-        assert page.locator('[data-testid="quest-toggle"][aria-expanded="true"]').count() == 1
-        assert first_card.locator('[data-testid="quest-details"][data-open="true"] p').count() == 2
-        title_box = first_card.locator('[data-testid="quest-toggle"]').bounding_box()
-        details_box = first_card.locator('[data-testid="quest-details"][data-open="true"]').bounding_box()
-        assert title_box and details_box and details_box["y"] >= title_box["y"] + title_box["height"] - 1
-        assert details_box["width"] >= 300
-
-        first_task = first_card.locator('[data-testid="subquest"]').first
-        completed_before = first_card.locator('[data-testid="subquest"][aria-pressed="true"]').count()
-        first_task.click()
-        page.wait_for_function(
-            "expected => document.querySelectorAll('[data-testid=quest-details][data-open=true] [data-testid=subquest][aria-pressed=true]').length === expected",
-            arg=completed_before + 1,
-        )
-        page.wait_for_timeout(700)
-
-        assert page.locator('[data-testid="quest-toggle"][aria-expanded="true"]').count() == 1
-        assert first_card.locator('[data-testid="subquest"][aria-pressed="true"]').count() == completed_before + 1
-        assert page.locator(".status-deck, .report-card, .source-card, .daily-quest-card").count() == 0
-        assert not errors, errors
-
-        ARTIFACT.parent.mkdir(exist_ok=True)
-        page.screenshot(path=str(ARTIFACT), full_page=True)
-        context.close()
+        check_dashboard(browser)
+        check_overlay(browser)
         browser.close()
 
 

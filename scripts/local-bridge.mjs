@@ -3,6 +3,14 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { buildDailySchedule, resolveNowFocus } from "../src/schedule/scheduler.js";
+import {
+  loadSchedule,
+  loadScheduleSettings,
+  reportScheduleBlock,
+  saveSchedule,
+  saveScheduleSettings,
+} from "./schedule-store.mjs";
 
 const PORT = Number(process.env.DAYBRIDGE_BRIDGE_PORT || 39393);
 const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
@@ -47,9 +55,9 @@ async function readRequestBody(request) {
   for await (const chunk of request) { total += chunk.length; if (total > 128 * 1024) throw new Error("Request body is too large."); chunks.push(chunk); }
   try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new Error("Request body must be valid JSON."); }
 }
-const allowedOrigins = new Set(["http://127.0.0.1:4173", "http://localhost:4173", "http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5178", "http://localhost:5178"]);
+const allowedOrigins = new Set(["http://127.0.0.1:4173", "http://localhost:4173", "http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5174", "http://localhost:5174", "http://127.0.0.1:5178", "http://localhost:5178"]);
 function send(response, status, payload, origin) {
-  response.writeHead(status, { "Access-Control-Allow-Origin": allowedOrigins.has(origin) ? origin : "http://127.0.0.1:4173", "Vary": "Origin", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  response.writeHead(status, { "Access-Control-Allow-Origin": allowedOrigins.has(origin) ? origin : "http://127.0.0.1:4173", "Vary": "Origin", "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   response.end(JSON.stringify(payload));
 }
 async function writeEvent(config, event) {
@@ -79,6 +87,75 @@ async function handleBoard(url) {
   const config = await loadConfig(); const connected = typeof config.handoffSinkDir === "string" && config.handoffSinkDir.trim().length > 0;
   return { status: 200, body: responseBody(board, connected ? "connected" : "local") };
 }
+function toTaskCandidate(quest) {
+  if (!quest || typeof quest !== "object" || typeof quest.id !== "string") return null;
+  const state = typeof quest.state === "string" ? quest.state : typeof quest.status === "string" ? quest.status : "ready";
+  return {
+    id: quest.id,
+    questId: quest.id,
+    missionId: typeof quest.missionId === "string" ? quest.missionId : null,
+    title: sanitizeText(quest.title, 180),
+    project: sanitizeText(quest.project, 100),
+    priority: ["must", "should", "could"].includes(quest.priority) ? quest.priority : "should",
+    state,
+    status: state,
+    execution: quest.execution === "sequential" ? "sequential" : "independent",
+    dependsOn: Array.isArray(quest.dependsOn) ? quest.dependsOn.filter((id) => typeof id === "string") : [],
+    estimateMinutes: Math.max(5, Math.min(180, Number(quest.estimateMinutes) || 25)),
+    durationMinutes: Math.max(5, Math.min(180, Number(quest.estimateMinutes) || 25)),
+    remainingMinutes: Math.max(5, Math.min(180, Number(quest.remainingMinutes) || Number(quest.estimateMinutes) || 25)),
+    currentAction: sanitizeText(quest.currentAction || quest.firstStep || quest.title, 240),
+    steps: Array.isArray(quest.steps) ? quest.steps.map((step) => ({ id: sanitizeText(step?.id, 120), label: sanitizeText(step?.label, 180), completed: Boolean(step?.completed), dependsOn: Array.isArray(step?.dependsOn) ? step.dependsOn.filter((id) => typeof id === "string") : [] })).filter((step) => step.id && step.label) : [],
+    sourceRefs: Array.isArray(quest.sourceRefs) ? quest.sourceRefs.map((ref) => sanitizeText(ref, 240)).filter(Boolean) : [],
+  };
+}
+function scheduleDate(value) { return safeDate(value?.date || value?.activityDate) || new Date().toISOString().slice(0, 10); }
+function koreaNow(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(date);
+  const field = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+  return `${field.year}-${field.month}-${field.day}T${field.hour}:${field.minute}:${field.second}+09:00`;
+}
+function nowFocus(schedule) { return resolveNowFocus(schedule, koreaNow()); }
+function retainedScheduleBlocks(schedule, at) {
+  if (!schedule || !Array.isArray(schedule.blocks)) return [];
+  const nowAt = Date.parse(at);
+  return schedule.blocks.filter((block) => block?.locked || (typeof block?.endAt === "string" && Date.parse(block.endAt) <= nowAt));
+}
+async function rebuildSchedule(activityDate) {
+  const board = await readJson(boardPath(activityDate));
+  if (!board || !Array.isArray(board.quests)) return null;
+  const settings = await loadScheduleSettings(DATA_DIR);
+  const existingSchedule = await loadSchedule(DATA_DIR, activityDate);
+  const generatedAt = koreaNow();
+  const tasks = board.quests.map(toTaskCandidate).filter(Boolean);
+  const completedQuestIds = board.quests.filter((quest) => (quest?.state || quest?.status) === "completed").map((quest) => quest.id).filter((id) => typeof id === "string");
+  const generated = buildDailySchedule({ date: activityDate, settings, taskCandidates: tasks, busyBlocks: [], lockedBlocks: retainedScheduleBlocks(existingSchedule, generatedAt), completedQuestIds, startAt: generatedAt, generatedAt });
+  return saveSchedule(DATA_DIR, activityDate, { ...generated, date: activityDate, timezone: "Asia/Seoul", calendar: { coverage: "attention" }, busyBlocks: [] });
+}
+async function handleSchedule(url) {
+  const activityDate = safeDate(url.searchParams.get("date")) || new Date().toISOString().slice(0, 10);
+  const schedule = await loadSchedule(DATA_DIR, activityDate) || await rebuildSchedule(activityDate);
+  if (!schedule) return { status: 404, body: { error: "No quest board exists for this date." } };
+  return { status: 200, body: { schedule, nowFocus: nowFocus(schedule) } };
+}
+async function handleScheduleRebuild(body) {
+  const activityDate = scheduleDate(body);
+  const schedule = await rebuildSchedule(activityDate);
+  if (!schedule) return { status: 404, body: { error: "No quest board exists for this date." } };
+  return { status: 200, body: { schedule, nowFocus: nowFocus(schedule) } };
+}
+async function handleScheduleBlockReport(body) {
+  const activityDate = safeDate(body.activityDate || body.date);
+  if (!activityDate) return { status: 400, body: { error: "activityDate and a valid block report are required." } };
+  let result;
+  try { result = await reportScheduleBlock(DATA_DIR, activityDate, body); } catch (error) { return { status: 400, body: { error: error instanceof Error ? sanitizeText(error.message, 160) : "Invalid block report." } }; }
+  if (!result) return { status: 404, body: { error: "No schedule exists for this date." } };
+  if (!result.schedule) return { status: 404, body: { error: "Schedule block was not found." } };
+  const config = await loadConfig();
+  const event = { schemaVersion: 1, id: result.report.id, eventType: "schedule_block_report", activityDate, occurredAt: result.report.occurredAt, source: "daybridge", sensitivity: "sanitized", block: result.report.block, report: { id: result.report.id, occurredAt: result.report.occurredAt, status: result.report.status, note: result.report.note, source: "daybridge" } };
+  const mirrored = await writeEvent(config, event);
+  return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
+}
 const server = createServer(async (request, response) => {
   const origin = request.headers.origin;
   if (!request.url) { send(response, 400, { error: "Request URL is required." }, origin); return; }
@@ -88,6 +165,11 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/health") { const config = await loadConfig(); send(response, 200, { status: "ok", dataDir: DATA_DIR, handoffSinkDir: config.handoffSinkDir || null, connected: Boolean(config.handoffSinkDir) }, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/board") { const result = await handleBoard(url); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/report") { const result = await handleReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/schedule") { const result = await handleSchedule(url); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/schedule/rebuild") { const result = await handleScheduleRebuild(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/schedule-settings") { send(response, 200, { settings: await loadScheduleSettings(DATA_DIR) }, origin); return; }
+    if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const incoming = await readRequestBody(request); const current = await loadScheduleSettings(DATA_DIR); send(response, 200, { settings: await saveScheduleSettings(DATA_DIR, { ...current, ...incoming }) }, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/schedule/block-report") { const result = await handleScheduleBlockReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     send(response, 404, { error: "Not found." }, origin);
   } catch (error) { send(response, 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error." }, origin); }
 });

@@ -1,0 +1,194 @@
+import { createScheduleShell, isKstIso, normalizeSchedule, toTaskCandidate } from "./model.js";
+
+const PRIORITY_WEIGHT = { must: 0, should: 1, could: 2 };
+
+function atKst(date, time) {
+  if (!/^\d{2}:\d{2}$/.test(time || "")) throw new TypeError("Schedule settings need HH:MM times");
+  return `${date}T${time}:00+09:00`;
+}
+
+function normalizedSettings(date, supplied = {}) {
+  const focusDurations = [...new Set((Array.isArray(supplied.focusDurations) ? supplied.focusDurations : [50, 25]).map(Number).filter((minutes) => minutes === 25 || minutes === 50))].sort((a, b) => b - a);
+  if (!focusDurations.length) throw new TypeError("focusDurations must include 25 and/or 50 minutes");
+  const bufferMinutes = supplied.bufferMinutes == null ? 10 : Number(supplied.bufferMinutes);
+  if (!Number.isInteger(bufferMinutes) || bufferMinutes < 0 || bufferMinutes > 30) throw new TypeError("bufferMinutes must be between 0 and 30");
+  const dayStart = supplied.dayStart || "09:00";
+  const dayEnd = supplied.dayEnd || "22:00";
+  const dayStartAt = atKst(date, dayStart);
+  const dayEndAt = atKst(date, dayEnd);
+  if (Date.parse(dayEndAt) <= Date.parse(dayStartAt)) throw new RangeError("dayEnd must be after dayStart");
+  return { dayStart, dayEnd, dayStartAt, dayEndAt, focusDurations, bufferMinutes };
+}
+
+function toBusyBlock(raw, index) {
+  if (!raw || typeof raw !== "object" || !isKstIso(raw.startAt) || !isKstIso(raw.endAt)) throw new TypeError("Busy blocks need Korea-time ISO ranges");
+  if (Date.parse(raw.endAt) <= Date.parse(raw.startAt)) throw new RangeError("Busy blocks must end after they start");
+  return { id: String(raw.id || `busy-${index + 1}`), type: "busy", startAt: raw.startAt, endAt: raw.endAt, locked: true };
+}
+
+function dedupeBusyBlocks(blocks) {
+  const ordered = [...blocks].sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt));
+  const merged = [];
+  for (const block of ordered) {
+    const previous = merged.at(-1);
+    if (previous && Date.parse(block.startAt) <= Date.parse(previous.endAt)) {
+      if (Date.parse(block.endAt) > Date.parse(previous.endAt)) previous.endAt = block.endAt;
+      previous.sourceIds = [...new Set([...(previous.sourceIds || [previous.id]), block.id])];
+    } else merged.push({ ...block });
+  }
+  return merged;
+}
+
+function dateBounded(block, date) {
+  return block.startAt.startsWith(`${date}T`) && block.endAt.startsWith(`${date}T`);
+}
+
+function makeConstraints({ date, busyBlocks, lockedBlocks }) {
+  const busy = dedupeBusyBlocks((busyBlocks || []).map(toBusyBlock)).filter((block) => dateBounded(block, date));
+  const locked = (lockedBlocks || []).map((block, index) => ({ ...block, id: String(block?.id || `locked-${index + 1}`), locked: true })).filter((block) => dateBounded(block, date));
+  return normalizeSchedule({ ...createScheduleShell({ date }), blocks: [...busy, ...locked] }).blocks;
+}
+
+function availableSlot(occupied, startMs, endMs, durationMinutes) {
+  let cursor = startMs;
+  for (const block of occupied) {
+    const blockStart = Date.parse(block.startAt);
+    const blockEnd = Date.parse(block.endAt);
+    if (blockEnd <= cursor) continue;
+    if (blockStart - cursor >= durationMinutes * 60_000) return [cursor, cursor + durationMinutes * 60_000];
+    cursor = Math.max(cursor, blockEnd);
+  }
+  return endMs - cursor >= durationMinutes * 60_000 ? [cursor, cursor + durationMinutes * 60_000] : null;
+}
+
+function directBufferSlot(occupied, startMs, endMs, bufferMinutes) {
+  if (!bufferMinutes) return null;
+  const end = startMs + bufferMinutes * 60_000;
+  if (end > endMs) return null;
+  const collision = occupied.some((block) => Date.parse(block.startAt) < end && Date.parse(block.endAt) > startMs);
+  return collision ? null : [startMs, end];
+}
+
+function asKstIso(milliseconds) {
+  const koreaClock = new Date(milliseconds + 9 * 60 * 60 * 1000);
+  const two = (value) => String(value).padStart(2, "0");
+  return `${koreaClock.getUTCFullYear()}-${two(koreaClock.getUTCMonth() + 1)}-${two(koreaClock.getUTCDate())}T${two(koreaClock.getUTCHours())}:${two(koreaClock.getUTCMinutes())}:${two(koreaClock.getUTCSeconds())}+09:00`;
+}
+
+function orderedCandidates(candidates, completedQuestIds) {
+  const pending = [...candidates];
+  const ready = new Set(completedQuestIds || []);
+  const ordered = [];
+  const blocked = [];
+  while (pending.length) {
+    const eligible = pending.filter((candidate) => candidate.dependsOn.every((dependency) => ready.has(dependency)));
+    if (!eligible.length) {
+      blocked.push(...pending);
+      break;
+    }
+    eligible.sort((left, right) => PRIORITY_WEIGHT[left.priority] - PRIORITY_WEIGHT[right.priority] || left.id.localeCompare(right.id));
+    const next = eligible[0];
+    pending.splice(pending.indexOf(next), 1);
+    ordered.push(next);
+    ready.add(next.id);
+  }
+  return { ordered, blocked };
+}
+
+function scheduledFocusMinutes(blocks, questId) {
+  return blocks.filter((block) => block.type === "focus" && block.questId === questId)
+    .reduce((total, block) => total + Math.round((Date.parse(block.endAt) - Date.parse(block.startAt)) / 60_000), 0);
+}
+
+export function buildDailySchedule({ date, settings, taskCandidates = [], busyBlocks = [], lockedBlocks = [], completedQuestIds = [], startAt, generatedAt } = {}) {
+  const shell = createScheduleShell({ date, generatedAt });
+  const config = normalizedSettings(date, settings);
+  const dayStartMs = Math.max(Date.parse(config.dayStartAt), startAt && isKstIso(startAt) ? Date.parse(startAt) : -Infinity);
+  const dayEndMs = Date.parse(config.dayEndAt);
+  if (dayStartMs >= dayEndMs) return normalizeSchedule({ ...shell, unscheduled: taskCandidates.map((quest) => ({ questId: quest.id, reason: "outside_schedule_window", remainingMinutes: quest.remainingMinutes || quest.estimateMinutes })).filter((item) => item.questId && item.remainingMinutes) });
+
+  const constraints = makeConstraints({ date, busyBlocks, lockedBlocks });
+  const candidates = taskCandidates.map(toTaskCandidate).filter(Boolean).filter((candidate) => candidate.state !== "blocked");
+  const candidateIds = new Set(candidates.map((candidate) => candidate.id));
+  const ordering = orderedCandidates(candidates, completedQuestIds);
+  const blocks = [...constraints];
+  const unscheduled = [];
+  const satisfiedDependencies = new Set(completedQuestIds);
+
+  for (const blocked of ordering.blocked) {
+    unscheduled.push({ questId: blocked.id, reason: blocked.dependsOn.some((dependency) => candidateIds.has(dependency)) ? "dependency_unmet" : "dependency_missing", remainingMinutes: blocked.remainingMinutes });
+  }
+
+  for (let candidateIndex = 0; candidateIndex < ordering.ordered.length; candidateIndex += 1) {
+    const candidate = ordering.ordered[candidateIndex];
+    if (!candidate.dependsOn.every((dependency) => satisfiedDependencies.has(dependency))) {
+      unscheduled.push({ questId: candidate.id, reason: "dependency_unmet", remainingMinutes: candidate.remainingMinutes });
+      continue;
+    }
+    const existingMinutes = scheduledFocusMinutes(blocks, candidate.id);
+    let remaining = Math.max(0, candidate.remainingMinutes - existingMinutes);
+    let focusIndex = 0;
+    while (remaining > 0) {
+      const duration = remaining >= 50 && config.focusDurations.includes(50) ? 50 : config.focusDurations.includes(25) ? 25 : 50;
+      const slot = availableSlot(blocks, dayStartMs, dayEndMs, duration);
+      if (!slot) break;
+      focusIndex += 1;
+      const [start, end] = slot;
+      blocks.push({ id: `focus-${candidate.id}-${focusIndex}`, type: "focus", questId: candidate.id, title: candidate.title, priority: candidate.priority, startAt: asKstIso(start), endAt: asKstIso(end), locked: false });
+      blocks.sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));
+      remaining = Math.max(0, remaining - duration);
+      const laterWorkExists = remaining > 0 || candidateIndex < ordering.ordered.length - 1;
+      if (laterWorkExists && config.bufferMinutes) {
+        const bufferSlot = directBufferSlot(blocks, end, dayEndMs, config.bufferMinutes);
+        if (bufferSlot) {
+          const [bufferStart, bufferEnd] = bufferSlot;
+          blocks.push({ id: `buffer-after-${candidate.id}-${focusIndex}`, type: "buffer", startAt: asKstIso(bufferStart), endAt: asKstIso(bufferEnd), locked: false });
+          blocks.sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));
+        }
+      }
+    }
+    if (remaining > 0) unscheduled.push({ questId: candidate.id, reason: "insufficient_time", remainingMinutes: remaining });
+    else satisfiedDependencies.add(candidate.id);
+  }
+  return normalizeSchedule({ ...shell, blocks, unscheduled });
+}
+
+function nextFocus(schedule, nowMs) {
+  return schedule.blocks.find((block) => block.type === "focus" && Date.parse(block.startAt) > nowMs) || null;
+}
+
+export function resolveNowFocus(schedule, now) {
+  const normalized = normalizeSchedule(schedule);
+  if (!isKstIso(now)) throw new TypeError("resolveNowFocus needs a Korea-time ISO timestamp");
+  const nowMs = Date.parse(now);
+  const active = normalized.blocks.find((block) => Date.parse(block.startAt) <= nowMs && nowMs < Date.parse(block.endAt));
+  if (active?.type === "focus") return { state: "active_focus", block: active, nextFocus: nextFocus(normalized, nowMs) };
+  if (active?.type === "busy") return { state: "in_busy_time", block: active, nextFocus: nextFocus(normalized, nowMs) };
+  const upcoming = nextFocus(normalized, nowMs);
+  if (upcoming) return { state: "up_next", block: upcoming, minutesUntil: Math.max(0, Math.round((Date.parse(upcoming.startAt) - nowMs) / 60_000)) };
+  return { state: "free_time", block: null, nextFocus: null };
+}
+
+export function rebuildRemainingSchedule({ schedule, now, taskCandidates = [], busyBlocks = [], lockedBlocks = [], settings, completedQuestIds = [] } = {}) {
+  const previous = normalizeSchedule(schedule);
+  if (!isKstIso(now)) throw new TypeError("rebuildRemainingSchedule needs a Korea-time ISO timestamp");
+  const nowMs = Date.parse(now);
+  const retained = previous.blocks.filter((block) => block.locked || block.type === "busy" || Date.parse(block.startAt) < nowMs);
+  const candidateById = new Map(taskCandidates.map(toTaskCandidate).filter(Boolean).map((candidate) => [candidate.id, candidate]));
+  const adjusted = [...candidateById.values()].map((candidate) => {
+    const retainedMinutes = scheduledFocusMinutes(retained, candidate.id);
+    return { ...candidate, remainingMinutes: Math.max(0, candidate.remainingMinutes - retainedMinutes) };
+  }).filter((candidate) => candidate.remainingMinutes > 0);
+  const retainedBusy = retained.filter((block) => block.type === "busy");
+  const retainedLocked = retained.filter((block) => block.type !== "busy");
+  return buildDailySchedule({
+    date: previous.date,
+    generatedAt: previous.generatedAt,
+    settings,
+    taskCandidates: adjusted,
+    busyBlocks: [...retainedBusy, ...busyBlocks],
+    lockedBlocks: [...retainedLocked, ...lockedBlocks],
+    completedQuestIds,
+    startAt: now,
+  });
+}

@@ -10,7 +10,7 @@ Turn AIHUB's evidence-linked daily work and learning candidates into a calm Wind
 
 ## Current milestone
 
-The completed quest-board foundation is being superseded by the **schedule-first** milestone: detailed closeout → Quest Plan → task candidates + read-only Calendar busy windows → carryover-aware `DailySchedule` → current-focus timetable widget. The todometer renderer and Tauri always-on-top shell remain presentation foundations, but the card deck will become a timeline with an expandable task detail.
+The schedule-first web foundation is implemented: detailed closeout → Quest Plan → task candidates + calendar-availability seam → carryover-aware `DailySchedule` → current-focus timetable widget. The Google Calendar OAuth adapter remains pending; until it is connected, the schedule explicitly reports calendar coverage as `attention` and assumes no imported busy windows.
 
 ## Verified progress
 
@@ -26,6 +26,10 @@ The completed quest-board foundation is being superseded by the **schedule-first
 - The Tauri shell defines a transparent frameless always-on-top window plus tray show/hide/quit behavior. Closing the window hides it to the tray.
 - TypeScript, production Vite build, compiler tests, runner/profile self-tests, local bridge syntax, and browser smoke/visual checks passed. The card-deck smoke check was run against an isolated preview fixture.
 - A schedule-first implementation plan now defines a deep `DailySchedule` module, Google Calendar busy-only read adapter, local-only schedule persistence, and a single current-focus card. Calendar writes are intentionally out of scope until the user explicitly asks for them.
+- `DailySchedule` now has a tested Korea-time scheduler: must/should/could ordering, explicit dependencies, 25/50-minute focus blocks, buffers, carryover, locked work, unscheduled reasons, and current-focus resolution.
+- The local bridge lazily creates and atomically stores daily schedules, exposes schedule/rebuild/settings/block-report endpoints, and mirrors only sanitized block receipts to AIHUB.
+- The desktop surface is split into a quiet 276×112 always-on-top overlay and a separately opened management dashboard. The overlay contains only the focus time, task title (or a privacy-safe generic label), and completion. The dashboard contains timeline, rebalancing, settings, and task detail.
+- Web production build, 23 Node tests, and the dashboard/overlay Playwright smoke flow passed. Native Tauri build remains unverified because Cargo is unavailable on this computer.
 
 ## Current blocker
 
@@ -33,9 +37,9 @@ The native Windows installer is not yet buildable on this computer because Rust/
 
 ## Next actions
 
-1. Implement and test the `DailySchedule` model and deterministic scheduler before changing the widget layout.
-2. Add the local bridge schedule endpoints and read-only Google Calendar busy-window adapter, including cache fallback and privacy tests.
-3. Replace the card-first surface with the current-focus card and timetable timeline; then verify it in web and native widget modes.
+1. Add the read-only Google Calendar OAuth busy-window adapter after the user authorizes a local OAuth client; retain the existing `attention` fallback until then.
+2. Install the Windows native build prerequisites, then verify the two Tauri windows, tray actions, lower-right placement, and always-on-top overlay.
+3. Observe the next actual AIHUB daily Quest Plan and verify that its current-date tasks create an actionable schedule rather than the empty-state fallback.
 
 ## Boundaries and risks
 
