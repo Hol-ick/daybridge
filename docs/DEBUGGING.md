@@ -37,7 +37,18 @@ Use the UI to change a quest status or submit a progress note. The bridge should
 
 ## 4. Check the floating widget
 
-패키징은 디버깅에 필요하지 않다. 기본 개발 루틴은 다음과 같다.
+패키징은 디버깅에 필요하지 않다. 평소에는 아래 **한 명령**으로 UI와 bridge를 함께 실행한다.
+
+```powershell
+pnpm dev:all
+```
+
+- 화면 확인: `http://127.0.0.1:5173`
+- 브라우저 개발자 도구: React 화면·네트워크·콘솔 오류 확인
+- bridge 로그: 같은 터미널에서 API·AIHUB handoff·Calendar relay 오류 확인
+- 종료: 해당 터미널에서 `Ctrl+C`
+
+UI만 빠르게 만질 때는 다음처럼 실행해도 된다.
 
 ```powershell
 # 터미널 1 — 화면과 코드 자동 새로고침
@@ -47,7 +58,7 @@ pnpm dev
 브라우저에서 `http://127.0.0.1:5173`을 열어 UI를 확인한다. 저장할 때마다 화면이 갱신되므로 카드 간격, 확장 애니메이션, 상태 클릭을 즉시 반복해서 확인할 수 있다. AIHUB 연결과 상태 영수증까지 확인할 때만 두 번째 터미널을 추가한다.
 
 ```powershell
-# 터미널 2 — 선택 사항: 로컬 보드와 상태 기록
+# 터미널 2 — 브리핑 보드·Calendar·상태 기록까지 확인할 때
 pnpm bridge
 ```
 
@@ -59,6 +70,12 @@ pnpm dev:widget
 ```
 
 `pnpm build:widget`은 설치 파일을 만들기 때문에 기능을 바꿀 때마다 실행하지 않는다. 릴리스 후보를 만들 때만 실행한다.
+
+bridge 코드 자체를 단계별로 확인해야 하면 다음 명령으로 Node inspector를 연다. Chrome/Edge의 `edge://inspect` 또는 VS Code의 Node attach에서 포트 `9229`에 붙인다.
+
+```powershell
+pnpm bridge:inspect
+```
 
 이전의 두 터미널 예시는 다음과 같다.
 
