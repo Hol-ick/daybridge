@@ -61,6 +61,14 @@
   text-align: left;
 }
 
+.meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 6px;
+}
+
 .time {
   min-width: 0;
   color: #a9abb7;
@@ -69,6 +77,19 @@
   font-weight: 750;
   letter-spacing: .075em;
   line-height: 1.2;
+}
+
+.leave {
+  flex: 0 0 auto;
+  overflow: hidden;
+  color: var(--green, #62dca5);
+  font-family: "Segoe UI Variable", "Pretendard", "SUIT", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: -.04em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .title {

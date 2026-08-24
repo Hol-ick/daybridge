@@ -23,6 +23,18 @@ function getFocusBlock(nowFocus) {
   return nowFocus?.block ?? nowFocus?.focusBlock ?? nowFocus ?? null;
 }
 
+function formatLeaveCountdown(value) {
+  const now = value instanceof Date ? value : new Date(value);
+  const deadline = new Date(now);
+  deadline.setHours(18, 0, 0, 0);
+  const remainingMinutes = Math.ceil((deadline.getTime() - now.getTime()) / 60_000);
+  if (remainingMinutes <= 0) return "퇴근 시간 지남";
+  const hours = Math.floor(remainingMinutes / 60);
+  const minutes = remainingMinutes % 60;
+  const duration = hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
+  return `18:00까지 ${duration}`;
+}
+
 /**
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
@@ -32,8 +44,13 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
   const feedbackTimerRef = useRef(null);
   const [feedback, setFeedback] = useState("");
   const [completing, setCompleting] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   useEffect(() => () => {
     if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+  }, []);
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 30_000);
+    return () => window.clearInterval(timer);
   }, []);
   const block = getFocusBlock(nowFocus);
   const blockId = block?.id ?? nowFocus?.blockId;
@@ -44,6 +61,7 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
   const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "시간표 확인";
+  const leaveLabel = formatLeaveCountdown(currentTime);
   const canComplete = Boolean(!isBusy && blockId && typeof onComplete === "function");
 
   const handleComplete = async (event) => {
@@ -61,7 +79,10 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
   };
 
   const handlePointerDown = (event) => {
-    if (event.button !== 0 || event.target.closest('[data-testid="now-focus-overlay-complete"]')) return;
+    const target = event.target instanceof Element ? event.target : null;
+    const completeButton = target?.closest('[data-testid="now-focus-overlay-complete"]');
+    const openButton = target?.closest('[data-testid="now-focus-overlay-open"]');
+    if (event.button !== 0 || completeButton) return;
     const state = dragRef.current;
     state.point = { x: event.clientX, y: event.clientY };
     const cleanup = () => {
@@ -73,7 +94,11 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
     };
     const handleMove = (moveEvent) => {
       if (!state.point || Math.hypot(moveEvent.clientX - state.point.x, moveEvent.clientY - state.point.y) < 4) return;
+      cleanup();
       state.suppressClick = true;
+      // A title-button click stays a normal click. Start native dragging only
+      // after movement so the dashboard action cannot be swallowed by Tauri.
+      void startOverlayDrag().catch(() => { state.suppressClick = false; });
       window.setTimeout(() => { state.suppressClick = false; }, 500);
     };
     state.cleanup?.();
@@ -81,12 +106,11 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
     document.addEventListener("pointermove", handleMove);
     document.addEventListener("pointerup", cleanup, { once: true });
     document.addEventListener("pointercancel", cleanup, { once: true });
-    // Tauri's native Windows drag must be started from the initial
-    // mousedown/pointerdown event. Calling it only after the pointer moved
-    // makes the card look immovable in some WebView2 focus states.
-    void startOverlayDrag().catch(() => {
-      state.suppressClick = false;
-    });
+    if (!openButton) {
+      // Non-interactive card padding can start dragging immediately. Buttons
+      // wait for the movement threshold above so ordinary clicks remain live.
+      void startOverlayDrag().catch(() => { state.suppressClick = false; });
+    }
   };
 
   const handleOpenDashboard = (event) => {
@@ -101,15 +125,19 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
 
   return (
     <aside className={styles.overlay} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
-      <div className={styles.surface} onPointerDown={handlePointerDown} data-tauri-drag-region="true">
+      <div className={styles.surface} onPointerDown={handlePointerDown} data-tauri-drag-region="deep">
         <button
           className={styles.open}
           type="button"
           onClick={handleOpenDashboard}
+          data-tauri-drag-region="false"
           data-testid="now-focus-overlay-open"
           aria-label="Daybridge 전체 시간표 열기"
         >
-          <span className={styles.time} data-testid="now-focus-overlay-time">{timeLabel}</span>
+          <span className={styles.meta}>
+            <span className={styles.time} data-testid="now-focus-overlay-time">{timeLabel}</span>
+            <span className={styles.leave} data-testid="now-focus-overlay-leave-time">{leaveLabel}</span>
+          </span>
           <strong className={styles.title} data-testid="now-focus-overlay-title">{feedback || title}</strong>
         </button>
         <button
@@ -117,6 +145,7 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
           type="button"
           onClick={handleComplete}
           disabled={!canComplete || completing}
+          data-tauri-drag-region="false"
           data-testid="now-focus-overlay-complete"
           aria-label={canComplete ? `${title} 완료` : "완료할 집중 시간이 없습니다"}
         >

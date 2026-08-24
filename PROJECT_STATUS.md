@@ -34,6 +34,7 @@ The schedule-first web foundation is implemented: detailed closeout → Quest Pl
 - 로컬 개발 환경은 설치 프로그램 없이 `pnpm dev:all`로 UI와 bridge를 함께 실행한다. VS Code task/launch 설정은 UI 브라우저 디버그와 Node bridge attach를 제공하며, bridge debugger는 평소 개발 환경과 동시에 실행하지 않는다. 오버레이 카드는 252×52px로 창과 같은 크기이며 모니터 작업 영역 모서리에 여백 없이 정렬된다.
 - 오버레이 위치는 Tauri 네이티브 `Moved` 이벤트로 앱 데이터에 저장되고 재실행 때 복원된다. 최초 pointerdown에서 native drag를 시작하며, 저장된 임의 위치는 작업 영역 안으로 보정되고 모서리 64px 이내에서만 자석 정렬된다. 실제 Windows 창 이동·재실행 복원을 확인했다.
 - 오버레이 카드는 native 창과 동일한 252×52px로 렌더링한다. `100vw - 16px` 제한으로 생기던 오른쪽 빈 영역을 제거해 모서리 정렬이 시각적으로도 창 끝과 일치한다.
+- 오버레이 제목 버튼은 native drag와 분리되어 클릭 시 관리 화면을 연다. 실제 이동 때만 드래그를 시작하며, 메타 줄에는 로컬 기준 `18:00까지` 남은 시간이 30초 주기로 갱신된다.
 
 ## Current blocker
 
