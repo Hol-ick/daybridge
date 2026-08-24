@@ -188,7 +188,7 @@ def check_dashboard_actions(browser) -> None:
 
 
 def check_overlay(browser) -> None:
-    context = browser.new_context(viewport={"width": 320, "height": 140}, device_scale_factor=1)
+    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -196,7 +196,8 @@ def check_overlay(browser) -> None:
     page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
     overlay = page.locator('[data-testid="now-focus-overlay"]')
     assert overlay.count() == 1
-    box = overlay.bounding_box()
+    surface = page.locator('[data-testid="now-focus-overlay-surface"]')
+    box = surface.bounding_box()
     assert box and round(box["width"]) == 288 and round(box["height"]) == 64
     assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 1
     assert page.get_by_text("시간표 확인", exact=True).count() == 0
@@ -226,10 +227,14 @@ def check_overlay(browser) -> None:
     artifact.parent.mkdir(exist_ok=True)
     page.screenshot(path=str(artifact), full_page=True)
     page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_timeout(100)
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-animation-mid.png", full_page=True)
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
-    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay]').getBoundingClientRect().height) === 520")
-    expanded_box = overlay.bounding_box()
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().height) === 520")
+    expanded_box = surface.bounding_box()
     assert expanded_box and round(expanded_box["height"]) == 520
+    summary_box = page.locator('[data-testid="now-focus-overlay-summary"]').bounding_box()
+    assert summary_box and abs((summary_box["y"] + summary_box["height"]) - (expanded_box["y"] + expanded_box["height"])) <= 1
     assert page.locator('[data-testid="now-focus-overlay-expanded"]').is_visible()
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-expanded.png", full_page=True)
     transition_duration = page.locator('[data-testid="now-focus-overlay-expanded"]').evaluate("element => parseFloat(getComputedStyle(element).transitionDuration)")
@@ -247,8 +252,10 @@ def check_overlay(browser) -> None:
     assert page.locator('[data-testid="now-focus-overlay-collapse"]').count() == 1
     page.locator('[data-testid="now-focus-overlay-collapse"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")
-    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay]').getBoundingClientRect().height) === 64")
-    collapsed_box = overlay.bounding_box()
+    page.wait_for_timeout(100)
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-animation-close-mid.png", full_page=True)
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().height) === 64")
+    collapsed_box = surface.bounding_box()
     assert collapsed_box and round(collapsed_box["height"]) == 64
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
@@ -262,7 +269,7 @@ def check_overlay(browser) -> None:
 
 def check_overlay_actions(browser) -> None:
     """Prove the compact card acknowledges a real completion request."""
-    context = browser.new_context(viewport={"width": 320, "height": 140}, device_scale_factor=1)
+    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
     report_calls: list[dict] = []
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/board(?:\?|$)"),

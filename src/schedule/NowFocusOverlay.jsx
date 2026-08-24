@@ -112,10 +112,13 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
 
   const setExpandedMode = (next) => {
     if (resizeTimerRef.current) window.clearTimeout(resizeTimerRef.current);
-    setExpanded(next);
     if (next) {
-      void resizeOverlay(OVERLAY_EXPANDED_HEIGHT);
+      // Grow the native viewport first. The collapsed card is already aligned
+      // to that viewport's bottom, so the CSS height animation can then pull
+      // only its top edge upward without moving the summary row.
+      void resizeOverlay(OVERLAY_EXPANDED_HEIGHT).catch(() => false).finally(() => setExpanded(true));
     } else {
+      setExpanded(false);
       resizeTimerRef.current = window.setTimeout(() => {
         void resizeOverlay(OVERLAY_COLLAPSED_HEIGHT);
       }, 280);
@@ -198,7 +201,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
 
   return (
     <aside className={styles.overlay} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
-      <div className={surfaceClassName} onPointerDown={handlePointerDown} data-tauri-drag-region="deep">
+      <div className={surfaceClassName} onPointerDown={handlePointerDown} data-tauri-drag-region="deep" data-testid="now-focus-overlay-surface">
         <section className={styles.expandedPanel} aria-label="오늘 시간표 관리" aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
           <header className={styles.expandedHeader}>
             <div><span>오늘 일정</span><strong>{completedCount}/{focusBlocks.length || 0}</strong></div>
@@ -223,7 +226,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
             <button type="button" onClick={handleOpenDashboard} data-tauri-drag-region="false">전체 시간표</button>
           </footer>
         </section>
-        <div className={styles.summary}>
+        <div className={styles.summary} data-testid="now-focus-overlay-summary">
         <button
           className={styles.open}
           type="button"

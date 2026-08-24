@@ -6,10 +6,12 @@
 :global(body[data-surface="overlay"]) {
   overflow: hidden;
   background: transparent;
+  height: 100vh;
 }
 
 :global(body[data-surface="overlay"] #root) {
-  width: max-content;
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
 }

@@ -1,7 +1,10 @@
 .overlay {
   /* Keep the native window and painted card the same size so the widget stays
      compact without sacrificing Korean legibility. */
+  display: flex;
+  align-items: flex-end;
   width: 288px;
+  height: 100%;
   max-width: 100vw;
   box-sizing: border-box;
   color: var(--font-color, #fafafa);
@@ -13,6 +16,7 @@
 .surface {
   position: relative;
   display: block;
+  flex: 0 0 auto;
   width: 100%;
   height: 64px;
   box-sizing: border-box;
