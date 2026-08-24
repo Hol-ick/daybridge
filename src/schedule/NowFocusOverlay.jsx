@@ -59,7 +59,7 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
   const title = privateMode && block ? "집중 시간" : sourceTitle;
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
   const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);
-  const timeLabel = start && end ? `${start} — ${end}` : start || end || "시간표 확인";
+  const timeLabel = start && end ? `${start} — ${end}` : start || end || "";
   const leaveTimer = formatLeaveTimer(currentTime);
   const canComplete = Boolean(!isBusy && blockId && typeof onComplete === "function");
 
@@ -142,9 +142,11 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
           data-testid="now-focus-overlay-open"
           aria-label="Daybridge 전체 시간표 열기"
         >
-          <span className={styles.meta}>
-            <span className={styles.time} data-testid="now-focus-overlay-time">{timeLabel}</span>
-          </span>
+          {timeLabel ? (
+            <span className={styles.meta}>
+              <span className={styles.time} data-testid="now-focus-overlay-time">{timeLabel}</span>
+            </span>
+          ) : null}
           <strong className={styles.title} data-testid="now-focus-overlay-title">{feedback || title}</strong>
         </button>
         {canComplete ? (

@@ -197,6 +197,7 @@ def check_overlay(browser) -> None:
     box = overlay.bounding_box()
     assert box and round(box["width"]) == 288 and round(box["height"]) == 64
     assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 1
+    assert page.get_by_text("시간표 확인", exact=True).count() == 0
     complete = page.locator('[data-testid="now-focus-overlay-complete"]')
     leave_timer = page.locator('[data-testid="now-focus-overlay-leave-time"]')
     assert complete.count() + leave_timer.count() == 1
