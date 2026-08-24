@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { OVERLAY_COLLAPSED_HEIGHT, OVERLAY_EXPANDED_HEIGHT, resizeOverlay, startOverlayDrag } from "../desktopWindow.js";
+import { getWorkdayCountdown } from "./workday-clock.js";
 import styles from "./NowFocusOverlay.module.css";
 
 function asDate(value) {
@@ -75,17 +76,6 @@ function OverlayScheduleItem({ block, privateMode, actionId, onComplete, onDefer
   );
 }
 
-function formatLeaveTimer(value) {
-  const now = value instanceof Date ? value : new Date(value);
-  const deadline = new Date(now);
-  deadline.setHours(18, 0, 0, 0);
-  const remainingMinutes = Math.ceil((deadline.getTime() - now.getTime()) / 60_000);
-  const safeMinutes = Math.max(0, remainingMinutes);
-  const hours = Math.floor(safeMinutes / 60);
-  const minutes = safeMinutes % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-}
-
 /**
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
@@ -115,7 +105,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
   const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "";
-  const leaveTimer = formatLeaveTimer(currentTime);
+  const workdayCountdown = getWorkdayCountdown(currentTime);
   const canComplete = Boolean(!isBusy && blockId && typeof onComplete === "function");
   const blocks = useMemo(() => getScheduleBlocks(schedule), [schedule]);
   const focusBlocks = blocks.filter((item) => scheduleBlockKind(item) === "focus");
@@ -267,9 +257,9 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
           <time
             className={styles.timer}
             data-testid="now-focus-overlay-leave-time"
-            aria-label={`퇴근까지 ${leaveTimer}`}
+            aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
           >
-            {leaveTimer}
+            {workdayCountdown.time}
           </time>
         )}
         </div>
