@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
+    "googleapis": "170.0.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   }

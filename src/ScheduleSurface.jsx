@@ -29,6 +29,7 @@ export default function ScheduleSurface() {
   const [schedule, setSchedule] = useState(null);
   const [nowFocus, setNowFocus] = useState(null);
   const [calendarCoverage, setCalendarCoverage] = useState("attention");
+  const [calendarConnection, setCalendarConnection] = useState({ state: "attention", reason: "status_pending" });
   const [settings, setSettings] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [privateMode, setPrivateMode] = useState(initialPrivateMode);
@@ -59,7 +60,19 @@ export default function ScheduleSurface() {
     } catch { setNotice("시간표 설정을 불러오지 못했어요"); }
   }, []);
 
+  const loadCalendarStatus = useCallback(async ({ quiet = false } = {}) => {
+    try {
+      const result = await readJson(await fetch(`${BRIDGE_URL}/api/calendar/status`));
+      setCalendarConnection(result.calendar || { state: "attention", reason: "status_unavailable" });
+      return result.calendar;
+    } catch {
+      if (!quiet) setNotice("캘린더 연결 상태를 확인하지 못했어요");
+      return null;
+    }
+  }, []);
+
   useEffect(() => { void loadSchedule({ quiet: true }); }, [loadSchedule]);
+  useEffect(() => { void loadCalendarStatus({ quiet: true }); }, [loadCalendarStatus]);
   useEffect(() => {
     const interval = window.setInterval(() => { void loadSchedule({ quiet: true }); }, 60_000);
     return () => window.clearInterval(interval);
@@ -91,6 +104,22 @@ export default function ScheduleSurface() {
     setSettingsOpen(true);
     void loadSettings();
   }, [loadSettings]);
+
+  const connectCalendar = useCallback(async () => {
+    try {
+      const result = await readJson(await fetch(`${BRIDGE_URL}/api/calendar/connect`, { method: "POST" }));
+      setCalendarConnection(result.calendar || { state: "attention", reason: "status_unavailable" });
+      if (result.authorizationUrl) {
+        window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");
+        setNotice("Google 승인 창을 열었어요");
+        window.setTimeout(() => { void loadCalendarStatus({ quiet: true }); }, 1_500);
+      } else if (result.calendar?.state === "unconfigured") {
+        setNotice("Google Calendar 연결 준비가 필요해요");
+      } else {
+        setNotice("캘린더 연결을 시작하지 못했어요");
+      }
+    } catch { setNotice("캘린더 연결을 시작하지 못했어요"); }
+  }, [loadCalendarStatus]);
 
   const saveSettings = useCallback(async (event) => {
     event.preventDefault();
@@ -124,11 +153,13 @@ export default function ScheduleSurface() {
       schedule={schedule}
       nowFocus={nowFocus}
       calendarCoverage={calendarCoverage}
+      calendarConnection={calendarConnection}
       onOpenQuest={toggleQuest}
       onCompleteBlock={(blockId) => { void reportBlock(blockId, "completed"); }}
       onDeferBlock={(blockId) => { void reportBlock(blockId, "deferred"); }}
       onRebuild={() => { void loadSchedule({ rebuild: true }); }}
       onOpenSettings={openSettings}
+      onConnectCalendar={connectCalendar}
     />
     <p className={styles.notice} role="status" data-visible={notice ? "true" : "false"}>{notice}</p>
     {selectedQuest ? <section className={styles.questDetail} aria-label="선택한 작업 상세"><Item quest={selectedQuest} /></section> : null}

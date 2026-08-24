@@ -104,7 +104,7 @@ function normalizeSchedule(date, input = {}) {
     activityDate: date,
     timeZone: source.timeZone === "Asia/Seoul" ? source.timeZone : DEFAULT_SCHEDULE_SETTINGS.timeZone,
     calendar: { coverage },
-    // Calendar sync is deliberately out of this runtime. Never persist input busy ranges here.
+    // Calendar input is normalized to anonymous schedule blocks upstream. Never persist the raw busyBlocks input or event metadata here.
     busyBlocks: [],
     blocks: Array.isArray(source.blocks) ? source.blocks.map(normalizeBlock) : [],
     generatedAt: typeof source.generatedAt === "string" ? source.generatedAt : now(),

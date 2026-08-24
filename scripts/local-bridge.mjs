@@ -11,6 +11,9 @@ import {
   saveSchedule,
   saveScheduleSettings,
 } from "./schedule-store.mjs";
+import { inspectGoogleCalendarConnection, readGoogleCalendarBusyBlocks } from "./calendar/google-calendar-reader.mjs";
+import { createGoogleCalendarAdapter } from "./calendar/googleapis-adapter.mjs";
+import { beginGoogleCalendarAuthorization, finishGoogleCalendarAuthorization, unprotectTokenWithDpapi } from "./calendar/google-oauth.mjs";
 
 const PORT = Number(process.env.DAYBRIDGE_BRIDGE_PORT || 39393);
 const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
@@ -21,6 +24,7 @@ const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const phonePattern = /(?<!\d)01[016789][ -]?\d{3,4}[ -]?\d{4}(?!\d)/g;
 const secretPattern = /(\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|client[_ -]?secret|cookie|session[_ -]?token|private[_ -]?key)\b\s*[:=]\s*)(['"]?)[^\s'"]{8,}/gi;
 const localPathPattern = /\b[A-Z]:\\[^\s|]+/gi;
+const calendarAuthorizationStates = new Map();
 
 function now() { return new Date().toISOString(); }
 function safeDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value || "") ? value : null; }
@@ -59,6 +63,10 @@ const allowedOrigins = new Set(["http://127.0.0.1:4173", "http://localhost:4173"
 function send(response, status, payload, origin) {
   response.writeHead(status, { "Access-Control-Allow-Origin": allowedOrigins.has(origin) ? origin : "http://127.0.0.1:4173", "Vary": "Origin", "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   response.end(JSON.stringify(payload));
+}
+function sendHtml(response, status, markup) {
+  response.writeHead(status, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  response.end(`<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Daybridge Calendar</title><style>body{margin:0;display:grid;min-height:100vh;place-items:center;background:#15161a;color:#f5f5f6;font:15px/1.6 system-ui,sans-serif}.card{width:min(360px,calc(100% - 40px));padding:28px;border:1px solid #30323a;border-radius:14px;background:#1e2026;box-shadow:0 18px 60px #0005}strong{display:block;font-size:20px;margin-bottom:8px}p{margin:0;color:#b7bac4}</style><main class="card">${markup}</main></html>`);
 }
 async function writeEvent(config, event) {
   await atomicWrite(join(DATA_DIR, "events", event.activityDate, event.id + ".json"), event);
@@ -129,8 +137,10 @@ async function rebuildSchedule(activityDate) {
   const generatedAt = koreaNow();
   const tasks = board.quests.map(toTaskCandidate).filter(Boolean);
   const completedQuestIds = board.quests.filter((quest) => (quest?.state || quest?.status) === "completed").map((quest) => quest.id).filter((id) => typeof id === "string");
-  const generated = buildDailySchedule({ date: activityDate, settings, taskCandidates: tasks, busyBlocks: [], lockedBlocks: retainedScheduleBlocks(existingSchedule, generatedAt), completedQuestIds, startAt: generatedAt, generatedAt });
-  return saveSchedule(DATA_DIR, activityDate, { ...generated, date: activityDate, timezone: "Asia/Seoul", calendar: { coverage: "attention" }, busyBlocks: [] });
+  const calendarResult = await readGoogleCalendarBusyBlocks({ date: activityDate, dataDir: DATA_DIR, adapter: createGoogleCalendarAdapter(), unprotectToken: unprotectTokenWithDpapi });
+  const coverage = calendarResult.calendar.state === "connected" ? "connected" : "attention";
+  const generated = buildDailySchedule({ date: activityDate, settings, taskCandidates: tasks, busyBlocks: calendarResult.busyBlocks, lockedBlocks: retainedScheduleBlocks(existingSchedule, generatedAt), completedQuestIds, startAt: generatedAt, generatedAt });
+  return saveSchedule(DATA_DIR, activityDate, { ...generated, date: activityDate, timezone: "Asia/Seoul", calendar: { coverage }, busyBlocks: [] });
 }
 async function handleSchedule(url) {
   const activityDate = safeDate(url.searchParams.get("date")) || new Date().toISOString().slice(0, 10);
@@ -156,6 +166,33 @@ async function handleScheduleBlockReport(body) {
   const mirrored = await writeEvent(config, event);
   return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
 }
+function calendarRedirectUri() { return `http://127.0.0.1:${PORT}/api/calendar/oauth/callback`; }
+function removeExpiredCalendarAuthorizations(at = Date.now()) {
+  for (const [state, expiresAt] of calendarAuthorizationStates) if (expiresAt <= at) calendarAuthorizationStates.delete(state);
+}
+async function handleCalendarStatus() {
+  return { status: 200, body: { calendar: await inspectGoogleCalendarConnection({ dataDir: DATA_DIR }) } };
+}
+async function handleCalendarConnect() {
+  removeExpiredCalendarAuthorizations();
+  const state = randomUUID();
+  const result = await beginGoogleCalendarAuthorization({ dataDir: DATA_DIR, redirectUri: calendarRedirectUri(), state });
+  if (result.state === "needs_authorization" && result.authorizationUrl) calendarAuthorizationStates.set(state, Date.now() + (10 * 60 * 1000));
+  return { status: result.state === "attention" ? 400 : 200, body: { calendar: { state: result.state, reason: result.reason }, authorizationUrl: result.authorizationUrl || null } };
+}
+async function handleCalendarCallback(url, response) {
+  removeExpiredCalendarAuthorizations();
+  const state = url.searchParams.get("state") || "";
+  const code = url.searchParams.get("code") || "";
+  const providerError = url.searchParams.get("error");
+  const expiresAt = calendarAuthorizationStates.get(state);
+  calendarAuthorizationStates.delete(state);
+  if (!expiresAt || expiresAt <= Date.now()) { sendHtml(response, 400, "<strong>연결을 확인할 수 없어요</strong><p>Daybridge에서 다시 연결을 시작한 뒤 이 창을 열어 주세요.</p>"); return; }
+  if (providerError || !code) { sendHtml(response, 400, "<strong>캘린더 연결이 취소되었어요</strong><p>승인하지 않은 상태입니다. 필요할 때 Daybridge에서 다시 연결할 수 있어요.</p>"); return; }
+  const result = await finishGoogleCalendarAuthorization({ dataDir: DATA_DIR, redirectUri: calendarRedirectUri(), code });
+  if (result.state === "connected") { sendHtml(response, 200, "<strong>Google Calendar가 연결되었어요</strong><p>Daybridge는 일정 제목이나 참석자를 읽지 않고, 바쁜 시간만 시간표에 반영합니다. 이 창은 닫아도 됩니다.</p><script>setTimeout(()=>window.close(),1200)</script>"); return; }
+  sendHtml(response, 400, "<strong>연결을 완료하지 못했어요</strong><p>OAuth 설정과 권한을 확인한 뒤 Daybridge에서 다시 시도해 주세요.</p>");
+}
 const server = createServer(async (request, response) => {
   const origin = request.headers.origin;
   if (!request.url) { send(response, 400, { error: "Request URL is required." }, origin); return; }
@@ -163,6 +200,9 @@ const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://127.0.0.1:" + PORT);
   try {
     if (request.method === "GET" && url.pathname === "/api/health") { const config = await loadConfig(); send(response, 200, { status: "ok", dataDir: DATA_DIR, handoffSinkDir: config.handoffSinkDir || null, connected: Boolean(config.handoffSinkDir) }, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/calendar/oauth/callback") { await handleCalendarCallback(url, response); return; }
+    if (request.method === "GET" && url.pathname === "/api/calendar/status") { const result = await handleCalendarStatus(); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/calendar/connect") { const result = await handleCalendarConnect(); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/board") { const result = await handleBoard(url); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/report") { const result = await handleReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule") { const result = await handleSchedule(url); send(response, result.status, result.body, origin); return; }

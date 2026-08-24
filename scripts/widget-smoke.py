@@ -14,6 +14,7 @@ DEFAULT_SETTINGS = json.dumps({
         "bufferMinutes": 10,
     }
 })
+CALENDAR_UNCONFIGURED = json.dumps({"calendar": {"state": "unconfigured", "reason": "oauth_client_missing", "canReadBusyBlocks": False}})
 
 
 def assert_no_page_errors(errors: list[str]) -> None:
@@ -26,6 +27,14 @@ def check_dashboard(browser) -> None:
         "http://127.0.0.1:39393/api/schedule-settings",
         lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
     )
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/connect",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -36,6 +45,13 @@ def check_dashboard(browser) -> None:
     assert page.locator('[data-testid="schedule-timeline"]').count() == 0
     assert page.locator('[data-testid="schedule-empty"]').count() == 1
     assert page.locator('[data-testid="quest-item"]').count() == 0
+    page.locator('[data-testid="calendar-connect"]').click()
+    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('연결 준비')")
+    assert "연결 준비" in page.locator('[role="status"]').inner_text()
+
+    dashboard_artifact = Path("test-artifacts/daybridge-schedule-dashboard-default.png")
+    dashboard_artifact.parent.mkdir(exist_ok=True)
+    page.screenshot(path=str(dashboard_artifact), full_page=True)
 
     page.locator('[data-testid="schedule-settings"]').click()
     page.wait_for_selector('form[aria-label="시간표 설정"]')

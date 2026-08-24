@@ -12,7 +12,7 @@ Daybridge is local-first in its initial release.
 
 - Upload diary contents by default.
 - Edit original daily notes, project worklogs, or canonical memory.
-- Store credentials, authentication codes, account details, or raw email bodies.
+- Store credentials, authentication codes, account details, or raw email bodies in Daybridge files or AIHUB. Google Calendar refresh tokens, when the user explicitly connects Calendar, are kept only as Windows-DPAPI ciphertext under the local Daybridge app-data directory.
 - Treat a user click as independently verified work completion.
 
 ## Display safety
@@ -20,3 +20,7 @@ Daybridge is local-first in its initial release.
 Desktop widgets can be visible to someone nearby. The compiler must remove or generalize client names, sender addresses, account numbers, tokens, attachment names, personal identifiers, and other sensitive details. If safe reduction is not possible, the item is excluded and marked for review in the source system.
 
 Cloud sync, telemetry, account login, and external AI calls are out of scope until the data flows and consent language are explicitly designed.
+
+## Google Calendar exception
+
+The optional Google Calendar connector is an explicit local consent flow. It requests the read-only Calendar scope and gives the scheduler only anonymous busy start/end ranges. It has no create, update, or delete path. See [Google Calendar connection](GOOGLE_CALENDAR.md).

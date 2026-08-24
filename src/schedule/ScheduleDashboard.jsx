@@ -128,6 +128,8 @@ export default function ScheduleDashboard({
   onRebuild,
   onOpenSettings,
   calendarCoverage,
+  calendarConnection,
+  onConnectCalendar,
 }) {
   const focus = getFocusBlock(nowFocus);
   const focusKind = blockKind(focus);
@@ -138,8 +140,14 @@ export default function ScheduleDashboard({
   const blocks = normalizeBlocks(schedule);
   const unscheduledCount = getUnscheduledCount(schedule);
   const scheduleLabel = schedule?.label ?? schedule?.dateLabel ?? "오늘 시간표";
-  const coverageState = calendarCoverage?.state ?? calendarCoverage ?? "unknown";
-  const coverageLabel = coverageState === "connected" || coverageState === "fresh" ? "캘린더 반영됨" : "캘린더 확인 필요";
+  const coverageState = calendarConnection?.state ?? calendarCoverage?.state ?? calendarCoverage ?? "unknown";
+  const coverageLabel = coverageState === "connected"
+    ? "Google Calendar 연결됨"
+    : coverageState === "needs_authorization"
+      ? "Google Calendar 승인 필요"
+      : coverageState === "unconfigured"
+        ? "Google Calendar 연결 준비 필요"
+        : "캘린더 확인 필요";
 
   return (
     <main className={styles.dashboard} data-testid="schedule-dashboard">
@@ -150,6 +158,7 @@ export default function ScheduleDashboard({
         </div>
         <div className={styles.headerActions}>
           <span className={styles.coverage} data-testid="calendar-coverage" aria-label={coverageLabel} title={coverageLabel} data-state={coverageState} />
+          <button type="button" onClick={onConnectCalendar} data-testid="calendar-connect">캘린더</button>
           <button type="button" onClick={onRebuild} data-testid="schedule-rebuild">재배치</button>
           <button type="button" onClick={onOpenSettings} data-testid="schedule-settings" aria-label="시간표 설정">설정</button>
         </div>

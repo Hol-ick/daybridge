@@ -43,6 +43,7 @@ Daybridge does not edit the original daily note. The compiler creates a sanitize
 - [Architecture](docs/ARCHITECTURE.md)
 - [Action-list contract](docs/INTEGRATION_CONTRACT.md)
 - [Privacy boundary](docs/PRIVACY.md)
+- [Google Calendar connection](docs/GOOGLE_CALENDAR.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Debugging guide](docs/DEBUGGING.md)
 - [Contributing](CONTRIBUTING.md)
