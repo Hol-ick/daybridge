@@ -7,14 +7,44 @@ use tauri::{
 };
 
 const OVERLAY_POSITION_FILE: &str = "overlay-position.json";
+const WINDOWS_STARTUP_VALUE: &str = "Daybridge";
+
+#[cfg(windows)]
+fn configure_windows_startup() -> Result<(), String> {
+    use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("실행 파일 경로를 확인할 수 없습니다: {error}"))?;
+    let quoted_executable = format!("\"{}\"", executable.display());
+    let current_user = RegKey::predef(HKEY_CURRENT_USER);
+    let (run_key, _) = current_user
+        .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")
+        .map_err(|error| format!("Windows 시작 항목을 열 수 없습니다: {error}"))?;
+    run_key
+        .set_value(WINDOWS_STARTUP_VALUE, &quoted_executable)
+        .map_err(|error| format!("Windows 시작 항목을 저장할 수 없습니다: {error}"))
+}
+
+#[cfg(not(windows))]
+fn configure_windows_startup() -> Result<(), String> {
+    Ok(())
+}
 
 fn overlay_position_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    app.path().app_data_dir().ok().map(|directory| directory.join(OVERLAY_POSITION_FILE))
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|directory| directory.join(OVERLAY_POSITION_FILE))
 }
 
 fn parse_position_value(contents: &str, key: &str) -> Option<i32> {
     let marker = format!("\"{key}\":");
-    let value = contents.split_once(&marker)?.1.split([',', '}']).next()?.trim();
+    let value = contents
+        .split_once(&marker)?
+        .1
+        .split([',', '}'])
+        .next()?
+        .trim();
     value.parse().ok()
 }
 
@@ -28,7 +58,8 @@ fn read_overlay_position(app: &tauri::AppHandle) -> Option<[i32; 2]> {
 }
 
 fn persist_overlay_position(app: &tauri::AppHandle, x: i32, y: i32) -> Result<(), String> {
-    let path = overlay_position_path(app).ok_or_else(|| "앱 데이터 경로를 확인할 수 없습니다.".to_string())?;
+    let path = overlay_position_path(app)
+        .ok_or_else(|| "앱 데이터 경로를 확인할 수 없습니다.".to_string())?;
     if let Some(directory) = path.parent() {
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     }
@@ -88,6 +119,14 @@ fn save_overlay_position(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), St
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
+            // Only the packaged application registers itself. Development
+            // builds depend on the local Vite server and must not become a
+            // stale Windows startup entry after a reboot.
+            if !cfg!(debug_assertions) {
+                if let Err(error) = configure_windows_startup() {
+                    eprintln!("Daybridge 자동 시작 등록 실패: {error}");
+                }
+            }
             if let Some(window) = app.get_webview_window("overlay") {
                 let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
             }
@@ -97,7 +136,11 @@ fn main() {
             let menu = Menu::with_items(app, &[&show, &hide, &quit])?;
 
             TrayIconBuilder::with_id("daybridge-tray")
-                .icon(app.default_window_icon().expect("missing Daybridge icon").clone())
+                .icon(
+                    app.default_window_icon()
+                        .expect("missing Daybridge icon")
+                        .clone(),
+                )
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -119,14 +162,18 @@ fn main() {
                         ..
                     } = event
                     {
-                    let _ = show_dashboard(&tray.app_handle());
+                        let _ = show_dashboard(&tray.app_handle());
                     }
                 })
                 .build(app)?;
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![open_dashboard, get_overlay_position, save_overlay_position])
+        .invoke_handler(tauri::generate_handler![
+            open_dashboard,
+            get_overlay_position,
+            save_overlay_position
+        ])
         .on_window_event(|window, event| {
             if window.label() == "overlay" {
                 if let WindowEvent::Moved(position) = event {
