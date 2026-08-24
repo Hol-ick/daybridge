@@ -94,6 +94,7 @@ export async function snapOverlayToCorner() {
   const next = nearestOverlayCorner(position, monitor, size);
   rememberOverlayPosition(next);
   if (next.x !== position.x || next.y !== position.y) await windowHandle.setPosition(new PhysicalPosition(next.x, next.y));
+  await invoke("save_overlay_position", { x: Math.round(next.x), y: Math.round(next.y) });
 }
 
 export async function placeOverlayInCorner() {
@@ -102,10 +103,16 @@ export async function placeOverlayInCorner() {
   const [monitor, size] = await Promise.all([currentMonitor(), windowHandle.outerSize()]);
   if (!monitor) return;
   const bounds = overlayBounds(monitor, size);
-  const saved = readOverlayPosition();
-  const next = saved
-    ? new PhysicalPosition(Math.min(bounds.maxX, Math.max(bounds.minX, saved.x)), Math.min(bounds.maxY, Math.max(bounds.minY, saved.y)))
+  // Native move events persist arbitrary drag positions. Read that durable
+  // value first; localStorage is only a browser-preview fallback.
+  const saved = await invoke("get_overlay_position");
+  const savedPosition = Array.isArray(saved) && saved.length === 2
+    ? { x: Number(saved[0]), y: Number(saved[1]) }
+    : readOverlayPosition();
+  const next = savedPosition && Number.isFinite(savedPosition.x) && Number.isFinite(savedPosition.y)
+    ? new PhysicalPosition(Math.min(bounds.maxX, Math.max(bounds.minX, savedPosition.x)), Math.min(bounds.maxY, Math.max(bounds.minY, savedPosition.y)))
     : new PhysicalPosition(bounds.maxX, bounds.maxY);
   await windowHandle.setPosition(next);
   rememberOverlayPosition(next);
+  await invoke("save_overlay_position", { x: Math.round(next.x), y: Math.round(next.y) });
 }

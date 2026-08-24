@@ -65,23 +65,28 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
     const state = dragRef.current;
     state.point = { x: event.clientX, y: event.clientY };
     const cleanup = () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", cleanup);
+      document.removeEventListener("pointermove", handleMove);
+      document.removeEventListener("pointerup", cleanup);
+      document.removeEventListener("pointercancel", cleanup);
+      state.point = null;
       state.cleanup = null;
     };
     const handleMove = (moveEvent) => {
       if (!state.point || Math.hypot(moveEvent.clientX - state.point.x, moveEvent.clientY - state.point.y) < 4) return;
-      cleanup();
       state.suppressClick = true;
-      void startOverlayDrag().then((started) => {
-        if (!started) state.suppressClick = false;
-      });
       window.setTimeout(() => { state.suppressClick = false; }, 500);
     };
     state.cleanup?.();
     state.cleanup = cleanup;
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", cleanup, { once: true });
+    document.addEventListener("pointermove", handleMove);
+    document.addEventListener("pointerup", cleanup, { once: true });
+    document.addEventListener("pointercancel", cleanup, { once: true });
+    // Tauri's native Windows drag must be started from the initial
+    // mousedown/pointerdown event. Calling it only after the pointer moved
+    // makes the card look immovable in some WebView2 focus states.
+    void startOverlayDrag().catch(() => {
+      state.suppressClick = false;
+    });
   };
 
   const handleOpenDashboard = (event) => {
@@ -96,7 +101,7 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
 
   return (
     <aside className={styles.overlay} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
-      <div className={styles.surface} onPointerDown={handlePointerDown} data-drag-region="true">
+      <div className={styles.surface} onPointerDown={handlePointerDown} data-tauri-drag-region="true">
         <button
           className={styles.open}
           type="button"
