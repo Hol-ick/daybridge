@@ -2,13 +2,14 @@
 
 ## Product shape
 
-Daybridge is an execution layer over AIHUB, not a second diary. The layers are:
+Daybridge is an execution layer over AIHUB, not a second diary or a second calendar. The current product direction is schedule-first: it turns AIHUB work candidates into a daily timetable around calendar constraints. The layers are:
 
 1. **AIHUB closeout** — produces the detailed, evidence-linked report. It is the source of truth and is never edited by Daybridge.
 2. **Completion-driven continuation** — the closeout automation invokes the Quest Extractor only after a ready synthesis exists. No fixed 17:40 cron is required.
 3. **Quest Plan** — a sanitized derived artifact. Stable `mission_id` and `quest_id` let a multi-day mission continue without resetting progress.
-4. **Daybridge compiler and bridge** — converts the plan into a local board, preserves receipts, and mirrors sanitized user interactions back to AIHUB.
-5. **Widget** — shows atomic quests (one observable outcome, normally 10–30 minutes), explicit sequence locks, progress, and carryover.
+4. **Calendar busy reader** — a local, user-authorized, read-only adapter that returns only occupied start/end ranges. It has no calendar write path.
+5. **DailySchedule** — combines task candidates, busy windows, user settings, prior receipts, and carryover into deterministic focus, busy, and buffer blocks.
+6. **Local bridge and widget** — serves the schedule, preserves receipts, mirrors sanitized user interactions back to AIHUB, and shows one current action plus a compact timeline.
 
 ## Data flow
 
@@ -17,8 +18,10 @@ Daybridge is an execution layer over AIHUB, not a second diary. The layers are:
         ↓ closeout packet ready signal
         ↓ Quest Extractor + quality gate + board compiler
         ↓ daybridge_quest_plan.json / .md
-09:05 Daybridge board refresh → Now / Next / Waiting / Completed
-        ↓ user receipts: complete, defer, blocked, resume
+morning Calendar busy sync (read-only) + local cache fallback
+        ↓
+Daybridge schedule refresh → Current focus / timetable / unscheduled carryover
+        ↓ user receipts: start, complete, defer, skip, rebalance remaining blocks
 AIHUB handoff sink → next closeout reconciliation
 ```
 
@@ -27,11 +30,12 @@ The continuation runner writes `daybridge_continuation.json` with `waiting`, `bl
 ## Execution model
 
 - A **mission** aggregates a multi-day outcome; it is not directly checked off.
-- A **quest** is one concrete result. Large work is split into several quests rather than hidden in one parent card.
+- A **quest** is one concrete result. It becomes one or more 25/50-minute focus blocks; it is not replaced by a calendar event.
 - A **step** is a mechanical unit. It is locked only when the plan explicitly declares `depends_on` or sequential execution.
-- States are `ready`, `in_progress`, `deferred`, `blocked`, and `completed`.
-- There are no XP, levels, badges, or artificial side-quest buckets. Priority (`must`, `should`, `could`) and execution mode (`independent`, `sequential`) are enough.
-- Deferring a quest keeps its stable ID and moves the unfinished work into the next plan as carryover.
+- A **busy block** is a Calendar time constraint. Its event details never enter the schedule.
+- A **focus block** is an executable window for one quest. A **buffer block** protects transitions and is not a task.
+- `DailySchedule` returns one of `active_focus`, `in_busy_time`, `up_next`, or `free_time` for the present moment.
+- Deferring unfinished work keeps its stable ID and makes it eligible for tomorrow's schedule as carryover.
 
 ## Ownership and safety
 
@@ -39,7 +43,9 @@ The continuation runner writes `daybridge_continuation.json` with `waiting`, `bl
 |---|---|---:|
 | Daily notes, worklogs, closeout synthesis | AIHUB source system | No |
 | Quest Plan | AIHUB extractor | No (read-only consumer) |
+| Google Calendar busy windows | User's Calendar | Read only, time ranges only |
+| DailySchedule and focus-block receipts | Daybridge | Yes |
 | Local board and user receipts | Daybridge | Yes |
 | Canonical project memory | AIHUB memory system | No |
 
-The bridge treats a click as a user acknowledgement, not independent proof. Every quest retains sanitized `source_refs`, coverage, quality, and exclusion warnings.
+The bridge treats a click as a user acknowledgement, not independent proof. Every quest retains sanitized `source_refs`, coverage, quality, and exclusion warnings. Calendar OAuth credentials live only in the operating system credential store; calendar event fields never cross into Daybridge files or AIHUB handoffs.

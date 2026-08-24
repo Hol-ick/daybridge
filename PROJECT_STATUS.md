@@ -1,16 +1,16 @@
 # Daybridge Project Status
 
 - Status: active
-- Last updated: 2026-08-12 KST
+- Last updated: 2026-08-24 KST
 - Repository: https://github.com/Hol-ick/daybridge
 
 ## Objective
 
-Turn the AIHUB closeout into a small, evidence-linked next-business-day quest board that stays visible as a calm Windows widget without changing the original notes.
+Turn AIHUB's evidence-linked daily work and learning candidates into a calm Windows timetable widget. It must show one actionable "do this now" focus block while respecting the user's Google Calendar availability without changing the original notes or calendar by default.
 
 ## Current milestone
 
-M2 implemented in source: detailed-closeout → separate Quest Extractor → stable Quest Plan → carryover-aware compiler/bridge → compact sequential quest widget. The todometer-based renderer and Tauri always-on-top shell remain the presentation layer.
+The completed quest-board foundation is being superseded by the **schedule-first** milestone: detailed closeout → Quest Plan → task candidates + read-only Calendar busy windows → carryover-aware `DailySchedule` → current-focus timetable widget. The todometer renderer and Tauri always-on-top shell remain presentation foundations, but the card deck will become a timeline with an expandable task detail.
 
 ## Verified progress
 
@@ -25,20 +25,22 @@ M2 implemented in source: detailed-closeout → separate Quest Extractor → sta
 - The accordion unfold, staggered sub-quest reveal, and completion response respect reduced-motion preference. The isolated browser smoke check confirms the collapsed default, single-card expansion, sub-quest completion, and absence of removed controls.
 - The Tauri shell defines a transparent frameless always-on-top window plus tray show/hide/quit behavior. Closing the window hides it to the tray.
 - TypeScript, production Vite build, compiler tests, runner/profile self-tests, local bridge syntax, and browser smoke/visual checks passed. The card-deck smoke check was run against an isolated preview fixture.
+- A schedule-first implementation plan now defines a deep `DailySchedule` module, Google Calendar busy-only read adapter, local-only schedule persistence, and a single current-focus card. Calendar writes are intentionally out of scope until the user explicitly asks for them.
 
 ## Current blocker
 
-The native Windows installer is not yet buildable on this computer because Rust/Cargo and Microsoft C++ Build Tools with the Windows SDK are not installed. WebView2 is available.
+The native Windows installer is not yet buildable on this computer because Rust/Cargo and Microsoft C++ Build Tools with the Windows SDK are not installed. WebView2 is available. The Google Calendar runtime connection also requires a user-authorized local OAuth setup; no calendar events will be written.
 
 ## Next actions
 
-1. Install the Windows native build prerequisites, then run `pnpm build:widget` and test tray/always-on-top behavior.
-2. Observe the next delayed closeout and verify the continuation receipt and board handoff.
-3. Decide public-release packaging policy before publishing an installer; the current renderer reuse boundary is documented and attributed.
+1. Implement and test the `DailySchedule` model and deterministic scheduler before changing the widget layout.
+2. Add the local bridge schedule endpoints and read-only Google Calendar busy-window adapter, including cache fallback and privacy tests.
+3. Replace the card-first surface with the current-focus card and timetable timeline; then verify it in web and native widget modes.
 
 ## Boundaries and risks
 
 - Original diaries, worklogs, closeout sources, and canonical indexes remain read-only to Daybridge.
 - A user click is a status receipt, not independent proof of task completion.
+- Calendar integration exposes only busy time ranges to scheduling. Event titles, attendees, descriptions, links, locations, tokens, and credentials are not written to Daybridge or AIHUB artifacts.
 - The machine-local Daybridge checkout and Node runtime paths must never enter repository fixtures or shared AIHUB documents.
 - Public release, telemetry, cloud sync, authentication, and licensing remain separate decisions.

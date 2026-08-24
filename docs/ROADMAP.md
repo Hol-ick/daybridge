@@ -24,15 +24,23 @@
 - Source-reference opening
 - Freshness and stale-data state
 
-## M3 — Windows desktop shell
+## M3 — Schedule-first daily companion
+
+- `DailySchedule` domain model with deterministic 25/50-minute focus blocks
+- current-focus resolver and remaining-day rebalance
+- local bridge schedule persistence and sanitized block receipts
+- read-only Google Calendar busy-window adapter with cache fallback
+- timetable UI with expandable task detail
+
+## M4 — Windows desktop shell
 
 - Tauri wrapper
 - Tray, autostart, persisted position, and compact widget mode
 - Explicit local-path setup flow
 
-## M4 — Optional extensions
+## M5 — Optional extensions
 
 - Multiple note sources
-- Calendar-aware but consented prioritization
+- Explicit, previewed calendar write-back chosen by the user
 - A review queue for low-confidence candidates
 - Optional encrypted sync
