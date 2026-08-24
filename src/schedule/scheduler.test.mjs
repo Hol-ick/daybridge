@@ -108,6 +108,16 @@ test("resolveNowFocus distinguishes active work, calendar time, upcoming work, a
   assert.equal(resolveNowFocus(schedule, "2026-08-24T12:00:00+09:00").state, "free_time");
 });
 
+test("resolveNowFocus skips completed, skipped, and deferred focus blocks", () => {
+  const schedule = buildDailySchedule({ date: DATE, settings, taskCandidates: [candidate("first", "must", 50), candidate("second", "should", 50)] });
+  const [first, second] = schedule.blocks.filter((block) => block.type === "focus");
+  const updated = { ...schedule, blocks: [{ ...first, status: "completed" }, { ...second, status: "planned" }] };
+
+  const result = resolveNowFocus(updated, "2026-08-24T08:40:00+09:00");
+  assert.equal(result.state, "up_next");
+  assert.equal(result.block.id, second.id);
+});
+
 test("rebuildRemainingSchedule preserves elapsed and locked blocks while moving remaining work after now", () => {
   const original = buildDailySchedule({ date: DATE, settings, taskCandidates: [candidate("must", "must", 50), candidate("should", "should", 25)] });
   const rebuilt = rebuildRemainingSchedule({

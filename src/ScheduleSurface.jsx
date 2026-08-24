@@ -115,7 +115,8 @@ export default function ScheduleSurface() {
       setNowFocus(result.nowFocus);
       setNotice(status === "completed" ? "집중 시간을 완료했어요" : "이 작업은 다음 계획으로 넘겼어요");
       void refresh();
-    } catch { setNotice("진행 상태를 저장하지 못했어요"); }
+      return true;
+    } catch { setNotice("진행 상태를 저장하지 못했어요"); return false; }
   }, [activityDate, refresh]);
 
   const openSettings = useCallback(() => {
@@ -166,7 +167,7 @@ export default function ScheduleSurface() {
 
   const selectedQuest = useMemo(() => board?.quests?.find((quest) => quest.id === expandedQuestId) || null, [board?.quests, expandedQuestId]);
   if (surface === "overlay") {
-    return <NowFocusOverlay nowFocus={nowFocus} privateMode={privateMode} onOpenDashboard={() => { void openDashboard(); }} onComplete={(blockId) => { void reportBlock(blockId, "completed"); }} />;
+    return <NowFocusOverlay nowFocus={nowFocus} privateMode={privateMode} onOpenDashboard={() => { void openDashboard(); }} onComplete={(blockId) => reportBlock(blockId, "completed")} />;
   }
 
   return <div className={styles.shell}>

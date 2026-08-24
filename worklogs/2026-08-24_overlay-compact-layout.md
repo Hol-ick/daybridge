@@ -12,11 +12,13 @@
 - 기존 dashboard 화면의 배경과 레이아웃은 surface 데이터 속성으로 분리해 영향받지 않게 했다.
 - 카드의 비버튼 영역에서 native drag를 시작하고, 마지막 위치를 저장한다. 모니터 작업 영역 모서리 64px 안으로 들어오면 가장 가까운 모서리로 자석 정렬하며, 모서리 여백은 0px로 맞춘다. CSS 카드 높이도 native 창과 같은 52px로 고정했다.
 - 대시보드 smoke 흐름에서 실제 완료 보고(`POST /api/schedule/block-report`)와 설정 저장·재배치(`PUT /api/schedule-settings`, `POST /api/schedule/rebuild`) 요청을 실행해 화면이 목업이 아님을 확인했다.
+- 완료 보고 뒤에도 같은 카드가 남아 보이던 상태 선택 버그를 수정했다. `completed`·`skipped`·`deferred` 블록은 현재 포커스 후보에서 제외하고, 오버레이 버튼은 `저장 중` → `완료`/`다시 시도`로 즉시 피드백한다.
 
 ## 검증
 
 - TypeScript 검사, Vite production build, Tauri `cargo check` 통과.
 - Playwright dashboard·overlay smoke 통과.
+- 완료 보고 후 다음 집중 블록으로 이동하는 overlay action smoke 통과.
 - 좁은 overlay 화면에서 카드 bounding box `252×52px`, root 높이 `52px`, `body` 배경 `rgba(0, 0, 0, 0)` 확인.
 - 콘솔 오류와 실패 네트워크 요청 없음.
 

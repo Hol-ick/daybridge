@@ -213,6 +213,40 @@ def check_overlay(browser) -> None:
     context.close()
 
 
+def check_overlay_actions(browser) -> None:
+    """Prove the compact card acknowledges a real completion request."""
+    context = browser.new_context(viewport={"width": 320, "height": 140}, device_scale_factor=1)
+    report_calls: list[dict] = []
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/board(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_BOARD),
+    )
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_SCHEDULE),
+    )
+
+    def handle_report(route) -> None:
+        report_calls.append(json.loads(route.request.post_data or "{}"))
+        route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_COMPLETED)
+
+    context.route("http://127.0.0.1:39393/api/schedule/block-report", handle_report)
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.wait_for_selector('[data-testid="now-focus-overlay-complete"]:not([disabled])')
+    page.locator('[data-testid="now-focus-overlay-complete"]').click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-title]').textContent === '완료'")
+    assert report_calls and report_calls[0]["blockId"] == "focus-1" and report_calls[0]["status"] == "completed"
+    assert_no_page_errors(errors)
+    context.close()
+
+
 def main() -> None:
     with sync_playwright() as playwright:
         launch_options = {"headless": True}
@@ -223,6 +257,7 @@ def main() -> None:
         check_dashboard(browser)
         check_dashboard_actions(browser)
         check_overlay(browser)
+        check_overlay_actions(browser)
         browser.close()
 
 

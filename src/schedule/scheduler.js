@@ -156,15 +156,19 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
   return normalizeSchedule({ ...shell, blocks, unscheduled });
 }
 
+function isOpenFocus(block) {
+  return block.type === "focus" && !["completed", "skipped", "deferred"].includes(block.status);
+}
+
 function nextFocus(schedule, nowMs) {
-  return schedule.blocks.find((block) => block.type === "focus" && Date.parse(block.startAt) > nowMs) || null;
+  return schedule.blocks.find((block) => isOpenFocus(block) && Date.parse(block.startAt) > nowMs) || null;
 }
 
 export function resolveNowFocus(schedule, now) {
   const normalized = normalizeSchedule(schedule);
   if (!isKstIso(now)) throw new TypeError("resolveNowFocus needs a Korea-time ISO timestamp");
   const nowMs = Date.parse(now);
-  const active = normalized.blocks.find((block) => Date.parse(block.startAt) <= nowMs && nowMs < Date.parse(block.endAt));
+  const active = normalized.blocks.find((block) => Date.parse(block.startAt) <= nowMs && nowMs < Date.parse(block.endAt) && (block.type !== "focus" || isOpenFocus(block)));
   if (active?.type === "focus") return { state: "active_focus", block: active, nextFocus: nextFocus(normalized, nowMs) };
   if (active?.type === "busy") return { state: "in_busy_time", block: active, nextFocus: nextFocus(normalized, nowMs) };
   const upcoming = nextFocus(normalized, nowMs);

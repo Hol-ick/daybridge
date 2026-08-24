@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { startOverlayDrag } from "../desktopWindow.js";
 import styles from "./NowFocusOverlay.module.css";
 
@@ -29,6 +29,12 @@ function getFocusBlock(nowFocus) {
  */
 export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete, privateMode = false }) {
   const dragRef = useRef({ point: null, cleanup: null, suppressClick: false });
+  const feedbackTimerRef = useRef(null);
+  const [feedback, setFeedback] = useState("");
+  const [completing, setCompleting] = useState(false);
+  useEffect(() => () => {
+    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+  }, []);
   const block = getFocusBlock(nowFocus);
   const blockId = block?.id ?? nowFocus?.blockId;
   const blockKind = block?.kind ?? block?.type ?? block?.blockType;
@@ -40,9 +46,18 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "시간표 확인";
   const canComplete = Boolean(!isBusy && blockId && typeof onComplete === "function");
 
-  const handleComplete = (event) => {
+  const handleComplete = async (event) => {
     event.stopPropagation();
-    if (canComplete) onComplete(blockId);
+    if (!canComplete || completing) return;
+    setCompleting(true);
+    setFeedback("저장 중");
+    let result = false;
+    try { result = await onComplete(blockId); } catch { result = false; }
+    setCompleting(false);
+    const succeeded = result !== false;
+    setFeedback(succeeded ? "완료" : "다시 시도");
+    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = window.setTimeout(() => setFeedback(""), succeeded ? 900 : 1800);
   };
 
   const handlePointerDown = (event) => {
@@ -90,17 +105,17 @@ export default function NowFocusOverlay({ nowFocus, onOpenDashboard, onComplete,
           aria-label="Daybridge 전체 시간표 열기"
         >
           <span className={styles.time} data-testid="now-focus-overlay-time">{timeLabel}</span>
-          <strong className={styles.title} data-testid="now-focus-overlay-title">{title}</strong>
+          <strong className={styles.title} data-testid="now-focus-overlay-title">{feedback || title}</strong>
         </button>
         <button
           className={styles.complete}
           type="button"
           onClick={handleComplete}
-          disabled={!canComplete}
+          disabled={!canComplete || completing}
           data-testid="now-focus-overlay-complete"
           aria-label={canComplete ? `${title} 완료` : "완료할 집중 시간이 없습니다"}
         >
-          완료
+          {completing ? "저장" : feedback || "완료"}
         </button>
       </div>
     </aside>
