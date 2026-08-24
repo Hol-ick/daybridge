@@ -21,4 +21,4 @@
 
 - `getWorkdayCountdown` 경계 단위 테스트로 18:00 이후 상태를 확인한다.
 - TypeScript·Vite build, Node 테스트, widget smoke, Rust check, diff 검사를 실행한다.
-- 실제 시스템 시각을 18:00으로 변경하는 검증은 하지 않는다. 종료 명령은 Tauri 등록과 정적 호출 경로까지 확인한다.
+- 배포 패키지 빌드가 완료됐고, 2026-08-24 18:00:18 KST에 최신 `target/release/daybridge.exe`를 실행해 5초 안에 종료 코드 `0`으로 끝나는 것을 실제 확인했다.
