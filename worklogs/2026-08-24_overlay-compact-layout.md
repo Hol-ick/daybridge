@@ -10,13 +10,14 @@
 - 카드 폭을 252px로 줄이고 패딩·간격·글자·완료 버튼을 함께 축소했다.
 - overlay surface가 표시될 때 `body` 배경을 투명하게 만들고 root를 콘텐츠 크기로 제한했다. 카드 주변에 남던 큰 보라색 사각형이 더 이상 칠해지지 않는다.
 - 기존 dashboard 화면의 배경과 레이아웃은 surface 데이터 속성으로 분리해 영향받지 않게 했다.
-- 카드의 비버튼 영역에서 native drag를 시작하고, 마지막 위치를 저장한다. 모니터 작업 영역 모서리 64px 안으로 들어오면 가장 가까운 모서리로 자석 정렬한다.
+- 카드의 비버튼 영역에서 native drag를 시작하고, 마지막 위치를 저장한다. 모니터 작업 영역 모서리 64px 안으로 들어오면 가장 가까운 모서리로 자석 정렬하며, 모서리 여백은 0px로 맞춘다. CSS 카드 높이도 native 창과 같은 52px로 고정했다.
+- 대시보드 smoke 흐름에서 실제 완료 보고(`POST /api/schedule/block-report`)와 설정 저장·재배치(`PUT /api/schedule-settings`, `POST /api/schedule/rebuild`) 요청을 실행해 화면이 목업이 아님을 확인했다.
 
 ## 검증
 
 - TypeScript 검사, Vite production build, Tauri `cargo check` 통과.
 - Playwright dashboard·overlay smoke 통과.
-- 좁은 overlay 화면에서 카드 bounding box `252×50.98px`, `body` 배경 `rgba(0, 0, 0, 0)` 확인.
+- 좁은 overlay 화면에서 카드 bounding box `252×52px`, root 높이 `52px`, `body` 배경 `rgba(0, 0, 0, 0)` 확인.
 - 콘솔 오류와 실패 네트워크 요청 없음.
 
 ## 남은 확인

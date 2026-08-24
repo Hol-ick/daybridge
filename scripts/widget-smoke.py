@@ -28,6 +28,48 @@ EMPTY_SCHEDULE = json.dumps({
     },
     "nowFocus": {"state": "free_time", "block": None, "nextFocus": None},
 })
+FUNCTIONAL_BOARD = json.dumps({
+    "board": {
+        "schemaVersion": 2,
+        "activityDate": "2026-08-24",
+        "missions": [],
+        "quests": [],
+    }
+})
+FUNCTIONAL_BLOCK = {
+    "id": "focus-1",
+    "kind": "focus",
+    "displayTitle": "리눅스 학습",
+    "startAt": "2026-08-24T09:00:00+09:00",
+    "endAt": "2026-08-24T09:50:00+09:00",
+    "status": "planned",
+}
+FUNCTIONAL_SCHEDULE = json.dumps({
+    "schedule": {
+        "schemaVersion": 1,
+        "date": "2026-08-24",
+        "timezone": "Asia/Seoul",
+        "generatedAt": "2026-08-24T00:00:00+09:00",
+        "label": "오늘 시간표",
+        "blocks": [FUNCTIONAL_BLOCK],
+        "unscheduled": [],
+        "calendar": {"coverage": "fresh"},
+    },
+    "nowFocus": {"state": "focus", "block": FUNCTIONAL_BLOCK, "nextFocus": None},
+})
+FUNCTIONAL_COMPLETED = json.dumps({
+    "schedule": {
+        "schemaVersion": 1,
+        "date": "2026-08-24",
+        "timezone": "Asia/Seoul",
+        "generatedAt": "2026-08-24T00:00:00+09:00",
+        "label": "오늘 시간표",
+        "blocks": [{**FUNCTIONAL_BLOCK, "status": "completed"}],
+        "unscheduled": [],
+        "calendar": {"coverage": "fresh"},
+    },
+    "nowFocus": {"state": "free_time", "block": None, "nextFocus": None},
+})
 
 
 def assert_no_page_errors(errors: list[str]) -> None:
@@ -83,6 +125,66 @@ def check_dashboard(browser) -> None:
     context.close()
 
 
+def check_dashboard_actions(browser) -> None:
+    """Prove the management surface is wired to command endpoints, not a static mock."""
+    context = browser.new_context(viewport={"width": 960, "height": 760}, device_scale_factor=1)
+    report_calls: list[dict] = []
+    settings_calls: list[dict] = []
+
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/board(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_BOARD),
+    )
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_SCHEDULE),
+    )
+
+    def handle_report(route) -> None:
+        report_calls.append(json.loads(route.request.post_data or "{}"))
+        route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_COMPLETED)
+
+    context.route("http://127.0.0.1:39393/api/schedule/block-report", handle_report)
+
+    def handle_settings(route) -> None:
+        if route.request.method == "PUT":
+            settings_calls.append(json.loads(route.request.post_data or "{}"))
+            route.fulfill(status=200, content_type="application/json", body=json.dumps({"settings": {"dayStart": "09:00", "dayEnd": "22:00", "defaultFocusMinutes": 50, "bufferMinutes": 5}}))
+        else:
+            route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS)
+
+    context.route("http://127.0.0.1:39393/api/schedule-settings", handle_settings)
+    context.route(
+        "http://127.0.0.1:39393/api/schedule/rebuild",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_COMPLETED),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
+
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173", wait_until="domcontentloaded")
+    page.wait_for_selector('[data-testid="schedule-timeline"]')
+    assert page.get_by_text("리눅스 학습", exact=True).count() >= 1
+
+    page.locator('[data-testid="schedule-block-complete-focus-1"]').click()
+    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('집중 시간을 완료했어요')")
+    assert report_calls and report_calls[0]["blockId"] == "focus-1" and report_calls[0]["status"] == "completed"
+
+    page.locator('[data-testid="schedule-settings"]').click()
+    page.wait_for_selector('form[aria-label="시간표 설정"]')
+    page.locator('select[name="bufferMinutes"]').select_option("5")
+    page.get_by_role("button", name="저장하고 재배치").click()
+    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('시간표 설정을 저장했어요')")
+    assert settings_calls and settings_calls[0]["bufferMinutes"] == 5
+
+    assert_no_page_errors(errors)
+    context.close()
+
+
 def check_overlay(browser) -> None:
     context = browser.new_context(viewport={"width": 320, "height": 140}, device_scale_factor=1)
     page = context.new_page()
@@ -119,6 +221,7 @@ def main() -> None:
             launch_options["executable_path"] = chrome_path
         browser = playwright.chromium.launch(**launch_options)
         check_dashboard(browser)
+        check_dashboard_actions(browser)
         check_overlay(browser)
         browser.close()
 

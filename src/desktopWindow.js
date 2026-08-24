@@ -2,7 +2,10 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { PhysicalPosition, currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 
 const OVERLAY_POSITION_KEY = "daybridge.overlay-position.v1";
-const OVERLAY_EDGE_GAP = 8;
+// The overlay is deliberately flush with the monitor work-area edge. The
+// taskbar is already excluded by `workArea`, so an extra inset makes the
+// widget look as if it stopped short of the corner.
+const OVERLAY_EDGE_GAP = 0;
 const OVERLAY_SNAP_DISTANCE = 64;
 
 function readOverlayPosition() {

@@ -30,8 +30,8 @@ The schedule-first web foundation is implemented: detailed closeout → Quest Pl
 - The schedule boundary compacts briefing prose into short action labels such as `리눅스 학습`, `Kiosk 주문 검증`, and `고객 택배 접수 검증`; source quest detail remains on the board.
 - The local bridge lazily creates and atomically stores daily schedules, exposes schedule/rebuild/settings/block-report endpoints, and mirrors only sanitized block receipts to AIHUB.
 - The desktop surface is split into a quiet 252×52 always-on-top overlay and a separately opened management dashboard. The overlay contains only the focus time, task title (or a privacy-safe generic label), and completion. Its transparent, shadowless host no longer paints a larger background rectangle around the card, and the card can be dragged with magnetic corner snapping. The dashboard contains timeline, rebalancing, settings, and task detail.
-- Web production build, 40 Node tests, and the dashboard/overlay Playwright smoke flow passed. Rust/Cargo, MSVC, Windows SDK, WebView2가 모두 Tauri 진단에서 확인됐고 `cargo check`가 통과했다. 실제 브리지 재생성 결과도 정각 시작·50분 종료와 짧은 제목을 확인했다.
-- 로컬 개발 환경은 설치 프로그램 없이 `pnpm dev:all`로 UI와 bridge를 함께 실행한다. VS Code task/launch 설정은 UI 브라우저 디버그와 Node bridge attach를 제공하며, bridge debugger는 평소 개발 환경과 동시에 실행하지 않는다.
+- Web production build, 40 Node tests, and the dashboard/overlay Playwright smoke flow passed. The smoke flow now exercises the real dashboard command paths for completing a focus block and saving/rebuilding schedule settings, not just static rendering. Rust/Cargo, MSVC, Windows SDK, WebView2가 모두 Tauri 진단에서 확인됐고 `cargo check`가 통과했다. 실제 브리지 재생성 결과도 정각 시작·50분 종료와 짧은 제목을 확인했다.
+- 로컬 개발 환경은 설치 프로그램 없이 `pnpm dev:all`로 UI와 bridge를 함께 실행한다. VS Code task/launch 설정은 UI 브라우저 디버그와 Node bridge attach를 제공하며, bridge debugger는 평소 개발 환경과 동시에 실행하지 않는다. 오버레이 카드는 252×52px로 창과 같은 크기이며 모니터 작업 영역 모서리에 여백 없이 정렬된다.
 
 ## Current blocker
 

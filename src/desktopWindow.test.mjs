@@ -12,7 +12,7 @@ const monitor = {
 const size = { width: 252, height: 52 };
 
 test("nearestOverlayCorner magnetically snaps a nearby position to the closest corner", () => {
-  assert.deepEqual(nearestOverlayCorner({ x: 1640, y: 970 }, monitor, size), { x: 1660, y: 1020 });
+  assert.deepEqual(nearestOverlayCorner({ x: 1644, y: 980 }, monitor, size), { x: 1668, y: 1028 });
 });
 
 test("nearestOverlayCorner keeps a deliberately central position free", () => {
