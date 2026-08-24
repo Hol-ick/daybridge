@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.vscode/chrome-debug-profile/
 .vite/
 *.log
 .env

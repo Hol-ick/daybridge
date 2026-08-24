@@ -29,7 +29,8 @@ The schedule-first web foundation is implemented: detailed closeout → Quest Pl
 - `DailySchedule` now has a tested Korea-time scheduler: must/should/could ordering, explicit dependencies, 25/50-minute focus blocks, buffers, carryover, locked work, unscheduled reasons, and current-focus resolution.
 - The local bridge lazily creates and atomically stores daily schedules, exposes schedule/rebuild/settings/block-report endpoints, and mirrors only sanitized block receipts to AIHUB.
 - The desktop surface is split into a quiet 276×112 always-on-top overlay and a separately opened management dashboard. The overlay contains only the focus time, task title (or a privacy-safe generic label), and completion. The dashboard contains timeline, rebalancing, settings, and task detail.
-- Web production build, 23 Node tests, and the dashboard/overlay Playwright smoke flow passed. Native Tauri build remains unverified because Cargo is unavailable on this computer.
+- Web production build, 36 Node tests, and the dashboard/overlay Playwright smoke flow passed. Native Tauri build remains unverified because Cargo is unavailable on this computer.
+- 로컬 개발 환경은 설치 프로그램 없이 `pnpm dev:all`로 UI와 bridge를 함께 실행한다. VS Code task/launch 설정은 UI 브라우저 디버그와 Node bridge attach를 제공하며, bridge debugger는 평소 개발 환경과 동시에 실행하지 않는다.
 
 ## Current blocker
 

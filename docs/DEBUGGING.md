@@ -48,6 +48,16 @@ pnpm dev:all
 - bridge 로그: 같은 터미널에서 API·AIHUB handoff·Calendar relay 오류 확인
 - 종료: 해당 터미널에서 `Ctrl+C`
 
+### VS Code에서 바로 시작하기
+
+저장소를 VS Code로 열면 `.vscode/tasks.json`과 `.vscode/launch.json`이 함께 제공된다.
+
+1. `Ctrl+Shift+P` → **Tasks: Run Task** → **Daybridge: 개발 환경**을 선택한다.
+2. 좌측 **실행 및 디버그**에서 **Daybridge: UI 디버그**를 실행하면 브라우저 UI의 breakpoint·콘솔·네트워크를 볼 수 있다.
+3. bridge 코드에서 중단점을 쓰려면 별도 터미널 작업 **Daybridge: bridge 디버거**를 시작한 뒤 **Daybridge: bridge 연결**을 실행한다.
+
+개발 환경과 bridge 디버거는 같은 bridge 포트를 사용하므로 동시에 실행하지 않는다. 평소에는 **개발 환경**, bridge 코드의 중단점이 필요할 때만 **bridge 디버거**를 선택한다.
+
 UI만 빠르게 만질 때는 다음처럼 실행해도 된다.
 
 ```powershell

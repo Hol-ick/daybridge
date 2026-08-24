@@ -1,0 +1,43 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Daybridge: 개발 환경",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["dev:all"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "daybridge-dev"
+      }
+    },
+    {
+      "label": "Daybridge: bridge 디버거",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["bridge:inspect"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "daybridge-debug"
+      }
+    },
+    {
+      "label": "Daybridge: 네이티브 위젯 개발",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["dev:widget"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "daybridge-widget"
+      }
+    }
+  ]
+}
