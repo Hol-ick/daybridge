@@ -11,6 +11,7 @@
 - VS Code launch에 UI 브라우저 디버그와 bridge Node inspector attach를 추가했다.
 - 브라우저 디버그 프로필은 저장소에서 제외했다.
 - 사용자 환경에 Node.js LTS와 사용자 전용 pnpm을 설치해 새 터미널에서 프로젝트 스크립트가 `node`를 찾도록 했다.
+- Rust stable MSVC 도구체인과 Visual Studio Build Tools C++ 워크로드·Windows SDK를 설치했다.
 
 ## 운영 결정
 
@@ -23,4 +24,5 @@
 - 의존성 lockfile 설치 상태와 Node.js LTS·pnpm 실행 경로를 확인했다.
 - 기존 Vite UI가 실행 중이어서 중복 UI 서버를 시작하지 않았고, local bridge를 별도로 시작해 AIHUB handoff `connected` health 응답을 확인했다.
 - Node 36개 테스트와 production web build가 통과했고 VS Code task/launch JSON도 파싱했다.
+- `pnpm tauri info`에서 WebView2, MSVC, rustc, cargo, Rust toolchain을 확인했고 `src-tauri`의 `cargo check`가 통과했다.
 - Rust/Cargo 부재에 따른 네이티브 위젯 개발 모드는 별도 설치 후 확인 대상이다.

@@ -29,17 +29,17 @@ The schedule-first web foundation is implemented: detailed closeout → Quest Pl
 - `DailySchedule` now has a tested Korea-time scheduler: must/should/could ordering, explicit dependencies, 25/50-minute focus blocks, buffers, carryover, locked work, unscheduled reasons, and current-focus resolution.
 - The local bridge lazily creates and atomically stores daily schedules, exposes schedule/rebuild/settings/block-report endpoints, and mirrors only sanitized block receipts to AIHUB.
 - The desktop surface is split into a quiet 276×112 always-on-top overlay and a separately opened management dashboard. The overlay contains only the focus time, task title (or a privacy-safe generic label), and completion. The dashboard contains timeline, rebalancing, settings, and task detail.
-- Web production build, 36 Node tests, and the dashboard/overlay Playwright smoke flow passed. Native Tauri build remains unverified because Cargo is unavailable on this computer.
+- Web production build, 36 Node tests, and the dashboard/overlay Playwright smoke flow passed. Rust/Cargo, MSVC, Windows SDK, WebView2가 모두 Tauri 진단에서 확인됐고 `cargo check`가 통과했다. 기존 UI 서버를 보존하기 위해 실제 네이티브 창·tray 상호작용은 이번 환경 설정에서 새로 띄우지 않았다.
 - 로컬 개발 환경은 설치 프로그램 없이 `pnpm dev:all`로 UI와 bridge를 함께 실행한다. VS Code task/launch 설정은 UI 브라우저 디버그와 Node bridge attach를 제공하며, bridge debugger는 평소 개발 환경과 동시에 실행하지 않는다.
 
 ## Current blocker
 
-The native Windows installer is not yet buildable on this computer because Rust/Cargo and Microsoft C++ Build Tools with the Windows SDK are not installed. WebView2 is available. The Google Calendar runtime connection also requires a user-authorized local OAuth setup; no calendar events will be written.
+The Google Calendar runtime connection still requires a user-authorized local OAuth setup; no calendar events will be written. The native toolchain is ready, but the overlay/tray behavior has not yet been exercised in a live Tauri development window.
 
 ## Next actions
 
 1. Add the read-only Google Calendar OAuth busy-window adapter after the user authorizes a local OAuth client; retain the existing `attention` fallback until then.
-2. Install the Windows native build prerequisites, then verify the two Tauri windows, tray actions, lower-right placement, and always-on-top overlay.
+2. Start the existing UI/bridge development environment, then verify the two Tauri windows, tray actions, lower-right placement, and always-on-top overlay with `pnpm dev:widget`.
 3. Observe the next actual AIHUB daily Quest Plan and verify that its current-date tasks create an actionable schedule rather than the empty-state fallback.
 
 ## Boundaries and risks
