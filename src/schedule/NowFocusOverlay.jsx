@@ -56,9 +56,8 @@ function OverlayScheduleItem({ block, privateMode, actionId, onComplete, onDefer
   const status = block?.status;
   const actionable = kind === "focus" && status !== "completed" && status !== "deferred";
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
-  const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);
   const title = privateMode && kind === "focus" ? "집중 시간" : scheduleBlockTitle(block);
-  const label = start && end ? `${start}–${end}` : start || end || "";
+  const label = start;
 
   return (
     <li className={[styles.compactBlock, styles[kind], status === "completed" ? styles.completed : ""].filter(Boolean).join(" ")} data-testid={`now-focus-overlay-block-${block?.id ?? "unknown"}`}>

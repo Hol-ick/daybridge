@@ -137,7 +137,7 @@
 
 .compactBlock {
   display: grid;
-  grid-template-columns: 74px minmax(0, 1fr) auto;
+  grid-template-columns: 62px minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
   min-height: 52px;
@@ -151,7 +151,7 @@
 .compactBlock.busy,
 .compactBlock.buffer { background: rgb(0 0 0 / 10%); color: #9da0ab; }
 .compactBlock.completed { opacity: .58; }
-.compactBlockTime { color: #cbd0dc; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; white-space: nowrap; }
+.compactBlockTime { color: #dce1ee; font-family: "Cascadia Mono", Consolas, monospace; font-size: 16px; font-weight: 850; letter-spacing: -.055em; line-height: 1; white-space: nowrap; }
 .compactBlockTitle { min-width: 0; overflow: hidden; color: #f4f7f5; font-family: "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif; font-size: 15px; font-weight: 800; letter-spacing: -.04em; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .busy .compactBlockTitle { color: #aeb1bc; }
 .compactActions { display: flex; flex: 0 0 auto; gap: 3px; }

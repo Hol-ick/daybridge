@@ -231,6 +231,7 @@ def check_overlay(browser) -> None:
     expanded_box = overlay.bounding_box()
     assert expanded_box and round(expanded_box["height"]) == 520
     assert page.locator('[data-testid="now-focus-overlay-expanded"]').is_visible()
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-expanded.png", full_page=True)
     transition_duration = page.locator('[data-testid="now-focus-overlay-expanded"]').evaluate("element => parseFloat(getComputedStyle(element).transitionDuration)")
     assert transition_duration > 0
     transform_origin = page.locator('[data-testid="now-focus-overlay-expanded"]').evaluate("element => getComputedStyle(element).transformOrigin")
@@ -241,7 +242,8 @@ def check_overlay(browser) -> None:
         row_style = compact_block.evaluate(
             "element => { const style = getComputedStyle(element); const title = element.querySelector('[class*=compactBlockTitle]'); const time = element.querySelector('[class*=compactBlockTime]'); return { display: style.display, columns: style.gridTemplateColumns, titleSize: parseFloat(getComputedStyle(title).fontSize), timeSize: parseFloat(getComputedStyle(time).fontSize) }; }"
         )
-        assert row_style["display"] == "grid" and row_style["titleSize"] >= 15 and row_style["timeSize"] >= 12, row_style
+        assert compact_block.locator('[class*=compactBlockTime]').inner_text().strip().count("–") == 0
+        assert row_style["display"] == "grid" and row_style["titleSize"] >= 15 and row_style["timeSize"] >= 16, row_style
     assert page.locator('[data-testid="now-focus-overlay-collapse"]').count() == 1
     page.locator('[data-testid="now-focus-overlay-collapse"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")
