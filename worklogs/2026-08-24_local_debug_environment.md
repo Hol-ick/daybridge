@@ -25,4 +25,5 @@
 - 기존 Vite UI가 실행 중이어서 중복 UI 서버를 시작하지 않았고, local bridge를 별도로 시작해 AIHUB handoff `connected` health 응답을 확인했다.
 - Node 36개 테스트와 production web build가 통과했고 VS Code task/launch JSON도 파싱했다.
 - `pnpm tauri info`에서 WebView2, MSVC, rustc, cargo, Rust toolchain을 확인했고 `src-tauri`의 `cargo check`가 통과했다.
+- Tauri가 검사 중 생성하는 `src-tauri/gen/` schema 산출물은 로컬 생성물로 제외해 작업 트리를 깨끗하게 유지한다.
 - Rust/Cargo 부재에 따른 네이티브 위젯 개발 모드는 별도 설치 후 확인 대상이다.
