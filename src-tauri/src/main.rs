@@ -49,6 +49,9 @@ fn open_dashboard(app: tauri::AppHandle) -> Result<(), String> {
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
+            if let Some(window) = app.get_webview_window("overlay") {
+                let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+            }
             let show = MenuItem::with_id(app, "show", "Daybridge 열기", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "숨기기", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
