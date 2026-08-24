@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useAppActions, useAppState } from "./AppContext.jsx";
 import { bindOverlayMagnet, currentSurface, openDashboard, placeOverlayInCorner } from "./desktopWindow.js";
 import Item from "./todometer/components/Item.jsx";
 import NowFocusOverlay from "./schedule/NowFocusOverlay.jsx";
 import ScheduleDashboard from "./schedule/ScheduleDashboard.jsx";
+import { getWorkdayCountdown } from "./schedule/workday-clock.js";
 import styles from "./ScheduleSurface.module.css";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
@@ -39,6 +41,29 @@ export default function ScheduleSurface() {
   useEffect(() => {
     document.body.dataset.surface = surface;
     return () => { delete document.body.dataset.surface; };
+  }, [surface]);
+
+  useEffect(() => {
+    if (surface !== "overlay" || !isTauri() || import.meta.env.DEV) return undefined;
+    let timeoutId;
+    let disposed = false;
+    const checkWorkdayEnd = () => {
+      if (disposed) return;
+      if (getWorkdayCountdown(new Date()).phase === "after_work") {
+        void invoke("exit_app");
+        return;
+      }
+      const now = new Date();
+      const workdayEnd = new Date(now);
+      workdayEnd.setHours(18, 0, 0, 0);
+      const delay = Math.max(1_000, Math.min(workdayEnd.getTime() - now.getTime(), 30_000));
+      timeoutId = window.setTimeout(checkWorkdayEnd, delay);
+    };
+    checkWorkdayEnd();
+    return () => {
+      disposed = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
   }, [surface]);
 
   const loadSchedule = useCallback(async ({ rebuild = false, quiet = false } = {}) => {

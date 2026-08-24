@@ -116,6 +116,11 @@ fn save_overlay_position(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), St
     persist_overlay_position(&app, x, y)
 }
 
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -172,7 +177,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             open_dashboard,
             get_overlay_position,
-            save_overlay_position
+            save_overlay_position,
+            exit_app
         ])
         .on_window_event(|window, event| {
             if window.label() == "overlay" {
