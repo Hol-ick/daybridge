@@ -10,7 +10,7 @@ from playwright.sync_api import sync_playwright
 DEFAULT_SETTINGS = json.dumps({
     "settings": {
         "dayStart": "09:00",
-        "dayEnd": "22:00",
+        "dayEnd": "18:00",
         "defaultFocusMinutes": 50,
         "bufferMinutes": 10,
     }
@@ -115,7 +115,7 @@ def check_dashboard(browser) -> None:
     page.locator('[data-testid="schedule-settings"]').click()
     page.wait_for_selector('form[aria-label="시간표 설정"]')
     assert page.get_by_label("시작 시간").input_value() == "09:00"
-    assert page.get_by_label("마감 시간").input_value() == "22:00"
+    assert page.get_by_label("마감 시간").input_value() == "18:00"
     assert page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
     settings_box = page.locator('form[aria-label="시간표 설정"]').bounding_box()
     assert settings_box and round(settings_box["width"]) == 288
@@ -151,7 +151,7 @@ def check_dashboard_actions(browser) -> None:
     def handle_settings(route) -> None:
         if route.request.method == "PUT":
             settings_calls.append(json.loads(route.request.post_data or "{}"))
-            route.fulfill(status=200, content_type="application/json", body=json.dumps({"settings": {"dayStart": "09:00", "dayEnd": "22:00", "defaultFocusMinutes": 50, "bufferMinutes": 5}}))
+            route.fulfill(status=200, content_type="application/json", body=json.dumps({"settings": {"dayStart": "09:00", "dayEnd": "18:00", "defaultFocusMinutes": 50, "bufferMinutes": 5}}))
         else:
             route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS)
 

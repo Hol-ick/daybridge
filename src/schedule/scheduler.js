@@ -14,7 +14,7 @@ function normalizedSettings(date, supplied = {}) {
   const bufferMinutes = supplied.bufferMinutes == null ? 10 : Number(supplied.bufferMinutes);
   if (!Number.isInteger(bufferMinutes) || bufferMinutes < 0 || bufferMinutes > 30) throw new TypeError("bufferMinutes must be between 0 and 30");
   const dayStart = supplied.dayStart || "09:00";
-  const dayEnd = supplied.dayEnd || "22:00";
+  const dayEnd = supplied.dayEnd || "18:00";
   const dayStartAt = atKst(date, dayStart);
   const dayEndAt = atKst(date, dayEnd);
   if (Date.parse(dayEndAt) <= Date.parse(dayStartAt)) throw new RangeError("dayEnd must be after dayStart");

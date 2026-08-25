@@ -15,7 +15,7 @@ export const DEFAULT_SCHEDULE_SETTINGS = Object.freeze({
   schemaVersion: 1,
   timeZone: "Asia/Seoul",
   dayStart: "09:00",
-  dayEnd: "22:00",
+  dayEnd: "18:00",
   focusDurations: [50],
   defaultFocusMinutes: 50,
   bufferMinutes: 10,
