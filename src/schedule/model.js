@@ -13,6 +13,11 @@ const SCHEDULE_TITLE_RULES = [
   [/(?:kiosk.*(?:migration|저장|고객 반영)|(?:migration|고객 반영).*kiosk)/i, "Kiosk 배포 검증"],
   [/(?:고객.*(?:택배 접수|매입가 카드)|택배 접수.*고객)/i, "고객 택배 접수 검증"],
   [/(?:대화|세션).*coverage|coverage.*(?:대화|세션)/i, "대화 coverage 확인"],
+  [/(?:github actions|verify web[- ]?buyback|배포 상태)/i, "배포 상태 확인"],
+  [/(?:review.*review[- ]?large|review[- ]?large.*review)/i, "문서 검토"],
+  [/(?:current[_ ]context)/i, "현재 맥락 확인"],
+  [/(?:실패.*(?:run|step|로그)|(?:run|step).*실패)/i, "실패 로그 확인"],
+  [/(?:번역 대상|자연어 품질)/i, "번역 품질 검토"],
   [/(?:운영\s*db|운영\s*database).*검증|upstream[_ -]?unavailable/i, "운영 DB 검증 확인"],
   [/(?:일일 보고서|closeout)/i, "일일 보고서 정리"],
 ];

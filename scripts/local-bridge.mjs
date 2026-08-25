@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { buildDailySchedule, resolveNowFocus } from "../src/schedule/scheduler.js";
+import { toScheduleTitle } from "../src/schedule/model.js";
 import { buildRoutineCandidates } from "../src/schedule/routine-planner.js";
 import {
   loadSchedule,
@@ -171,11 +172,12 @@ async function handleBoard(url) {
 function toTaskCandidate(quest) {
   if (!quest || typeof quest !== "object" || typeof quest.id !== "string") return null;
   const state = typeof quest.state === "string" ? quest.state : typeof quest.status === "string" ? quest.status : "ready";
+  const sourceTitle = sanitizeText(quest.scheduleTitle || quest.displayTitle || quest.title, 180);
   return {
     id: quest.id,
     questId: quest.id,
     missionId: typeof quest.missionId === "string" ? quest.missionId : null,
-    scheduleTitle: sanitizeText(quest.scheduleTitle || quest.displayTitle || quest.title, 180),
+    scheduleTitle: toScheduleTitle(sourceTitle),
     title: sanitizeText(quest.title, 180),
     project: sanitizeText(quest.project, 100),
     priority: ["must", "should", "could"].includes(quest.priority) ? quest.priority : "should",
@@ -201,7 +203,9 @@ function nowFocus(schedule) { return resolveNowFocus(schedule, koreaNow()); }
 function retainedScheduleBlocks(schedule, at) {
   if (!schedule || !Array.isArray(schedule.blocks)) return [];
   const nowAt = Date.parse(at);
-  return schedule.blocks.filter((block) => !block?.hidden && (block?.locked || (typeof block?.endAt === "string" && Date.parse(block.endAt) <= nowAt)));
+  return schedule.blocks
+    .filter((block) => !block?.hidden && (block?.locked || (typeof block?.endAt === "string" && Date.parse(block.endAt) <= nowAt)))
+    .map((block) => block?.type === "focus" ? { ...block, title: toScheduleTitle(block.title || block.displayTitle || block.scheduleTitle) } : block);
 }
 async function rebuildSchedule(activityDate) {
   const board = await readJson(boardPath(activityDate));

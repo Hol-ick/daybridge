@@ -233,6 +233,7 @@ export default function ScheduleSurface() {
       nowFocus={nowFocus}
       privateMode={privateMode}
       onOpenDashboard={() => { void openDashboard(); }}
+      onReportBlock={(blockId, status) => { void reportBlock(blockId, status); }}
       onRebuild={() => loadSchedule({ rebuild: true })}
       onAddManualTask={addManualTask}
       onMoveBlock={moveBlock}

@@ -33,7 +33,7 @@ async function startBridge(dataDir) {
 async function createBoard(dataDir) {
   await mkdir(join(dataDir, "boards"), { recursive: true });
   await writeFile(join(dataDir, "config.json"), JSON.stringify({ handoffSinkDir: null }));
-  const quests = ["첫 번째 작업", "두 번째 작업", "세 번째 작업"].map((title, index) => ({
+  const quests = ["GitHub Actions에서 Verify web-buyback 배포 상태와 첫 실패 로그 확인", "리눅스 학습", "내일 계획"].map((title, index) => ({
     id: `quest-${index + 1}`,
     title,
     scheduleTitle: title,
@@ -60,6 +60,7 @@ test("schedule block move reorders open focus cards without entering lunch", asy
     const initial = await rebuilt.json();
     const initialFocus = initial.schedule.blocks.filter((block) => block.type === "focus");
     assert.deepEqual(initialFocus.map((block) => block.startAt.slice(11, 16)), ["09:00", "10:00", "13:00"]);
+    assert.equal(initialFocus[0].title, "배포 상태 확인");
 
     const movedResponse = await fetch(`${baseUrl}/api/schedule/block-move`, {
       method: "POST",

@@ -55,6 +55,23 @@ function scheduleBlockTitle(block) {
   return block?.displayTitle ?? block?.scheduleTitle ?? block?.questTitle ?? block?.taskTitle ?? block?.title ?? "집중 작업";
 }
 
+const BLOCK_STATUS_CYCLE = ["planned", "in_progress", "completed", "deferred"];
+const BLOCK_STATUS_LABELS = {
+  planned: "미완료",
+  in_progress: "진행 중",
+  completed: "완료",
+  deferred: "보류",
+};
+
+function blockStatusLabel(status) {
+  return BLOCK_STATUS_LABELS[status] || BLOCK_STATUS_LABELS.planned;
+}
+
+function nextBlockStatus(status) {
+  const current = BLOCK_STATUS_CYCLE.indexOf(status);
+  return BLOCK_STATUS_CYCLE[(current + 1 + BLOCK_STATUS_CYCLE.length) % BLOCK_STATUS_CYCLE.length];
+}
+
 function OverlayTitle({ children, className = "", ...props }) {
   const viewportRef = useRef(null);
   const trackRef = useRef(null);
@@ -92,7 +109,7 @@ function OverlayTitle({ children, className = "", ...props }) {
   );
 }
 
-function OverlayScheduleItem({ block, privateMode, onMove, onPointerDragStart, onPointerDragMove, onPointerDragEnd, onKeyboardMove, draggingBlockId, dropTargetId }) {
+function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onScheduleDragStart, onKeyboardMove, draggingBlockId, dropTargetId, suppressClickRef }) {
   const kind = scheduleBlockKind(block);
   const status = block?.status;
   const actionable = kind === "focus" && status !== "completed" && status !== "deferred";
@@ -100,10 +117,26 @@ function OverlayScheduleItem({ block, privateMode, onMove, onPointerDragStart, o
   const title = privateMode && kind === "focus" ? "집중 시간" : scheduleBlockTitle(block);
   const label = start;
   const draggable = actionable && typeof onMove === "function";
+  const clickable = kind === "focus" && typeof onStatusChange === "function";
   const handleKeyDown = (event) => {
-    if (!draggable || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
-    event.preventDefault();
-    onKeyboardMove?.(block.id, event.key);
+    if (draggable && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+      event.preventDefault();
+      onKeyboardMove?.(block.id, event.key);
+      return;
+    }
+    if (clickable && ["Enter", " "].includes(event.key)) {
+      event.preventDefault();
+      onStatusChange(block.id, nextBlockStatus(status));
+    }
+  };
+  const handleClick = (event) => {
+    if (!clickable) return;
+    if (suppressClickRef.current) {
+      event.preventDefault();
+      suppressClickRef.current = false;
+      return;
+    }
+    onStatusChange(block.id, nextBlockStatus(status));
   };
 
   return (
@@ -114,16 +147,19 @@ function OverlayScheduleItem({ block, privateMode, onMove, onPointerDragStart, o
       data-drag-enabled={draggable ? "true" : "false"}
       data-dragging={draggingBlockId === block?.id ? "true" : "false"}
       data-drop-target={dropTargetId === block?.id ? "true" : "false"}
-      tabIndex={draggable ? 0 : undefined}
+      data-status={status || "planned"}
+      role={clickable ? "button" : undefined}
+      aria-label={clickable ? `${title} · ${blockStatusLabel(status)} · 클릭하여 상태 변경` : title}
+      tabIndex={clickable ? 0 : undefined}
       onKeyDown={handleKeyDown}
-      onPointerDown={draggable ? (event) => onPointerDragStart(event, block) : undefined}
-      onPointerMove={draggable ? onPointerDragMove : undefined}
-      onPointerUp={draggable ? onPointerDragEnd : undefined}
-      onPointerCancel={draggable ? onPointerDragEnd : undefined}
+      onClick={clickable ? handleClick : undefined}
+      onPointerDown={draggable ? (event) => onScheduleDragStart(event, block) : undefined}
+      onMouseDown={draggable ? (event) => onScheduleDragStart(event, block) : undefined}
       data-tauri-drag-region="false"
     >
       <div className={styles.compactBlockTop}>
         <span className={styles.compactBlockTime}>{label}</span>
+        {clickable ? <span className={styles.compactBlockStatus} data-testid={`now-focus-overlay-status-${block.id}`}>{blockStatusLabel(status)}</span> : null}
       </div>
       <OverlayTitle className={styles.compactBlockTitle} title={title} aria-label={title}>{title}</OverlayTitle>
     </li>
@@ -134,9 +170,10 @@ function OverlayScheduleItem({ block, privateMode, onMove, onPointerDragStart, o
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, onRebuild, onAddManualTask, onMoveBlock, privateMode = false }) {
-  const dragRef = useRef({ point: null, cleanup: null, suppressClick: false });
-  const pointerDragRef = useRef({ blockId: "", pointerId: null, startX: 0, startY: 0, started: false });
+export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, onReportBlock, onRebuild, onAddManualTask, onMoveBlock, privateMode = false }) {
+  const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
+  const pointerDragRef = useRef({ blockId: "", inputType: null, pointerId: null, startX: 0, startY: 0, started: false, cleanup: null });
+  const suppressCardClickRef = useRef(false);
   const resizeTimerRef = useRef(null);
   const [draggingBlockId, setDraggingBlockId] = useState("");
   const [dropTargetId, setDropTargetId] = useState("");
@@ -170,24 +207,21 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     return movableBlocks.some((item) => item.id === targetId) ? { card, targetId } : { card: null, targetId: "" };
   };
   const clearPointerDrag = () => {
-    pointerDragRef.current = { blockId: "", pointerId: null, startX: 0, startY: 0, started: false };
+    pointerDragRef.current.cleanup?.();
+    pointerDragRef.current = { blockId: "", inputType: null, pointerId: null, startX: 0, startY: 0, started: false, cleanup: null };
     setDraggingBlockId("");
     setDropTargetId("");
   };
-  const handleSchedulePointerDragStart = (event, item) => {
-    if (!onMoveBlock || event.button !== 0) return;
-    event.stopPropagation();
-    event.preventDefault();
-    try { event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* pointer capture is optional */ }
-    pointerDragRef.current = { blockId: item.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, started: false };
-  };
-  const handleSchedulePointerDragMove = (event) => {
+  const handleScheduleDragMove = (event) => {
     const state = pointerDragRef.current;
-    if (!state.blockId || state.pointerId !== event.pointerId) return;
+    const inputType = event.type.startsWith("pointer") ? "pointer" : "mouse";
+    if (!state.blockId || state.inputType !== inputType || (inputType === "pointer" && state.pointerId !== event.pointerId)) return;
+    if (inputType === "mouse" && event.buttons === 0) return;
     const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
     if (!state.started && distance < 6) return;
     if (!state.started) {
       state.started = true;
+      suppressCardClickRef.current = true;
       setDraggingBlockId(state.blockId);
     }
     event.preventDefault();
@@ -195,21 +229,50 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     const target = findDropTarget(event.clientX, event.clientY);
     setDropTargetId(target.targetId && target.targetId !== state.blockId ? target.targetId : "");
   };
-  const handleSchedulePointerDragEnd = async (event) => {
+  const handleScheduleDragEnd = async (event) => {
     const state = pointerDragRef.current;
-    if (!state.blockId || state.pointerId !== event.pointerId) return;
+    const inputType = event.type.startsWith("pointer") ? "pointer" : "mouse";
+    if (!state.blockId || state.inputType !== inputType || (inputType === "pointer" && state.pointerId !== event.pointerId)) return;
     event.stopPropagation();
-    if (!state.started) {
-      clearPointerDrag();
-      return;
-    }
     const sourceId = state.blockId;
     const target = findDropTarget(event.clientX, event.clientY);
     const targetItem = movableBlocks.find((item) => item.id === target.targetId && item.id !== sourceId);
     const rect = target.card?.getBoundingClientRect();
     const position = rect && event.clientY < rect.top + (rect.height / 2) ? "before" : "after";
+    const shouldMove = state.started && Boolean(targetItem && onMoveBlock);
+    if (state.started) suppressCardClickRef.current = true;
     clearPointerDrag();
-    if (targetItem && onMoveBlock) await onMoveBlock(sourceId, targetItem.id, position);
+    if (shouldMove) await onMoveBlock(sourceId, targetItem.id, position);
+    window.setTimeout(() => { suppressCardClickRef.current = false; }, 0);
+  };
+  const handleScheduleDragStart = (event, item) => {
+    if (!onMoveBlock || event.button !== 0 || pointerDragRef.current.blockId) return;
+    const inputType = event.type.startsWith("pointer") ? "pointer" : "mouse";
+    event.stopPropagation();
+    event.preventDefault();
+    suppressCardClickRef.current = false;
+    try { if (inputType === "pointer") event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* pointer capture is optional */ }
+    const moveEvent = inputType === "pointer" ? "pointermove" : "mousemove";
+    const endEvent = inputType === "pointer" ? "pointerup" : "mouseup";
+    const cancelEvent = inputType === "pointer" ? "pointercancel" : "mouseleave";
+    const move = (moveEventValue) => handleScheduleDragMove(moveEventValue);
+    const end = (endEventValue) => handleScheduleDragEnd(endEventValue);
+    document.addEventListener(moveEvent, move, { passive: false });
+    document.addEventListener(endEvent, end, { once: true });
+    document.addEventListener(cancelEvent, end, { once: true });
+    pointerDragRef.current = {
+      blockId: item.id,
+      inputType,
+      pointerId: inputType === "pointer" ? event.pointerId : null,
+      startX: event.clientX,
+      startY: event.clientY,
+      started: false,
+      cleanup: () => {
+        document.removeEventListener(moveEvent, move);
+        document.removeEventListener(endEvent, end);
+        document.removeEventListener(cancelEvent, end);
+      },
+    };
   };
   const handleKeyboardMove = async (sourceId, key) => {
     const index = movableBlocks.findIndex((item) => item.id === sourceId);
@@ -251,18 +314,26 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
   }, [expanded]);
 
   const handlePointerDown = (event) => {
+    if (dragRef.current.point) return;
     window.getSelection?.()?.removeAllRanges();
     const target = event.target instanceof Element ? event.target : null;
     const openButton = target?.closest('[data-testid="now-focus-overlay-open"]');
     const interactive = target?.closest('[data-tauri-drag-region="false"]');
     if (event.button !== 0 || (interactive && !openButton)) return;
     const state = dragRef.current;
+    const inputType = event.type.startsWith("pointer") ? "pointer" : "mouse";
     state.point = { x: event.clientX, y: event.clientY };
+    state.inputType = inputType;
+    event.preventDefault();
+    const moveEvent = inputType === "pointer" ? "pointermove" : "mousemove";
+    const endEvent = inputType === "pointer" ? "pointerup" : "mouseup";
+    const cancelEvent = inputType === "pointer" ? "pointercancel" : "mouseleave";
     const cleanup = () => {
-      document.removeEventListener("pointermove", handleMove);
-      document.removeEventListener("pointerup", cleanup);
-      document.removeEventListener("pointercancel", cleanup);
+      document.removeEventListener(moveEvent, handleMove);
+      document.removeEventListener(endEvent, cleanup);
+      document.removeEventListener(cancelEvent, cleanup);
       state.point = null;
+      state.inputType = null;
       state.cleanup = null;
     };
     const handleMove = (moveEvent) => {
@@ -276,9 +347,9 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     };
     state.cleanup?.();
     state.cleanup = cleanup;
-    document.addEventListener("pointermove", handleMove);
-    document.addEventListener("pointerup", cleanup, { once: true });
-    document.addEventListener("pointercancel", cleanup, { once: true });
+    document.addEventListener(moveEvent, handleMove, { passive: false });
+    document.addEventListener(endEvent, cleanup, { once: true });
+    document.addEventListener(cancelEvent, cleanup, { once: true });
     if (!openButton) {
       // Non-interactive card padding can start dragging immediately. Buttons
       // wait for the movement threshold above so ordinary clicks remain live.
@@ -305,7 +376,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
 
   return (
     <aside className={styles.overlay} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
-      <div className={surfaceClassName} onPointerDown={handlePointerDown} data-tauri-drag-region="deep" data-testid="now-focus-overlay-surface">
+      <div className={surfaceClassName} onPointerDown={handlePointerDown} onMouseDown={handlePointerDown} data-testid="now-focus-overlay-surface">
         <section className={styles.expandedPanel} aria-label="오늘 시간표 관리" aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
           {blocks.length ? (
             <ol className={styles.compactList}>
@@ -315,20 +386,18 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
                   block={item}
                   privateMode={privateMode}
                   onMove={onMoveBlock}
-                  onPointerDragStart={handleSchedulePointerDragStart}
-                  onPointerDragMove={handleSchedulePointerDragMove}
-                  onPointerDragEnd={handleSchedulePointerDragEnd}
+                  onStatusChange={onReportBlock}
+                  onScheduleDragStart={handleScheduleDragStart}
                   onKeyboardMove={handleKeyboardMove}
                   draggingBlockId={draggingBlockId}
                   dropTargetId={dropTargetId}
+                  suppressClickRef={suppressCardClickRef}
                 />
               ))}
             </ol>
           ) : <p className={styles.compactEmpty}>오늘 배치된 일정이 없습니다.</p>}
-          <div className={styles.manualTaskBottom}>
-            <ManualTaskForm compact onSubmit={onAddManualTask} />
-          </div>
           <footer className={styles.expandedFooter}>
+            <div className={styles.manualTaskFooter}><ManualTaskForm compact onSubmit={onAddManualTask} /></div>
             <button type="button" onClick={onRebuild} disabled={!onRebuild} data-tauri-drag-region="false">재배치</button>
             <button type="button" onClick={handleOpenDashboard} data-tauri-drag-region="false">전체 시간표</button>
           </footer>

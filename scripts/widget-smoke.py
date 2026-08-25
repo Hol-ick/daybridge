@@ -49,9 +49,9 @@ LONG_FUNCTIONAL_BLOCK = {
     "displayTitle": "GitHub Actions Verify web-buyback 배포 상태와 첫 실패 로그 확인",
 }
 DRAG_BLOCKS = [
-    {"id": "drag-a", "type": "focus", "title": "첫 번째 긴 작업 이름이 아래 줄에 표시됩니다", "displayTitle": "첫 번째 긴 작업 이름이 아래 줄에 표시됩니다", "startAt": "2026-08-24T09:00:00+09:00", "endAt": "2026-08-24T09:50:00+09:00", "status": "planned"},
-    {"id": "drag-b", "type": "focus", "title": "두 번째 작업", "displayTitle": "두 번째 작업", "startAt": "2026-08-24T10:00:00+09:00", "endAt": "2026-08-24T10:50:00+09:00", "status": "planned"},
-    {"id": "drag-c", "type": "focus", "title": "세 번째 작업", "displayTitle": "세 번째 작업", "startAt": "2026-08-24T13:00:00+09:00", "endAt": "2026-08-24T13:50:00+09:00", "status": "planned"},
+    {"id": "drag-a", "type": "focus", "title": "메일 확인", "displayTitle": "메일 확인", "startAt": "2026-08-24T09:00:00+09:00", "endAt": "2026-08-24T09:50:00+09:00", "status": "planned"},
+    {"id": "drag-b", "type": "focus", "title": "리눅스 학습", "displayTitle": "리눅스 학습", "startAt": "2026-08-24T10:00:00+09:00", "endAt": "2026-08-24T10:50:00+09:00", "status": "planned"},
+    {"id": "drag-c", "type": "focus", "title": "내일 계획", "displayTitle": "내일 계획", "startAt": "2026-08-24T13:00:00+09:00", "endAt": "2026-08-24T13:50:00+09:00", "status": "planned"},
 ]
 DRAG_SCHEDULE = json.dumps({
     "schedule": {"schemaVersion": 1, "date": "2026-08-24", "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": DRAG_BLOCKS, "unscheduled": [], "calendar": {"coverage": "fresh"}},
@@ -65,6 +65,11 @@ DRAG_MOVED_BLOCKS = [
 DRAG_MOVED_SCHEDULE = json.dumps({
     "schedule": {"schemaVersion": 1, "date": "2026-08-24", "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": DRAG_MOVED_BLOCKS, "unscheduled": [], "calendar": {"coverage": "fresh"}},
     "nowFocus": {"state": "focus", "block": DRAG_MOVED_BLOCKS[0], "nextFocus": DRAG_MOVED_BLOCKS[1]},
+})
+DRAG_STATUS_BLOCKS = [{**block, "status": "in_progress" if block["id"] == "drag-b" else block["status"]} for block in DRAG_MOVED_BLOCKS]
+DRAG_STATUS_SCHEDULE = json.dumps({
+    "schedule": {"schemaVersion": 1, "date": "2026-08-24", "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": DRAG_STATUS_BLOCKS, "unscheduled": [], "calendar": {"coverage": "fresh"}},
+    "nowFocus": {"state": "focus", "block": DRAG_STATUS_BLOCKS[0], "nextFocus": DRAG_STATUS_BLOCKS[1]},
 })
 FUNCTIONAL_SCHEDULE = json.dumps({
     "schedule": {
@@ -397,9 +402,10 @@ def check_overlay_long_title(browser) -> None:
 
 
 def check_overlay_reorder(browser) -> None:
-    """Prove cards expose the top controls/lower title layout and persist drag reorder."""
+    """Prove mouse/pointer card drag, status clicks, and footer controls work."""
     context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
     move_calls: list[dict] = []
+    report_calls: list[dict] = []
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=DRAG_SCHEDULE),
@@ -410,6 +416,11 @@ def check_overlay_reorder(browser) -> None:
         route.fulfill(status=200, content_type="application/json", body=DRAG_MOVED_SCHEDULE)
 
     context.route("http://127.0.0.1:39393/api/schedule/block-move", handle_move)
+    def handle_report(route) -> None:
+        report_calls.append(json.loads(route.request.post_data or "{}"))
+        route.fulfill(status=200, content_type="application/json", body=DRAG_STATUS_SCHEDULE)
+
+    context.route("http://127.0.0.1:39393/api/schedule/block-report", handle_report)
     context.route(
         "http://127.0.0.1:39393/api/calendar/status",
         lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
@@ -436,15 +447,17 @@ def check_overlay_reorder(browser) -> None:
     source_y = first_box["y"] + first_box["height"] / 2
     target_x = second_box["x"] + second_box["width"] / 2
     target_y = second_box["y"] + 10
-    pointer_id = 41
-    first.dispatch_event("pointerdown", {"pointerId": pointer_id, "pointerType": "mouse", "button": 0, "clientX": source_x, "clientY": source_y})
-    first.dispatch_event("pointermove", {"pointerId": pointer_id, "pointerType": "mouse", "button": -1, "clientX": source_x + 8, "clientY": source_y + 8})
-    first.dispatch_event("pointermove", {"pointerId": pointer_id, "pointerType": "mouse", "button": -1, "clientX": target_x, "clientY": target_y})
-    first.dispatch_event("pointerup", {"pointerId": pointer_id, "pointerType": "mouse", "button": 0, "clientX": target_x, "clientY": target_y})
+    first.dispatch_event("mousedown", {"button": 0, "clientX": source_x, "clientY": source_y})
+    first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": source_x + 8, "clientY": source_y + 8})
+    first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": target_x, "clientY": target_y})
+    first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": target_x, "clientY": target_y})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getBoundingClientRect().top < document.querySelector('[data-testid=now-focus-overlay-block-drag-a]')?.getBoundingClientRect().top")
     assert move_calls and move_calls[0]["blockId"] == "drag-a" and move_calls[0]["targetBlockId"] == "drag-b"
     assert move_calls[0]["position"] in {"before", "after"}
     assert page.locator('[data-testid="now-focus-overlay-block-drag-b"]').bounding_box()["y"] < page.locator('[data-testid="now-focus-overlay-block-drag-a"]').bounding_box()["y"]
+    page.locator('[data-testid="now-focus-overlay-block-drag-b"]').click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-status-drag-b]').textContent === '진행 중'")
+    assert report_calls and report_calls[0]["blockId"] == "drag-b" and report_calls[0]["status"] == "in_progress"
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-dragged.png", full_page=True)
     assert_no_page_errors(errors)
     context.close()

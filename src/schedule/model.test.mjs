@@ -38,6 +38,9 @@ test("toScheduleTitle turns briefing prose into a short action label", () => {
   assert.equal(toScheduleTitle("고객이 페이지를 강력 새로고침한 후 최신 매입가 카드 1건으로 택배 접수를 다시 시도하고, 관리자 수신·사진 표시·접수번호·상태조회를 한 번 확인해야 한다."), "고객 택배 접수 검증");
   assert.equal(toScheduleTitle("리눅스 학습"), "리눅스 학습");
   assert.equal(toScheduleTitle({ title: "긴 원문", scheduleTitle: "짧은 확인" }), "짧은 확인");
+  assert.equal(toScheduleTitle("GitHub Actions에서 Verify web-buyback 배포 상태와 첫 실패 로그 확인"), "배포 상태 확인");
+  assert.equal(toScheduleTitle("review · review-large 문서 중 실제 변경점 검토"), "문서 검토");
+  assert.equal(toScheduleTitle("실패 시 새 run의 첫 실패 step과 로그를 기준으로 확인"), "실패 로그 확인");
 });
 
 test("toTaskCandidate rejects malformed or already-completed quests", () => {

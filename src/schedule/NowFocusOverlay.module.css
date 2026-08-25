@@ -160,20 +160,26 @@
 .compactBlock.dropTarget { border-color: rgb(98 220 165 / 86%); background: rgb(98 220 165 / 13%); box-shadow: 0 0 0 1px rgb(98 220 165 / 24%) inset; }
 .compactBlockTop { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 8px; }
 .compactBlockTime { color: #dce1ee; font-family: "Cascadia Mono", Consolas, monospace; font-size: 18px; font-weight: 850; letter-spacing: -.075em; line-height: 1; white-space: nowrap; }
+.compactBlockStatus { flex: 0 0 auto; color: #aab0bf; font-size: 10px; font-weight: 850; letter-spacing: -.04em; white-space: nowrap; }
+.compactBlock[data-status="in_progress"] { border-color: rgb(98 220 165 / 64%); background: rgb(98 220 165 / 10%); }
+.compactBlock[data-status="in_progress"] .compactBlockStatus { color: #c8ffe0; }
+.compactBlock[data-status="completed"] { border-color: rgb(255 255 255 / 18%); background: rgb(255 255 255 / 7%); }
+.compactBlock[data-status="completed"] .compactBlockStatus { color: #b7f6d3; }
+.compactBlock[data-status="deferred"] { border-color: rgb(255 205 125 / 28%); background: rgb(255 205 125 / 7%); }
+.compactBlock[data-status="deferred"] .compactBlockStatus { color: #ffd994; }
 .compactBlock .compactBlockTitle { display: block; width: 100%; min-width: 0; max-width: 100%; overflow: hidden; color: #f4f7f5; font-family: "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif; font-size: 18px; font-weight: 850; letter-spacing: -.055em; line-height: 1.15; white-space: nowrap; }
 .busy .compactBlockTitle { color: #aeb1bc; }
 .compactEmpty { margin: 10px 0 0; padding: 18px 8px; border: 1px dashed rgb(255 255 255 / 14%); border-radius: 8px; color: #9ca2b0; font-size: 12px; font-weight: 700; letter-spacing: -.03em; text-align: center; }
-.manualTaskBottom { flex: 0 0 auto; min-width: 0; }
-.manualTaskBottom [data-testid="manual-task-add-toggle"] { width: 100%; min-height: 25px; padding: 0 6px; border-radius: 5px; font-size: 10px; }
-.manualTaskBottom [data-testid="manual-task-add-toggle"] > span { font-size: 13px; }
-.manualTaskBottom [data-testid="manual-task-form"] { max-width: 100%; padding: 5px; gap: 4px; border-radius: 6px; }
-.manualTaskBottom [data-testid="manual-task-form"] .titleInput { height: 25px; font-size: 11px; }
-.manualTaskBottom [data-testid="manual-task-form"] .duration,
-.manualTaskBottom [data-testid="manual-task-form"] .durationSelected,
-.manualTaskBottom [data-testid="manual-task-form"] .submit { min-height: 24px; padding: 0 5px; font-size: 9px; }
 .expandedFooter { gap: 5px; margin-top: 6px; padding: 7px 0 9px; border-top: 1px solid rgb(255 255 255 / 8%); }
+.manualTaskFooter { flex: 1 1 0; min-width: 0; }
+.manualTaskFooter [data-testid="manual-task-add-toggle"] { width: 100%; min-height: 24px; padding: 0 6px; border-radius: 5px; font-size: 9px; }
+.manualTaskFooter [data-testid="manual-task-add-toggle"] > span { font-size: 12px; }
+.manualTaskFooter [data-testid="manual-task-form"] { max-width: 100%; padding: 5px; gap: 4px; border-radius: 6px; }
+.manualTaskFooter [data-testid="manual-task-form"] .titleInput { height: 24px; font-size: 10px; }
+.manualTaskFooter [data-testid="manual-task-form"] .duration,
+.manualTaskFooter [data-testid="manual-task-form"] .durationSelected,
+.manualTaskFooter [data-testid="manual-task-form"] .submit { min-height: 23px; padding: 0 4px; font-size: 8px; }
 .expandedFooter > button { flex: 1 1 0; }
-.expandedFooter button { flex: 1; }
 
 .open {
   display: grid;
