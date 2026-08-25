@@ -7,7 +7,7 @@ function durationLabel(minutes) {
   return `${minutes}분`;
 }
 
-export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = false }) {
+export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = false, onOpenChange }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(50);
@@ -16,6 +16,7 @@ export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = f
 
   const close = () => {
     setOpen(false);
+    onOpenChange?.(false);
     setTitle("");
     setDurationMinutes(50);
     setError("");
@@ -43,7 +44,7 @@ export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = f
       <button
         type="button"
         className={[styles.openButton, compact ? styles.compactOpen : "", iconOnly ? styles.iconOnly : ""].filter(Boolean).join(" ")}
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); onOpenChange?.(true); }}
         data-tauri-drag-region="false"
         data-testid="manual-task-add-toggle"
         aria-label={iconOnly ? "작업 추가" : undefined}

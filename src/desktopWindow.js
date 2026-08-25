@@ -9,6 +9,8 @@ const OVERLAY_EDGE_GAP = 0;
 const OVERLAY_SNAP_DISTANCE = 64;
 export const OVERLAY_COLLAPSED_HEIGHT = 64;
 export const OVERLAY_EXPANDED_HEIGHT = 520;
+export const OVERLAY_COLLAPSED_WIDTH = 288;
+export const OVERLAY_MODAL_WIDTH = 420;
 
 function readOverlayPosition() {
   try {
@@ -66,10 +68,11 @@ export async function startOverlayDrag() {
 }
 
 /** Resize the overlay while keeping its bottom edge anchored in place. */
-export async function resizeOverlay(height) {
+export async function resizeOverlay(height, width = null) {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
   const windowHandle = getCurrentWindow();
   const targetHeight = Math.max(OVERLAY_COLLAPSED_HEIGHT, Math.round(height));
+  const targetWidth = Math.max(OVERLAY_COLLAPSED_WIDTH, Math.round(width ?? OVERLAY_COLLAPSED_WIDTH));
   const [monitor, position, size] = await Promise.all([
     currentMonitor(),
     windowHandle.outerPosition(),
@@ -77,10 +80,11 @@ export async function resizeOverlay(height) {
   ]);
   if (!monitor) return false;
   const bottom = position.y + size.height;
-  const bounds = overlayBounds(monitor, { width: size.width, height: targetHeight });
-  const nextX = Math.min(bounds.maxX, Math.max(bounds.minX, position.x));
+  const right = position.x + size.width;
+  const bounds = overlayBounds(monitor, { width: targetWidth, height: targetHeight });
+  const nextX = Math.min(bounds.maxX, Math.max(bounds.minX, right - targetWidth));
   const nextY = Math.min(bounds.maxY, Math.max(bounds.minY, bottom - targetHeight));
-  await windowHandle.setSize(new PhysicalSize(size.width, targetHeight));
+  await windowHandle.setSize(new PhysicalSize(targetWidth, targetHeight));
   await windowHandle.setPosition(new PhysicalPosition(nextX, nextY));
   rememberOverlayPosition({ x: nextX, y: nextY });
   await invoke("save_overlay_position", { x: Math.round(nextX), y: Math.round(nextY) });

@@ -14,6 +14,7 @@
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+.overlay.modalOpen { width: 420px; }
 
 .surface {
   position: relative;
@@ -37,6 +38,7 @@
 
 .surface:active { cursor: grabbing; }
 .surface.expanded { height: 520px; }
+.surface.modalOpen { width: 420px; }
 
 .surface::before {
   position: absolute;
@@ -197,26 +199,31 @@
 .manualTaskFooter [data-testid="manual-task-add-toggle"].iconOnly { min-height: 32px; padding: 0; }
 .manualTaskFooter [data-testid="manual-task-add-toggle"].iconOnly > span { font-size: 24px; }
 .manualTaskFooter [data-testid="manual-task-form"] { position: absolute; right: 10px; bottom: 48px; left: 10px; z-index: 35; max-width: none; padding: 5px; gap: 4px; border-radius: 6px; }
+.surface.modalOpen .manualTaskFooter [data-testid="manual-task-form"] { top: 12px; right: 12px; bottom: auto; left: 12px; width: auto; max-width: 360px; margin: 0 auto; padding: 12px; gap: 10px; border-radius: 10px; box-shadow: 0 18px 32px rgb(0 0 0 / 42%), 0 0 0 1px rgb(255 255 255 / 5%) inset; }
+.surface.modalOpen .manualTaskFooter [data-testid="manual-task-form"] .titleInput { height: 36px; font-size: 14px; }
+.surface.modalOpen .manualTaskFooter [data-testid="manual-task-form"] .duration,
+.surface.modalOpen .manualTaskFooter [data-testid="manual-task-form"] .durationSelected,
+.surface.modalOpen .manualTaskFooter [data-testid="manual-task-form"] .submit { min-height: 32px; padding: 0 9px; font-size: 11px; }
 .manualTaskFooter [data-testid="manual-task-form"] .titleInput { height: 24px; font-size: 10px; }
 .manualTaskFooter [data-testid="manual-task-form"] .duration,
 .manualTaskFooter [data-testid="manual-task-form"] .durationSelected,
 .manualTaskFooter [data-testid="manual-task-form"] .submit { min-height: 23px; padding: 0 4px; font-size: 8px; }
-.settingsModal { position: absolute; inset: 7px; z-index: 40; display: grid; place-items: center; border: 1px solid rgb(98 220 165 / 42%); border-radius: 9px; background: linear-gradient(145deg, rgb(27 32 41 / 99%), rgb(13 16 21 / 99%)); box-shadow: 0 18px 32px rgb(0 0 0 / 42%), 0 0 0 1px rgb(255 255 255 / 5%) inset; animation: overlay-settings-in .22s cubic-bezier(.22, 1, .36, 1); }
-.settingsForm { display: grid; width: min(100%, 246px); gap: 9px; padding: 10px; box-sizing: border-box; }
+.settingsModal { position: absolute; inset: 12px; z-index: 40; display: grid; place-items: center; border: 1px solid rgb(98 220 165 / 42%); border-radius: 10px; background: linear-gradient(145deg, rgb(27 32 41 / 99%), rgb(13 16 21 / 99%)); box-shadow: 0 18px 32px rgb(0 0 0 / 42%), 0 0 0 1px rgb(255 255 255 / 5%) inset; animation: overlay-settings-in .22s cubic-bezier(.22, 1, .36, 1); }
+.settingsForm { display: grid; width: min(100%, 360px); gap: 11px; padding: 18px; box-sizing: border-box; }
 .settingsHeader { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
 .settingsHeader div { display: grid; gap: 2px; }
-.settingsHeader span { color: #9ef3c8; font-size: 10px; font-weight: 850; letter-spacing: -.04em; }
-.settingsHeader strong { color: #f4fff9; font-size: 17px; font-weight: 850; letter-spacing: -.06em; }
+.settingsHeader span { color: #9ef3c8; font-size: 12px; font-weight: 850; letter-spacing: -.04em; }
+.settingsHeader strong { color: #f4fff9; font-size: 22px; font-weight: 850; letter-spacing: -.06em; }
 .settingsClose { display: grid; width: 24px; height: 24px; place-items: center; padding: 0; border: 1px solid rgb(255 255 255 / 14%); border-radius: 5px; background: rgb(255 255 255 / 5%); color: #c1c5d0; cursor: pointer; font: inherit; font-size: 18px; line-height: 1; }
 .settingsRow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
-.settingsForm label { display: grid; gap: 4px; min-width: 0; color: #b9bdc9; font-size: 9px; font-weight: 750; letter-spacing: -.03em; }
-.settingsForm input:not([type="checkbox"]), .settingsForm select { width: 100%; min-height: 28px; box-sizing: border-box; padding: 0 7px; border: 1px solid rgb(255 255 255 / 15%); border-radius: 5px; outline: none; background: rgb(4 6 9 / 45%); color: #f5fff9; font: inherit; font-size: 11px; font-weight: 800; }
+.settingsForm label { display: grid; gap: 5px; min-width: 0; color: #b9bdc9; font-size: 11px; font-weight: 750; letter-spacing: -.03em; }
+.settingsForm input:not([type="checkbox"]), .settingsForm select { width: 100%; min-height: 34px; box-sizing: border-box; padding: 0 9px; border: 1px solid rgb(255 255 255 / 15%); border-radius: 6px; outline: none; background: rgb(4 6 9 / 45%); color: #f5fff9; font: inherit; font-size: 13px; font-weight: 800; }
 .settingsForm input:not([type="checkbox"]):focus, .settingsForm select:focus { border-color: rgb(98 220 165 / 72%); box-shadow: 0 0 0 2px rgb(98 220 165 / 12%); }
-.fixedSetting { display: grid; align-content: center; gap: 4px; min-width: 0; padding-top: 13px; color: #b9bdc9; font-size: 9px; font-weight: 750; }
-.fixedSetting strong { color: #dcffe9; font-size: 12px; }
+.fixedSetting { display: grid; align-content: center; gap: 5px; min-width: 0; padding-top: 16px; color: #b9bdc9; font-size: 11px; font-weight: 750; }
+.fixedSetting strong { color: #dcffe9; font-size: 15px; }
 .settingsCheckbox { display: flex !important; grid-template-columns: none !important; align-items: center; gap: 6px !important; color: #e7ebef !important; }
 .settingsCheckbox input { accent-color: #62dca5; }
-.settingsSave { min-height: 30px; border: 1px solid #74e7b1; border-radius: 5px; background: #74e7b1; color: #0d2118; cursor: pointer; font: inherit; font-size: 10px; font-weight: 900; }
+.settingsSave { min-height: 38px; border: 1px solid #74e7b1; border-radius: 6px; background: #74e7b1; color: #0d2118; cursor: pointer; font: inherit; font-size: 12px; font-weight: 900; }
 .settingsSave:hover { background: #a0f4c8; }
 .settingsLoading { color: #b9bdc9; font-size: 11px; font-weight: 750; }
 

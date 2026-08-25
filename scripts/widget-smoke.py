@@ -341,9 +341,11 @@ def check_overlay(browser) -> None:
     assert transform_origin.split()[-1].startswith("456") or transform_origin.split()[-1].startswith("100%"), transform_origin
     assert page.get_by_text("여유 시간", exact=True).count() == 0
     page.locator('[data-testid="manual-task-add-toggle"]').click()
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 420")
     page.locator('[data-testid="manual-task-title"]').fill("리눅스 학습")
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-manual-form.png", full_page=True)
     page.locator('[data-testid="manual-task-cancel"]').click()
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 288")
     compact_block = page.locator('[data-testid^="now-focus-overlay-block-"]').first
     if compact_block.count():
         row_style = compact_block.evaluate(
@@ -367,10 +369,12 @@ def check_overlay(browser) -> None:
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
     page.locator('[data-testid="now-focus-overlay-settings"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-settings-modal"]')
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 420")
     assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="dayStart"]').input_value() == "09:00"
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
     page.locator('[data-testid="now-focus-overlay-settings-modal"] [aria-label="설정 닫기"]').click()
     assert page.locator('[data-testid="now-focus-overlay-settings-modal"]').count() == 0
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 288")
     assert_no_page_errors(errors)
     context.close()
 
