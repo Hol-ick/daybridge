@@ -209,14 +209,16 @@ def check_overlay(browser) -> None:
         assert not complete.is_disabled()
         assert complete.text_content() != "열기"
     else:
-        assert re.fullmatch(r"\d{2}:\d{2}", leave_timer.text_content() or "")
-        assert re.fullmatch(r"(근무 시작까지|점심까지|오후 시작까지|퇴근까지|근무 종료) \d{2}:\d{2}", leave_timer.get_attribute("aria-label") or "")
+        leave_timer_value = page.locator('[data-testid="now-focus-overlay-leave-time-value"]')
+        assert re.fullmatch(r"\d{2}:\d{2}", leave_timer_value.text_content() or "")
+        assert page.locator('[data-testid="now-focus-overlay-leave-time"] [class*=timerLabel]').count() == 1
+        assert re.fullmatch(r"(근무 시작까지|점심시간까지|오후 시작까지|퇴근시간까지|근무 종료) \d{2}:\d{2}", leave_timer.get_attribute("aria-label") or "")
     title_style = page.locator('[data-testid="now-focus-overlay-title"]').evaluate(
         "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
     )
     assert title_style["fontSize"] >= 17 and title_style["fontWeight"] >= 800, title_style
     if leave_timer.count():
-        leave_style = leave_timer.evaluate(
+        leave_style = page.locator('[data-testid="now-focus-overlay-leave-time-value"]').evaluate(
             "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
         )
         assert leave_style["fontSize"] >= 27 and leave_style["fontWeight"] >= 800, leave_style

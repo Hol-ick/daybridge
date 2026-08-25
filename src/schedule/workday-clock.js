@@ -48,7 +48,7 @@ export function getWorkdayCountdown(value) {
     target = boundaries.morningStart;
   } else if (now < boundaries.lunchStart) {
     phase = "morning";
-    label = "점심까지";
+    label = "점심시간까지";
     target = boundaries.lunchStart;
   } else if (now < boundaries.afternoonStart) {
     phase = "lunch";
@@ -56,7 +56,7 @@ export function getWorkdayCountdown(value) {
     target = boundaries.afternoonStart;
   } else if (now < boundaries.workdayEnd) {
     phase = "afternoon";
-    label = "퇴근까지";
+    label = "퇴근시간까지";
     target = boundaries.workdayEnd;
   }
 

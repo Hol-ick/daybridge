@@ -17,7 +17,7 @@ test("counts down to the morning start before 09:00", () => {
 test("counts down from the morning start to lunch", () => {
   assert.equal(getWorkdayCountdown(at(9, 0)).time, "02:30");
   assert.equal(getWorkdayCountdown(at(11, 29, 30)).time, "00:01");
-  assert.equal(getWorkdayCountdown(at(9, 0)).label, "점심까지");
+  assert.equal(getWorkdayCountdown(at(9, 0)).label, "점심시간까지");
 });
 
 test("counts down from lunch to the afternoon start", () => {
@@ -32,7 +32,7 @@ test("counts down from lunch to the afternoon start", () => {
 test("counts down from the afternoon start to leaving time", () => {
   assert.deepEqual(getWorkdayCountdown(at(13, 0)), {
     phase: "afternoon",
-    label: "퇴근까지",
+    label: "퇴근시간까지",
     remainingMinutes: 300,
     time: "05:00",
   });

@@ -262,7 +262,8 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
             data-testid="now-focus-overlay-leave-time"
             aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
           >
-            {workdayCountdown.time}
+            <span className={styles.timerLabel}>{workdayCountdown.label}</span>
+            <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
           </time>
         )}
         </div>

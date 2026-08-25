@@ -203,17 +203,34 @@
 }
 
 .timer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
   align-self: center;
-  min-width: 88px;
+  min-width: 96px;
+  gap: 2px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.timerLabel {
+  color: #b7f6d3;
+  font-family: "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: -.045em;
+  line-height: 1;
+}
+
+.timerValue {
   color: #c6ffe4;
   font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
   font-size: 27px;
   font-weight: 850;
   letter-spacing: .025em;
   line-height: 1;
-  text-align: right;
   text-shadow: 0 0 14px rgb(98 220 165 / 28%);
-  white-space: nowrap;
 }
 
 .title {
