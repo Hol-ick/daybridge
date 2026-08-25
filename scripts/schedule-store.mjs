@@ -93,6 +93,16 @@ function normalizeBlock(block, index) {
   const status = SCHEDULE_STATUSES.has(source.status) ? source.status : "planned";
   return { ...source, id, status };
 }
+function normalizeDiscardedBlocks(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => ({
+    blockId: typeof item?.blockId === "string" ? sanitizeText(item.blockId, 120) : "",
+    questId: typeof item?.questId === "string" ? sanitizeText(item.questId, 120) : "",
+    title: typeof item?.title === "string" ? sanitizeText(item.title, 180) : "",
+    units: Number.isInteger(item?.units) && item.units > 0 ? Math.min(item.units, 10) : 1,
+    discardedAt: typeof item?.discardedAt === "string" && !Number.isNaN(Date.parse(item.discardedAt)) ? item.discardedAt : now(),
+  })).filter((item) => item.blockId && item.questId).slice(-200);
+}
 function normalizeSchedule(date, input = {}) {
   const source = input && typeof input === "object" ? input : {};
   const sourceDate = source.date || source.activityDate || date;
@@ -108,6 +118,7 @@ function normalizeSchedule(date, input = {}) {
     // Calendar input is normalized to anonymous schedule blocks upstream. Never persist the raw busyBlocks input or event metadata here.
     busyBlocks: [],
     blocks: Array.isArray(source.blocks) ? source.blocks.map(normalizeBlock) : [],
+    discardedBlocks: normalizeDiscardedBlocks(source.discardedBlocks),
     generatedAt: typeof source.generatedAt === "string" ? source.generatedAt : now(),
   };
 }
@@ -215,5 +226,35 @@ export async function moveScheduleBlock(dataDir, date, input = {}) {
       position: targetBlockId ? position : "end",
       block: { id: moved.id, questId: sanitizeText(moved.questId, 120), title: sanitizeText(moved.title, 180), startAt: moved.startAt, endAt: moved.endAt },
     },
+  };
+}
+
+export async function discardScheduleBlock(dataDir, date, input = {}) {
+  const requestedDate = assertDate(date);
+  const blockId = typeof input.blockId === "string" ? sanitizeText(input.blockId, 120) : "";
+  if (!blockId) throw new TypeError("blockId is required to discard a schedule block.");
+  const schedule = await loadSchedule(dataDir, requestedDate);
+  if (!schedule) return null;
+  const source = schedule.blocks.find((block) => block.id === blockId);
+  if (!source) return { schedule: null, discard: null };
+  const terminal = new Set(["completed", "deferred", "skipped"]);
+  if (source.type !== "focus" || terminal.has(source.status)) throw new TypeError("Only an open focus block can be discarded.");
+  const discardedAt = now();
+  const discard = {
+    blockId: source.id,
+    questId: sanitizeText(source.questId, 120),
+    title: sanitizeText(source.title, 180),
+    units: 1,
+    discardedAt,
+  };
+  const updated = await saveSchedule(dataDir, requestedDate, {
+    ...schedule,
+    blocks: schedule.blocks.filter((block) => block.id !== blockId),
+    discardedBlocks: [...schedule.discardedBlocks, discard],
+    updatedAt: discardedAt,
+  });
+  return {
+    schedule: updated,
+    discard: { id: randomUUID(), occurredAt: discardedAt, ...discard },
   };
 }

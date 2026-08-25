@@ -163,8 +163,15 @@
 .compactBlock.dropAfter::after { position: absolute; right: 7px; left: 7px; height: 3px; border-radius: 999px; background: #8dffd0; box-shadow: 0 0 12px rgb(98 220 165 / 82%); content: ""; pointer-events: none; }
 .compactBlock.dropBefore::before { top: -5px; }
 .compactBlock.dropAfter::after { bottom: -5px; }
+.compactBlock.swapSource { z-index: 3; animation: overlay-swap-source .42s cubic-bezier(.22, 1, .36, 1); }
+.compactBlock.swapTarget { z-index: 2; }
+.compactBlock.swapTargetBefore { animation: overlay-swap-target-before .42s cubic-bezier(.22, 1, .36, 1); }
+.compactBlock.swapTargetAfter { animation: overlay-swap-target-after .42s cubic-bezier(.22, 1, .36, 1); }
 .dragPreview { position: absolute; z-index: 20; margin: 0; pointer-events: none; opacity: .97; border-color: rgb(127 255 194 / 92%); background: linear-gradient(145deg, rgb(43 74 68 / 98%), rgb(26 44 43 / 98%)); box-shadow: 0 16px 28px rgb(0 0 0 / 42%), 0 0 0 2px rgb(98 220 165 / 22%); transform: rotate(1.5deg) scale(1.025); transform-origin: 18% 50%; transition: left .04s linear, top .04s linear, box-shadow .16s ease; }
 .dragPreviewHint { flex: 0 0 auto; color: #c8ffe0; font-size: 10px; font-weight: 900; letter-spacing: -.04em; white-space: nowrap; }
+.trashZone { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; min-height: 57px; box-sizing: border-box; margin: 6px 2px 0 0; border: 1px dashed rgb(255 132 132 / 46%); border-radius: 7px; background: linear-gradient(145deg, rgb(70 35 43 / 78%), rgb(38 25 31 / 88%)); color: #ffb6b6; font-size: 11px; font-weight: 850; letter-spacing: -.045em; opacity: .9; animation: overlay-trash-reveal .2s cubic-bezier(.22, 1, .36, 1); transition: border-color .16s ease, background-color .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
+.trashZone svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.trashZone.trashActive { border-style: solid; border-color: rgb(255 128 128 / 92%); background: linear-gradient(145deg, rgb(118 46 56 / 94%), rgb(63 28 37 / 96%)); color: #ffe2e2; box-shadow: 0 0 0 2px rgb(255 128 128 / 20%), 0 8px 22px rgb(255 81 81 / 22%); transform: translateY(-3px) scale(1.015); animation: overlay-trash-pulse .62s ease-in-out infinite; }
 .compactBlockTop { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 8px; }
 .compactBlockTime { color: #dce1ee; font-family: "Cascadia Mono", Consolas, monospace; font-size: 18px; font-weight: 850; letter-spacing: -.075em; line-height: 1; white-space: nowrap; }
 .compactBlockStatus { flex: 0 0 auto; color: #aab0bf; font-size: 10px; font-weight: 850; letter-spacing: -.04em; white-space: nowrap; }
@@ -285,9 +292,35 @@
   50% { transform: translateY(-3px) scale(1.012); box-shadow: 0 0 0 1px rgb(98 220 165 / 45%) inset, 0 8px 18px rgb(98 220 165 / 18%); }
 }
 
+@keyframes overlay-swap-source {
+  0% { transform: scale(1); opacity: .55; }
+  45% { transform: translateY(-6px) scale(1.035) rotate(-1deg); opacity: 1; box-shadow: 0 12px 24px rgb(98 220 165 / 24%); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes overlay-swap-target-before {
+  0%, 100% { transform: translateY(0) scale(1); }
+  45% { transform: translateY(8px) scale(1.015); }
+}
+
+@keyframes overlay-swap-target-after {
+  0%, 100% { transform: translateY(0) scale(1); }
+  45% { transform: translateY(-8px) scale(1.015); }
+}
+
+@keyframes overlay-trash-reveal {
+  from { opacity: 0; transform: translateY(10px) scale(.96); }
+  to { opacity: .9; transform: translateY(0) scale(1); }
+}
+
+@keyframes overlay-trash-pulse {
+  0%, 100% { transform: translateY(-2px) scale(1.01); }
+  50% { transform: translateY(-5px) scale(1.035); }
+}
+
 .open:hover .title { color: var(--green, #62dca5); }
 
 @media (prefers-reduced-motion: reduce) {
   .surface, .expandedPanel, .title { transition: none; }
-  .titleTrackMoving, .compactBlock.dropTarget { animation: none; }
+  .titleTrackMoving, .compactBlock.dropTarget, .compactBlock.swapSource, .compactBlock.swapTargetBefore, .compactBlock.swapTargetAfter, .trashZone, .trashZone.trashActive { animation: none; }
 }

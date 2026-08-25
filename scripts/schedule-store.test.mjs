@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   DEFAULT_SCHEDULE_SETTINGS,
+  discardScheduleBlock,
   loadSchedule,
   loadScheduleSettings,
   reportScheduleBlock,
@@ -65,5 +66,22 @@ test("block reports only accept explicit schedule states and preserve a sanitize
     assert.match(result.schedule.blocks[0].reports[0].note, /\[email removed\]/);
     assert.match(result.schedule.blocks[0].reports[0].note, /\[local path\]/);
     await assert.rejects(reportScheduleBlock(dataDir, "2026-08-24", { blockId: "focus-1", status: "blocked" }), /valid block status/);
+  } finally { remove(dataDir); }
+});
+
+test("discarding an open focus block removes one schedule unit and persists a sanitized receipt", async () => {
+  const dataDir = temporaryStore();
+  try {
+    await saveSchedule(dataDir, "2026-08-24", {
+      date: "2026-08-24",
+      blocks: [
+        { id: "focus-1", type: "focus", questId: "quest-1", title: "리눅스 학습", status: "planned", startAt: "2026-08-24T09:00:00+09:00", endAt: "2026-08-24T09:50:00+09:00" },
+        { id: "focus-2", type: "focus", questId: "quest-1", title: "리눅스 학습", status: "planned", startAt: "2026-08-24T10:00:00+09:00", endAt: "2026-08-24T10:50:00+09:00" },
+      ],
+    });
+    const result = await discardScheduleBlock(dataDir, "2026-08-24", { blockId: "focus-1" });
+    assert.deepEqual(result.schedule.blocks.map((block) => block.id), ["focus-2"]);
+    assert.deepEqual(result.schedule.discardedBlocks.map((item) => ({ blockId: item.blockId, questId: item.questId, units: item.units })), [{ blockId: "focus-1", questId: "quest-1", units: 1 }]);
+    assert.equal((await loadSchedule(dataDir, "2026-08-24")).discardedBlocks[0].title, "리눅스 학습");
   } finally { remove(dataDir); }
 });

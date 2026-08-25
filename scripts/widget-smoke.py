@@ -71,6 +71,11 @@ DRAG_STATUS_SCHEDULE = json.dumps({
     "schedule": {"schemaVersion": 1, "date": "2026-08-24", "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": DRAG_STATUS_BLOCKS, "unscheduled": [], "calendar": {"coverage": "fresh"}},
     "nowFocus": {"state": "focus", "block": DRAG_STATUS_BLOCKS[0], "nextFocus": DRAG_STATUS_BLOCKS[1]},
 })
+DRAG_DISCARDED_BLOCKS = [block for block in DRAG_STATUS_BLOCKS if block["id"] != "drag-a"]
+DRAG_DISCARDED_SCHEDULE = json.dumps({
+    "schedule": {"schemaVersion": 1, "date": "2026-08-24", "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": DRAG_DISCARDED_BLOCKS, "discardedBlocks": [{"blockId": "drag-a", "questId": "quest-drag-a", "title": "메일 확인", "units": 1}], "unscheduled": [], "calendar": {"coverage": "fresh"}},
+    "nowFocus": {"state": "focus", "block": DRAG_DISCARDED_BLOCKS[0], "nextFocus": DRAG_DISCARDED_BLOCKS[1]},
+})
 FUNCTIONAL_SCHEDULE = json.dumps({
     "schedule": {
         "schemaVersion": 1,
@@ -402,10 +407,11 @@ def check_overlay_long_title(browser) -> None:
 
 
 def check_overlay_reorder(browser) -> None:
-    """Prove mouse/pointer card drag, status clicks, and footer controls work."""
+    """Prove card drag, swap motion, trash discard, status clicks, and footer controls work."""
     context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
     move_calls: list[dict] = []
     report_calls: list[dict] = []
+    discard_calls: list[dict] = []
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=DRAG_SCHEDULE),
@@ -421,6 +427,11 @@ def check_overlay_reorder(browser) -> None:
         route.fulfill(status=200, content_type="application/json", body=DRAG_STATUS_SCHEDULE)
 
     context.route("http://127.0.0.1:39393/api/schedule/block-report", handle_report)
+    def handle_discard(route) -> None:
+        discard_calls.append(json.loads(route.request.post_data or "{}"))
+        route.fulfill(status=200, content_type="application/json", body=DRAG_DISCARDED_SCHEDULE)
+
+    context.route("http://127.0.0.1:39393/api/schedule/block-discard", handle_discard)
     context.route(
         "http://127.0.0.1:39393/api/calendar/status",
         lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
@@ -461,6 +472,10 @@ def check_overlay_reorder(browser) -> None:
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-drop-target.png", full_page=True)
     first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": target_x, "clientY": target_y})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-drag-preview]') === null")
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-a]')?.getAttribute('data-swap-role') === 'source' && document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getAttribute('data-swap-role') === 'target'")
+    swap_style = second.evaluate("element => getComputedStyle(element).animationName")
+    assert "overlay-swap-target" in swap_style, swap_style
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-swap.png", full_page=True)
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getBoundingClientRect().top < document.querySelector('[data-testid=now-focus-overlay-block-drag-a]')?.getBoundingClientRect().top")
     assert move_calls and move_calls[0]["blockId"] == "drag-a" and move_calls[0]["targetBlockId"] == "drag-b"
     assert move_calls[0]["position"] in {"before", "after"}
@@ -468,6 +483,26 @@ def check_overlay_reorder(browser) -> None:
     page.locator('[data-testid="now-focus-overlay-block-drag-b"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-status-drag-b]').textContent === '진행 중'")
     assert report_calls and report_calls[0]["blockId"] == "drag-b" and report_calls[0]["status"] == "in_progress"
+
+    discard_card = page.locator('[data-testid="now-focus-overlay-block-drag-a"]')
+    discard_box = discard_card.bounding_box()
+    assert discard_box
+    discard_card.dispatch_event("mousedown", {"button": 0, "clientX": discard_box["x"] + discard_box["width"] / 2, "clientY": discard_box["y"] + discard_box["height"] / 2})
+    discard_card.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": discard_box["x"] + discard_box["width"] / 2 + 8, "clientY": discard_box["y"] + discard_box["height"] / 2 + 8})
+    page.wait_for_selector('[data-testid="now-focus-overlay-trash"]')
+    trash = page.locator('[data-testid="now-focus-overlay-trash"]')
+    trash_box = trash.bounding_box()
+    card_heights = page.evaluate("() => ({ card: document.querySelector('[data-testid=now-focus-overlay-block-drag-a]')?.offsetHeight || 0, trash: document.querySelector('[data-testid=now-focus-overlay-trash]')?.offsetHeight || 0 })")
+    assert trash_box and abs(card_heights["trash"] - card_heights["card"]) <= 1, card_heights
+    trash_center_x = trash_box["x"] + trash_box["width"] / 2
+    trash_center_y = trash_box["y"] + trash_box["height"] / 2
+    discard_card.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": trash_center_x, "clientY": trash_center_y})
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-trash]')?.getAttribute('data-trash-active') === 'true'")
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-trash-active.png", full_page=True)
+    discard_card.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": trash_center_x, "clientY": trash_center_y})
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-a]') === null")
+    assert discard_calls and discard_calls[0]["blockId"] == "drag-a"
+    assert page.locator('[data-testid="now-focus-overlay-trash"]').count() == 0
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-dragged.png", full_page=True)
     assert_no_page_errors(errors)
     context.close()

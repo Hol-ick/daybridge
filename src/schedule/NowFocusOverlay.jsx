@@ -109,7 +109,7 @@ function OverlayTitle({ children, className = "", ...props }) {
   );
 }
 
-function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onScheduleDragStart, onKeyboardMove, draggingBlockId, dropTargetId, dropPosition, suppressClickRef }) {
+function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onScheduleDragStart, onKeyboardMove, draggingBlockId, dropTargetId, dropPosition, swapRole, swapDirection, suppressClickRef }) {
   const kind = scheduleBlockKind(block);
   const status = block?.status;
   const actionable = kind === "focus" && status !== "completed" && status !== "deferred";
@@ -141,13 +141,14 @@ function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onSch
 
   return (
     <li
-      className={[styles.compactBlock, styles[kind], status === "completed" ? styles.completed : "", draggingBlockId === block?.id ? styles.dragging : "", dropTargetId === block?.id ? styles.dropTarget : "", dropTargetId === block?.id && dropPosition ? styles[`drop${dropPosition[0].toUpperCase()}${dropPosition.slice(1)}`] : ""].filter(Boolean).join(" ")}
+      className={[styles.compactBlock, styles[kind], status === "completed" ? styles.completed : "", draggingBlockId === block?.id ? styles.dragging : "", dropTargetId === block?.id ? styles.dropTarget : "", dropTargetId === block?.id && dropPosition ? styles[`drop${dropPosition[0].toUpperCase()}${dropPosition.slice(1)}`] : "", swapRole === "source" ? styles.swapSource : "", swapRole === "target" ? styles.swapTarget : "", swapRole === "target" && swapDirection ? styles[`swapTarget${swapDirection[0].toUpperCase()}${swapDirection.slice(1)}`] : ""].filter(Boolean).join(" ")}
       data-testid={`now-focus-overlay-block-${block?.id ?? "unknown"}`}
       data-block-id={block?.id ?? ""}
       data-drag-enabled={draggable ? "true" : "false"}
       data-dragging={draggingBlockId === block?.id ? "true" : "false"}
       data-drop-target={dropTargetId === block?.id ? "true" : "false"}
       data-drop-position={dropTargetId === block?.id ? dropPosition || "" : ""}
+      data-swap-role={swapRole || ""}
       data-status={status || "planned"}
       role={clickable ? "button" : undefined}
       aria-label={clickable ? `${title} · ${blockStatusLabel(status)} · 클릭하여 상태 변경` : title}
@@ -171,19 +172,23 @@ function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onSch
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, onReportBlock, onRebuild, onAddManualTask, onMoveBlock, privateMode = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, onReportBlock, onRebuild, onAddManualTask, onMoveBlock, onDiscardBlock, privateMode = false }) {
   const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
   const pointerDragRef = useRef({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null });
   const suppressCardClickRef = useRef(false);
   const resizeTimerRef = useRef(null);
+  const swapTimerRef = useRef(null);
   const [draggingBlockId, setDraggingBlockId] = useState("");
   const [dropTargetId, setDropTargetId] = useState("");
   const [dropPosition, setDropPosition] = useState("");
   const [dragPreview, setDragPreview] = useState(null);
+  const [trashActive, setTrashActive] = useState(false);
+  const [swapState, setSwapState] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   useEffect(() => () => {
     if (resizeTimerRef.current) window.clearTimeout(resizeTimerRef.current);
+    if (swapTimerRef.current) window.clearTimeout(swapTimerRef.current);
   }, []);
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(new Date()), 30_000);
@@ -205,9 +210,12 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
   const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks]);
   const findDropTarget = (clientX, clientY) => {
     const element = document.elementFromPoint(clientX, clientY);
-    const card = element instanceof Element ? element.closest("[data-block-id]") : null;
+    const node = element instanceof Element ? element : null;
+    const trash = node?.closest('[data-testid="now-focus-overlay-trash"]');
+    if (trash) return { card: null, trash, targetId: "" };
+    const card = node?.closest("[data-block-id]");
     const targetId = card?.getAttribute("data-block-id") || "";
-    return movableBlocks.some((item) => item.id === targetId) ? { card, targetId } : { card: null, targetId: "" };
+    return movableBlocks.some((item) => item.id === targetId) ? { card, trash: null, targetId } : { card: null, trash: null, targetId: "" };
   };
   const clearPointerDrag = () => {
     pointerDragRef.current.cleanup?.();
@@ -216,6 +224,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     setDropTargetId("");
     setDropPosition("");
     setDragPreview(null);
+    setTrashActive(false);
   };
   const updateDragPreview = (event, state) => {
     const surface = document.querySelector('[data-testid="now-focus-overlay-surface"]');
@@ -245,6 +254,13 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     event.stopPropagation();
     updateDragPreview(event, state);
     const target = findDropTarget(event.clientX, event.clientY);
+    if (target.trash) {
+      setTrashActive(true);
+      setDropTargetId("");
+      setDropPosition("");
+      return;
+    }
+    setTrashActive(false);
     setDropTargetId(target.targetId && target.targetId !== state.blockId ? target.targetId : "");
     const targetRect = target.card?.getBoundingClientRect();
     const nextPosition = target.targetId && target.targetId !== state.blockId && targetRect
@@ -263,9 +279,16 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     const rect = target.card?.getBoundingClientRect();
     const position = rect && event.clientY < rect.top + (rect.height / 2) ? "before" : "after";
     const shouldMove = state.started && Boolean(targetItem && onMoveBlock);
+    const shouldDiscard = state.started && Boolean(target.trash && onDiscardBlock);
     if (state.started) suppressCardClickRef.current = true;
+    if (shouldMove) {
+      if (swapTimerRef.current) window.clearTimeout(swapTimerRef.current);
+      setSwapState({ sourceId, targetId: targetItem.id, direction: position });
+      swapTimerRef.current = window.setTimeout(() => setSwapState(null), 460);
+    }
     clearPointerDrag();
-    if (shouldMove) await onMoveBlock(sourceId, targetItem.id, position);
+    if (shouldDiscard) await onDiscardBlock(sourceId);
+    else if (shouldMove) await onMoveBlock(sourceId, targetItem.id, position);
     window.setTimeout(() => { suppressCardClickRef.current = false; }, 0);
   };
   const handleScheduleDragStart = (event, item) => {
@@ -423,11 +446,27 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
                   draggingBlockId={draggingBlockId}
                   dropTargetId={dropTargetId}
                   dropPosition={dropPosition}
+                  swapRole={swapState?.sourceId === item.id ? "source" : swapState?.targetId === item.id ? "target" : ""}
+                  swapDirection={swapState?.targetId === item.id ? swapState.direction : ""}
                   suppressClickRef={suppressCardClickRef}
                 />
               ))}
             </ol>
           ) : <p className={styles.compactEmpty}>오늘 배치된 일정이 없습니다.</p>}
+          {draggingBlockId ? (
+            <div
+              className={[styles.trashZone, trashActive ? styles.trashActive : ""].filter(Boolean).join(" ")}
+              data-testid="now-focus-overlay-trash"
+              data-trash-active={trashActive ? "true" : "false"}
+              aria-label={trashActive ? "놓으면 작업 폐기" : "작업을 폐기하려면 여기로 끌기"}
+              style={dragPreview ? { height: `${dragPreview.height}px` } : undefined}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M5 7h14M9 7V5h6v2m-8 3v7m4-7v7m4-7v7M7 7l1 13h8l1-13" />
+              </svg>
+              <span>{trashActive ? "놓으면 폐기" : "여기로 폐기"}</span>
+            </div>
+          ) : null}
           {dragPreview ? (
             <div
               className={[styles.compactBlock, styles.focus, styles.dragPreview].join(" ")}

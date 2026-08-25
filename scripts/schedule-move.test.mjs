@@ -99,3 +99,33 @@ test("schedule block move rejects completed cards and lunch-only targets", async
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test("schedule block discard removes the card and keeps its quest unit out after rebuild", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-schedule-discard-"));
+  const { child, baseUrl } = await startBridge(dataDir);
+  try {
+    await createBoard(dataDir);
+    const rebuilt = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
+    const initial = await rebuilt.json();
+    const source = initial.schedule.blocks.find((block) => block.type === "focus");
+    const discardedResponse = await fetch(`${baseUrl}/api/schedule/block-discard`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "http://tauri.localhost" },
+      body: JSON.stringify({ activityDate: DATE, blockId: source.id }),
+    });
+    assert.equal(discardedResponse.status, 200);
+    const discarded = await discardedResponse.json();
+    assert.equal(discarded.schedule.blocks.some((block) => block.id === source.id), false);
+    assert.deepEqual(discarded.schedule.discardedBlocks.map((item) => item.questId), [source.questId]);
+    assert.equal(discardedResponse.headers.get("access-control-allow-origin"), "http://tauri.localhost");
+
+    const rebuiltAgain = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
+    assert.equal(rebuiltAgain.status, 200);
+    const rebuiltResult = await rebuiltAgain.json();
+    assert.equal(rebuiltResult.schedule.blocks.some((block) => block.questId === source.questId), false);
+    assert.deepEqual(rebuiltResult.schedule.discardedBlocks.map((item) => item.questId), [source.questId]);
+  } finally {
+    child.kill();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});

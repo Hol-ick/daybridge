@@ -9,6 +9,7 @@ import { buildRoutineCandidates } from "../src/schedule/routine-planner.js";
 import {
   loadSchedule,
   loadScheduleSettings,
+  discardScheduleBlock,
   moveScheduleBlock,
   reportScheduleBlock,
   saveSchedule,
@@ -207,6 +208,17 @@ function retainedScheduleBlocks(schedule, at) {
     .filter((block) => !block?.hidden && (block?.locked || (typeof block?.endAt === "string" && Date.parse(block.endAt) <= nowAt)))
     .map((block) => block?.type === "focus" ? { ...block, title: toScheduleTitle(block.title || block.displayTitle || block.scheduleTitle) } : block);
 }
+function applyDiscardedUnits(tasks, schedule) {
+  const discardedUnits = new Map();
+  for (const item of schedule?.discardedBlocks || []) {
+    if (!item?.questId) continue;
+    discardedUnits.set(item.questId, (discardedUnits.get(item.questId) || 0) + (Number.isInteger(item.units) ? item.units : 1));
+  }
+  return tasks.map((task) => {
+    const units = discardedUnits.get(task.id) || 0;
+    return units ? { ...task, remainingMinutes: Math.max(0, task.remainingMinutes - (units * 50)) } : task;
+  }).filter((task) => task.remainingMinutes > 0);
+}
 async function rebuildSchedule(activityDate) {
   const board = await readJson(boardPath(activityDate));
   if (!board || !Array.isArray(board.quests)) return null;
@@ -215,12 +227,12 @@ async function rebuildSchedule(activityDate) {
   const generatedAt = koreaNow();
   const briefingTasks = board.quests.map(toTaskCandidate).filter(Boolean);
   const routineTasks = buildRoutineCandidates({ date: activityDate, board });
-  const tasks = [...briefingTasks, ...routineTasks];
+  const tasks = applyDiscardedUnits([...briefingTasks, ...routineTasks], existingSchedule);
   const completedQuestIds = board.quests.filter((quest) => (quest?.state || quest?.status) === "completed").map((quest) => quest.id).filter((id) => typeof id === "string");
   const calendarResult = await readCalendarBusyBlocks(activityDate);
   const coverage = calendarResult.calendar.state === "connected" ? "connected" : "attention";
   const generated = buildDailySchedule({ date: activityDate, settings, taskCandidates: tasks, busyBlocks: calendarResult.busyBlocks, lockedBlocks: retainedScheduleBlocks(existingSchedule, generatedAt), completedQuestIds, startAt: generatedAt, generatedAt });
-  return saveSchedule(DATA_DIR, activityDate, { ...generated, date: activityDate, timezone: "Asia/Seoul", calendar: { coverage }, busyBlocks: [] });
+  return saveSchedule(DATA_DIR, activityDate, { ...generated, date: activityDate, timezone: "Asia/Seoul", calendar: { coverage }, busyBlocks: [], discardedBlocks: existingSchedule?.discardedBlocks || [] });
 }
 async function handleSchedule(url) {
   const activityDate = safeDate(url.searchParams.get("date")) || new Date().toISOString().slice(0, 10);
@@ -268,6 +280,27 @@ async function handleScheduleBlockMove(body) {
       position: result.movement.position,
       block: result.movement.block,
     },
+  };
+  const mirrored = await writeEvent(config, event);
+  return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
+}
+async function handleScheduleBlockDiscard(body) {
+  const activityDate = safeDate(body.activityDate || body.date);
+  if (!activityDate) return { status: 400, body: { error: "activityDate and a valid block discard are required." } };
+  let result;
+  try { result = await discardScheduleBlock(DATA_DIR, activityDate, body); } catch (error) { return { status: 400, body: { error: error instanceof Error ? sanitizeText(error.message, 180) : "Invalid block discard." } }; }
+  if (!result) return { status: 404, body: { error: "No schedule exists for this date." } };
+  if (!result.schedule) return { status: 404, body: { error: "Schedule block was not found." } };
+  const config = await loadConfig();
+  const event = {
+    schemaVersion: 1,
+    id: result.discard.id,
+    eventType: "schedule_block_discarded",
+    activityDate,
+    occurredAt: result.discard.occurredAt,
+    source: "daybridge",
+    sensitivity: "sanitized",
+    discard: { blockId: result.discard.blockId, questId: result.discard.questId, title: result.discard.title, units: result.discard.units },
   };
   const mirrored = await writeEvent(config, event);
   return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
@@ -346,6 +379,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const incoming = await readRequestBody(request); const current = await loadScheduleSettings(DATA_DIR); send(response, 200, { settings: await saveScheduleSettings(DATA_DIR, { ...current, ...incoming }) }, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-report") { const result = await handleScheduleBlockReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-move") { const result = await handleScheduleBlockMove(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/schedule/block-discard") { const result = await handleScheduleBlockDiscard(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     send(response, 404, { error: "Not found." }, origin);
   } catch (error) { send(response, 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error." }, origin); }
 });

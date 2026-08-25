@@ -180,6 +180,24 @@ export default function ScheduleSurface() {
     }
   }, [activityDate, refresh]);
 
+  const discardBlock = useCallback(async (blockId) => {
+    try {
+      const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule/block-discard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityDate, blockId }),
+      }));
+      setSchedule(result.schedule);
+      setNowFocus(result.nowFocus);
+      setNotice("작업을 오늘 시간표에서 폐기했어요");
+      void refresh();
+      return true;
+    } catch {
+      setNotice("이 작업을 폐기하지 못했어요");
+      return false;
+    }
+  }, [activityDate, refresh]);
+
   const openSettings = useCallback(() => {
     setSettingsOpen(true);
     void loadSettings();
@@ -237,6 +255,7 @@ export default function ScheduleSurface() {
       onRebuild={() => loadSchedule({ rebuild: true })}
       onAddManualTask={addManualTask}
       onMoveBlock={moveBlock}
+      onDiscardBlock={discardBlock}
     />;
   }
 
