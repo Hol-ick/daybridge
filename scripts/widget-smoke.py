@@ -44,6 +44,10 @@ FUNCTIONAL_BLOCK = {
     "endAt": "2026-08-24T09:50:00+09:00",
     "status": "planned",
 }
+LONG_FUNCTIONAL_BLOCK = {
+    **FUNCTIONAL_BLOCK,
+    "displayTitle": "GitHub Actions Verify web-buyback 배포 상태와 첫 실패 로그 확인",
+}
 FUNCTIONAL_SCHEDULE = json.dumps({
     "schedule": {
         "schemaVersion": 1,
@@ -56,6 +60,19 @@ FUNCTIONAL_SCHEDULE = json.dumps({
         "calendar": {"coverage": "fresh"},
     },
     "nowFocus": {"state": "focus", "block": FUNCTIONAL_BLOCK, "nextFocus": None},
+})
+LONG_FUNCTIONAL_SCHEDULE = json.dumps({
+    "schedule": {
+        "schemaVersion": 1,
+        "date": "2026-08-24",
+        "timezone": "Asia/Seoul",
+        "generatedAt": "2026-08-24T00:00:00+09:00",
+        "label": "오늘 시간표",
+        "blocks": [LONG_FUNCTIONAL_BLOCK],
+        "unscheduled": [],
+        "calendar": {"coverage": "fresh"},
+    },
+    "nowFocus": {"state": "focus", "block": LONG_FUNCTIONAL_BLOCK, "nextFocus": None},
 })
 FUNCTIONAL_COMPLETED = json.dumps({
     "schedule": {
@@ -208,15 +225,17 @@ def check_overlay(browser) -> None:
     assert page.locator('[data-testid="now-focus-overlay-title"]').evaluate("element => getComputedStyle(element).userSelect") == "none"
     complete = page.locator('[data-testid="now-focus-overlay-complete"]')
     leave_timer = page.locator('[data-testid="now-focus-overlay-leave-time"]')
-    assert complete.count() + leave_timer.count() <= 1
+    assert complete.count() + leave_timer.count() == 1
     if complete.count():
         assert not complete.is_disabled()
         assert complete.text_content() != "열기"
     else:
-        idle_copy = re.sub(r"\s+", " ", page.locator('[data-testid="now-focus-overlay-title"]').text_content() or "").strip()
-        assert re.fullmatch(r"(근무 시작까지|점심시간까지|오후 시작까지|퇴근시간까지|근무 종료) \d{2}:\d{2}", idle_copy), idle_copy
-        assert page.locator('[data-testid="now-focus-overlay-title"]').get_attribute("aria-label") == idle_copy
-        assert leave_timer.count() == 0
+        idle_label = re.sub(r"\s+", " ", page.locator('[data-testid="now-focus-overlay-title"]').text_content() or "").strip()
+        assert re.fullmatch(r"(근무 시작까지|점심시간까지|오후 시작까지|퇴근시간까지|근무 종료)", idle_label), idle_label
+        leave_timer_value = page.locator('[data-testid="now-focus-overlay-leave-time-value"]')
+        assert re.fullmatch(r"\d{2}:\d{2}", leave_timer_value.text_content() or "")
+        assert page.locator('[data-testid="now-focus-overlay-leave-time"] [class*=timerLabel]').count() == 0
+        assert page.locator('[data-testid="now-focus-overlay-title"]').get_attribute("aria-label") == f"{idle_label} {leave_timer_value.text_content().strip()}"
     title_style = page.locator('[data-testid="now-focus-overlay-title"]').evaluate(
         "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
     )
@@ -294,7 +313,7 @@ def check_overlay_actions(browser) -> None:
     )
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
-        lambda route: route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_SCHEDULE),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=LONG_FUNCTIONAL_SCHEDULE),
     )
 
     def handle_report(route) -> None:
@@ -311,6 +330,16 @@ def check_overlay_actions(browser) -> None:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
     page.wait_for_selector('[data-testid="now-focus-overlay-complete"]:not([disabled])')
+    page.wait_for_selector('[class*=titleTrackMoving]')
+    marquee = page.locator('[data-testid="now-focus-overlay-title"] [class*=titleTrackMoving]')
+    assert marquee.count() == 1
+    animation_name = marquee.evaluate("element => getComputedStyle(element).animationName")
+    assert "overlay-title-marquee" in animation_name, animation_name
+    initial_transform = marquee.evaluate("element => getComputedStyle(element).transform")
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-marquee.png", full_page=True)
+    page.wait_for_timeout(4_500)
+    assert marquee.evaluate("element => getComputedStyle(element).transform") != initial_transform
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-marquee-moved.png", full_page=True)
     page.locator('[data-testid="now-focus-overlay-complete"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-title]').textContent === '완료'")
     assert report_calls and report_calls[0]["blockId"] == "focus-1" and report_calls[0]["status"] == "completed"

@@ -54,6 +54,43 @@ function scheduleBlockTitle(block) {
   return block?.displayTitle ?? block?.scheduleTitle ?? block?.questTitle ?? block?.taskTitle ?? block?.title ?? "집중 작업";
 }
 
+function OverlayTitle({ children, className = "", ...props }) {
+  const viewportRef = useRef(null);
+  const trackRef = useRef(null);
+  const [marqueeDistance, setMarqueeDistance] = useState(0);
+
+  useEffect(() => {
+    const measure = () => {
+      const viewport = viewportRef.current;
+      const track = trackRef.current;
+      if (!viewport || !track) return;
+      setMarqueeDistance(Math.max(0, Math.ceil(track.scrollWidth - viewport.clientWidth)));
+    };
+    const frame = window.requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+    if (observer && viewportRef.current) observer.observe(viewportRef.current);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+      observer?.disconnect();
+    };
+  }, [children]);
+
+  const moving = marqueeDistance > 0;
+  return (
+    <strong ref={viewportRef} className={[styles.title, className].filter(Boolean).join(" ")} {...props}>
+      <span
+        ref={trackRef}
+        className={[styles.titleTrack, moving ? styles.titleTrackMoving : ""].filter(Boolean).join(" ")}
+        style={moving ? { "--marquee-distance": `${marqueeDistance}px` } : undefined}
+      >
+        {children}
+      </span>
+    </strong>
+  );
+}
+
 function OverlayScheduleItem({ block, privateMode, actionId, onComplete, onDefer }) {
   const kind = scheduleBlockKind(block);
   const status = block?.status;
@@ -248,17 +285,12 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
             </span>
           ) : null}
           {showIdleTitle ? (
-            <strong
-              className={`${styles.title} ${styles.idleTitle}`}
+            <OverlayTitle
               data-testid="now-focus-overlay-title"
               aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
-            >
-              <span className={styles.idleLabel}>{workdayCountdown.label}</span>
-              {" "}
-              <span className={styles.idleValue}>{workdayCountdown.time}</span>
-            </strong>
+            >{workdayCountdown.label}</OverlayTitle>
           ) : (
-            <strong className={styles.title} data-testid="now-focus-overlay-title">{feedback || title}</strong>
+            <OverlayTitle data-testid="now-focus-overlay-title">{feedback || title}</OverlayTitle>
           )}
         </button>
         {canComplete ? (
@@ -273,16 +305,16 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
           >
             {actionId === blockId ? "저장" : feedback || "완료"}
           </button>
-        ) : block ? (
+        ) : (
           <time
             className={styles.timer}
             data-testid="now-focus-overlay-leave-time"
             aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
           >
-            <span className={styles.timerLabel}>{workdayCountdown.label}</span>
+            {block ? <span className={styles.timerLabel}>{workdayCountdown.label}</span> : null}
             <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
           </time>
-        ) : null}
+        )}
         </div>
       </div>
     </aside>
