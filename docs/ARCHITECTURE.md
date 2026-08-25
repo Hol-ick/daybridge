@@ -6,7 +6,7 @@ Daybridge is an execution layer over AIHUB, not a second diary or a second calen
 
 1. **AIHUB closeout** — produces the detailed, evidence-linked report. It is the source of truth and is never edited by Daybridge.
 2. **Completion-driven continuation** — the closeout automation invokes the Quest Extractor only after a ready synthesis exists. No fixed 17:40 cron is required.
-3. **Quest Plan** — a sanitized derived artifact. Stable `mission_id` and `quest_id` let a multi-day mission continue without resetting progress.
+3. **Quest Plan** — a sanitized derived artifact. Stable `mission_id` and `quest_id` let a multi-day mission continue without resetting progress. The input contract is validated before any candidate reaches the scheduler; confirmation questions remain in `review_queue`.
 4. **Calendar busy reader** — a local, user-authorized, read-only adapter that returns only occupied start/end ranges. It has no calendar write path.
 5. **Routine planner** — turns personal, opt-in defaults such as Linux learning into a maximum of two optional candidates. It runs after the briefing board is read and never displaces briefing work.
 6. **DailySchedule** — combines briefing candidates, optional routine candidates, busy windows, user settings, prior receipts, and carryover into deterministic focus, busy, and buffer blocks.
@@ -31,7 +31,7 @@ The continuation runner writes `daybridge_continuation.json` with `waiting`, `bl
 ## Execution model
 
 - A **mission** aggregates a multi-day outcome; it is not directly checked off.
-- A **quest** is one concrete result. It becomes one or more 25/50-minute focus blocks; it is not replaced by a calendar event.
+- A **quest** is one concrete result. It becomes one or more fixed 50-minute focus blocks; its `focus_units` value is the scheduling source of truth. It is not replaced by a calendar event.
 - A **step** is a mechanical unit. It is locked only when the plan explicitly declares `depends_on` or sequential execution.
 - A **busy block** is a Calendar time constraint. Its event details never enter the schedule.
 - A **focus block** is an executable window for one quest. A **buffer block** protects transitions and is not a task.

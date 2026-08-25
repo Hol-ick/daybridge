@@ -96,10 +96,14 @@ export function toTaskCandidate(quest) {
     : "";
   const title = rawTitle ? toScheduleTitle(quest) : "";
   const state = quest.state || quest.status || "ready";
-  const estimateMinutes = Number(quest.estimateMinutes);
+  const focusUnits = Number(quest.focusUnits ?? quest.focus_units);
+  const estimateMinutes = Number.isInteger(focusUnits) && focusUnits > 0 ? focusUnits * 50 : Number(quest.estimateMinutes);
   if (!id || !title || state === "completed" || !STATES.has(state) || !positiveInteger(estimateMinutes)) return null;
 
-  const remaining = quest.remainingMinutes == null ? estimateMinutes : Number(quest.remainingMinutes);
+  const remainingUnits = Number(quest.remainingUnits ?? quest.remaining_units);
+  const remaining = Number.isInteger(remainingUnits) && remainingUnits > 0
+    ? remainingUnits * 50
+    : (quest.remainingMinutes == null ? estimateMinutes : Number(quest.remainingMinutes));
   if (!positiveInteger(remaining)) return null;
   return {
     id,

@@ -14,6 +14,16 @@ The compiler reads the sanitized closeout without editing it. Check the quest co
 
 The scheduled closeout uses the same path through `daybridge_board.py`. It reads the machine-local `daybridge_root` and `daybridge_node` profile fields, creates the local board, and stores a redacted AIHUB receipt. Neither absolute path belongs in shared AIHUB documents.
 
+### 입력 계약을 먼저 확인하기
+
+새로운 AIHUB 전달물은 `daybridge_quest_plan` 1.1을 사용한다. `source_date`와 `schedule_date`가 맞는지, 각 후보에 `focus_units`가 있는지, `start_at`/`end_at`이 섞이지 않았는지 먼저 확인한다. 검증 결과에서 `accepted`만 스케줄러로 넘어가며, `review_queue`·`excluded`·`warnings`는 보드 메타데이터에 남는다.
+
+```powershell
+node --test src/schedule/input-contract.test.mjs scripts/compile-quests.test.mjs
+```
+
+`confirmation_questions`가 카드로 나타나면 오래된 컴파일러나 레거시 board를 보고 있는 것이다. 새 board에는 `reviewQueue`로만 남아야 한다. `focus_units: 2`가 `estimateMinutes: 100`, `remaining_units: 1`이 `remainingMinutes: 50`으로 변환되는지도 함께 확인한다.
+
 ## 2. Check the local bridge
 
 Start the bridge in a second terminal:

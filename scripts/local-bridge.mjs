@@ -174,6 +174,14 @@ function toTaskCandidate(quest) {
   if (!quest || typeof quest !== "object" || typeof quest.id !== "string") return null;
   const state = typeof quest.state === "string" ? quest.state : typeof quest.status === "string" ? quest.status : "ready";
   const sourceTitle = sanitizeText(quest.scheduleTitle || quest.displayTitle || quest.title, 180);
+  const focusUnits = Number(quest.focusUnits ?? quest.focus_units);
+  const legacyEstimate = Number(quest.estimateMinutes);
+  const estimateMinutes = Number.isInteger(focusUnits) && focusUnits > 0 ? focusUnits * 50 : (Number.isFinite(legacyEstimate) && legacyEstimate > 0 ? legacyEstimate : 25);
+  const remainingUnits = Number(quest.remainingUnits ?? quest.remaining_units);
+  const legacyRemaining = Number(quest.remainingMinutes);
+  const remainingMinutes = Number.isInteger(remainingUnits) && remainingUnits > 0
+    ? Math.min(remainingUnits * 50, estimateMinutes)
+    : Math.max(5, Math.min(180, Number.isFinite(legacyRemaining) && legacyRemaining > 0 ? legacyRemaining : estimateMinutes));
   return {
     id: quest.id,
     questId: quest.id,
@@ -186,9 +194,11 @@ function toTaskCandidate(quest) {
     status: state,
     execution: quest.execution === "sequential" ? "sequential" : "independent",
     dependsOn: Array.isArray(quest.dependsOn) ? quest.dependsOn.filter((id) => typeof id === "string") : [],
-    estimateMinutes: Math.max(5, Math.min(180, Number(quest.estimateMinutes) || 25)),
-    durationMinutes: Math.max(5, Math.min(180, Number(quest.estimateMinutes) || 25)),
-    remainingMinutes: Math.max(5, Math.min(180, Number(quest.remainingMinutes) || Number(quest.estimateMinutes) || 25)),
+    focusUnits: Number.isInteger(focusUnits) && focusUnits > 0 ? focusUnits : Math.max(1, Math.ceil(estimateMinutes / 50)),
+    remainingUnits: Number.isInteger(remainingUnits) && remainingUnits > 0 ? Math.max(1, Math.ceil(remainingMinutes / 50)) : Math.max(1, Math.ceil(remainingMinutes / 50)),
+    estimateMinutes: Math.max(5, Math.min(180, estimateMinutes)),
+    durationMinutes: Math.max(5, Math.min(180, estimateMinutes)),
+    remainingMinutes,
     currentAction: sanitizeText(quest.currentAction || quest.firstStep || quest.title, 240),
     steps: Array.isArray(quest.steps) ? quest.steps.map((step) => ({ id: sanitizeText(step?.id, 120), label: sanitizeText(step?.label, 180), completed: Boolean(step?.completed), dependsOn: Array.isArray(step?.dependsOn) ? step.dependsOn.filter((id) => typeof id === "string") : [] })).filter((step) => step.id && step.label) : [],
     sourceRefs: Array.isArray(quest.sourceRefs) ? quest.sourceRefs.map((ref) => sanitizeText(ref, 240)).filter(Boolean) : [],

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateQuestPlan, FOCUS_UNIT_MINUTES } from "../src/schedule/input-contract.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ACTION_WORDS = /check|verify|review|write|send|record|run|decide|prepare|update|fix|implement|confirm|draft|publish|inspect|정리|확인|검토|작성|기록|결정|준비|수정|구현|발행|점검/i;
@@ -91,6 +92,13 @@ function candidateToQuest(raw, context, index) {
   const firstStep = clean(raw.first_step || raw.firstStep || steps[0]?.label || title, 240);
   const currentAction = clean(raw.current_action || raw.currentAction || steps.find((step) => !step.completed)?.label || steps[0]?.label || title, 240);
   if ([title, firstStep, currentAction, ...steps.map((step) => step.label)].some((value) => UNSAFE_CARD_TEXT.test(value))) return null;
+  const legacyEstimate = Number(raw.estimate_minutes || raw.estimateMinutes);
+  const focusUnits = Number.isInteger(Number(raw.focus_units || raw.focusUnits)) && Number(raw.focus_units || raw.focusUnits) > 0
+    ? Number(raw.focus_units || raw.focusUnits)
+    : Math.max(1, Math.ceil((legacyEstimate || (steps.length > 1 ? steps.length * 15 : 15)) / FOCUS_UNIT_MINUTES));
+  const remainingUnits = Number.isInteger(Number(raw.remaining_units || raw.remainingUnits)) && Number(raw.remaining_units || raw.remainingUnits) > 0
+    ? Math.min(focusUnits, Number(raw.remaining_units || raw.remainingUnits))
+    : focusUnits;
   return {
     id,
     missionId: inferMission(project, raw),
@@ -106,7 +114,11 @@ function candidateToQuest(raw, context, index) {
     firstStep,
     currentAction,
     doneWhen: clean(raw.done_when || raw.doneWhen || "The observable result is recorded.", 240),
-    estimateMinutes: Math.max(5, Math.min(90, Number(raw.estimate_minutes || raw.estimateMinutes) || (steps.length > 1 ? steps.length * 15 : 15))),
+    scheduleTitle: clean(raw.schedule_title || raw.scheduleTitle, 32) || undefined,
+    focusUnits,
+    remainingUnits,
+    estimateMinutes: focusUnits * FOCUS_UNIT_MINUTES,
+    remainingMinutes: remainingUnits * FOCUS_UNIT_MINUTES,
     progress: { completed: steps.filter((step) => step.completed).length, total: steps.length },
     carryoverCount: Number(raw.carryover_count || raw.carryoverCount) || 0,
     steps,
@@ -117,15 +129,29 @@ function candidateToQuest(raw, context, index) {
     reports: Array.isArray(raw.reports) ? raw.reports : [],
   };
 }
-function planCandidates(plan, sourceDate) { return (Array.isArray(plan?.quests) ? plan.quests : []).map((raw, index) => candidateToQuest(raw, { sourceDate, sourceLabel: "AIHUB Quest Plan", sourcePath: safeRef("aihub", sourceDate, "quest-plan") }, index)).filter(Boolean); }
+function planCandidates(plan, sourceDate, targetDate, validation = validateQuestPlan(plan, { sourceDate, targetDate })) {
+  if (!validation.valid) return [];
+  return validation.accepted.map((raw, index) => candidateToQuest(raw, { sourceDate, sourceLabel: "AIHUB Quest Plan", sourcePath: safeRef("aihub", sourceDate, "quest-plan") }, index)).filter(Boolean);
+}
 function closeoutCandidates(packet, sourceDate) {
   const values = [
     ...(Array.isArray(packet?.tomorrow_first_steps) ? packet.tomorrow_first_steps : []),
     ...(Array.isArray(packet?.immediate_actions) ? packet.immediate_actions : []),
     ...(Array.isArray(packet?.open_items) ? packet.open_items : []),
-    ...(Array.isArray(packet?.confirmation_questions) ? packet.confirmation_questions.map((title) => ({ title, kind: "decision" })) : []),
   ];
   return values.map((raw, index) => candidateToQuest(raw, { sourceDate, sourceLabel: "AIHUB closeout (legacy)", sourcePath: safeRef("aihub", sourceDate, "briefing"), priority: index < 2 ? "must" : "should" }, index)).filter(Boolean);
+}
+function closeoutReviewQueue(packet, sourceDate) {
+  const values = [
+    ...(Array.isArray(packet?.review_queue) ? packet.review_queue : []),
+    ...(Array.isArray(packet?.reviewQueue) ? packet.reviewQueue : []),
+    ...(Array.isArray(packet?.confirmation_questions) ? packet.confirmation_questions : []),
+  ];
+  return values.map((item, index) => {
+    const title = clean(typeof item === "string" ? item : item?.question || item?.title || item?.text, 240);
+    if (!title) return null;
+    return { id: String(item?.id || `review-${index + 1}`), question: title, reason: clean(item?.reason || "needs_user_confirmation", 160), sourceRefs: [safeRef("aihub", sourceDate, "briefing")] };
+  }).filter(Boolean);
 }
 function parseMarkdown(text, sourceDate) { return String(text || "").split(/\r?\n/).map((line) => line.replace(/^\s*(?:[-*+] |\d+[.)] )/, "").trim()).filter((line) => line && ACTION_WORDS.test(line) && !COMPLETED_WORDS.test(line)).map((title) => candidateToQuest({ title }, { sourceDate, sourceLabel: "input", sourcePath: safeRef("input", sourceDate) }, 0)).filter(Boolean); }
 function preserveState(quests, outputPath, targetDate) {
@@ -150,22 +176,23 @@ export function compile(options = {}) {
   const { targetDate, sourceDate } = resolveDates(options);
   const source = options.source || "auto";
   const outputPath = resolve(options.output || join(process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "Daybridge", "boards", `${targetDate}.json`));
-  const warnings = []; const sourceInputs = []; const excluded = []; let sourceCoverage = "stale"; let sourceQuality = "unknown"; let quests = []; let plan = null;
+  const warnings = []; const sourceInputs = []; const excluded = []; const reviewQueue = []; let sourceCoverage = "stale"; let sourceQuality = "unknown"; let quests = []; let plan = null;
   const root = options.aihubRoot || profileRoot(); const sourcePaths = root && !options.questPlan ? pathsFor(root, sourceDate) : null;
   const boundary = boundaryMetadata(sourcePaths, sourceDate, targetDate); warnings.push(...boundary.warnings); excluded.push(...boundary.excluded);
   const sourceIsFuture = sourceDate > targetDate;
   if (sourceIsFuture) warnings.push("Source packet has a future activity date relative to the current board.");
-  if (options.questPlan && existsSync(options.questPlan)) { plan = readJson(options.questPlan); if (!sourceIsFuture) quests = planCandidates(plan, sourceDate); sourceInputs.push(safeRef("aihub", sourceDate, "quest-plan")); sourceCoverage = plan?.status === "ready" || plan?.artifact_type === "daybridge_quest_plan" ? "connected" : "attention"; sourceQuality = plan?.source?.quality || "unknown"; }
-  else if (source !== "diary" && sourcePaths?.plan && existsSync(sourcePaths.plan)) { plan = readJson(sourcePaths.plan); if (!sourceIsFuture) quests = planCandidates(plan, sourceDate); sourceInputs.push(safeRef("aihub", sourceDate, "quest-plan")); sourceCoverage = "connected"; sourceQuality = plan?.source?.quality || "unknown"; }
-  else if (source !== "diary" && sourcePaths?.briefing && existsSync(sourcePaths.briefing)) { const packet = readJson(sourcePaths.briefing); if (!sourceIsFuture) quests = closeoutCandidates(packet, sourceDate); sourceInputs.push(safeRef("aihub", sourceDate, "briefing")); sourceCoverage = "attention"; sourceQuality = packet?.coverage?.record_quality || "unknown"; warnings.push("Quest Plan was unavailable; compiled legacy closeout candidates."); }
-  else if (Array.isArray(options.input) && options.input.length) { for (const input of options.input) { if (!existsSync(input)) continue; const json = input.toLowerCase().endsWith(".json") ? readJson(input) : null; quests.push(...(json?.artifact_type === "daybridge_quest_plan" ? planCandidates(json, sourceDate) : json?.artifact_type === "aihub_briefing_synthesis" ? closeoutCandidates(json, sourceDate) : parseMarkdown(readFileSync(input, "utf8"), sourceDate))); sourceInputs.push(safeRef("input", sourceDate)); } sourceCoverage = quests.length ? "connected" : "attention"; }
+  if (options.questPlan && existsSync(options.questPlan)) { plan = readJson(options.questPlan); const validation = validateQuestPlan(plan, { sourceDate, targetDate }); if (!sourceIsFuture) quests = planCandidates(plan, sourceDate, targetDate, validation); sourceInputs.push(safeRef("aihub", sourceDate, "quest-plan")); sourceCoverage = validation.valid && validation.source.coverage === "complete" ? "connected" : "attention"; sourceQuality = validation.source.quality; warnings.push(...validation.warnings, ...validation.errors); excluded.push(...validation.excluded); reviewQueue.push(...validation.reviewQueue); }
+  else if (source !== "diary" && sourcePaths?.plan && existsSync(sourcePaths.plan)) { plan = readJson(sourcePaths.plan); const validation = validateQuestPlan(plan, { sourceDate, targetDate }); if (!sourceIsFuture) quests = planCandidates(plan, sourceDate, targetDate, validation); sourceInputs.push(safeRef("aihub", sourceDate, "quest-plan")); sourceCoverage = validation.valid && validation.source.coverage === "complete" ? "connected" : "attention"; sourceQuality = validation.source.quality; warnings.push(...validation.warnings, ...validation.errors); excluded.push(...validation.excluded); reviewQueue.push(...validation.reviewQueue); }
+  else if (source !== "diary" && sourcePaths?.briefing && existsSync(sourcePaths.briefing)) { const packet = readJson(sourcePaths.briefing); if (!sourceIsFuture) quests = closeoutCandidates(packet, sourceDate); sourceInputs.push(safeRef("aihub", sourceDate, "briefing")); sourceCoverage = "attention"; sourceQuality = packet?.coverage?.record_quality || "unknown"; warnings.push("Quest Plan was unavailable; compiled legacy closeout candidates."); reviewQueue.push(...closeoutReviewQueue(packet, sourceDate)); }
+  else if (Array.isArray(options.input) && options.input.length) { for (const input of options.input) { if (!existsSync(input)) continue; const json = input.toLowerCase().endsWith(".json") ? readJson(input) : null; if (json?.artifact_type === "daybridge_quest_plan") { const validation = validateQuestPlan(json, { sourceDate, targetDate }); quests.push(...planCandidates(json, sourceDate, targetDate, validation)); warnings.push(...validation.warnings, ...validation.errors); excluded.push(...validation.excluded); reviewQueue.push(...validation.reviewQueue); } else if (json?.artifact_type === "aihub_briefing_synthesis") { quests.push(...closeoutCandidates(json, sourceDate)); reviewQueue.push(...closeoutReviewQueue(json, sourceDate)); } else quests.push(...parseMarkdown(readFileSync(input, "utf8"), sourceDate)); sourceInputs.push(safeRef("input", sourceDate)); } sourceCoverage = quests.length ? "connected" : "attention"; }
   else { warnings.push(root ? "No Quest Plan or closeout packet was found." : "AIHUB machine profile could not be resolved."); sourceCoverage = "attention"; }
   if (plan?.source?.warnings) warnings.push(...plan.source.warnings); if (Array.isArray(plan?.warnings)) warnings.push(...plan.warnings); if (Array.isArray(plan?.excluded)) excluded.push(...plan.excluded);
   const uniqueWarnings = [...new Set(warnings.filter(Boolean))]; if (uniqueWarnings.length || plan?.source?.coverage === "attention") sourceCoverage = "attention";
   const deduped = [...new Map(quests.map((quest) => [quest.id, quest])).values()]; const kept = preserveState(deduped, outputPath, targetDate);
   const uniqueExcluded = [...new Map(excluded.map((item) => [`${clean(item.title, 260).toLowerCase()}|${clean(item.reason, 260).toLowerCase()}`, item])).values()];
-  const board = { schemaVersion: 2, activityDate: targetDate, sourceDate, sourceInputs, title: `${targetDate} quest board`, generatedAt: new Date().toISOString(), sourceCoverage, sourceQuality, sourceWarnings: uniqueWarnings, sourceMetadata: { ...boundary.metadata, ...(plan?.source || {}) }, excluded: uniqueExcluded, missions: makeMissions(kept), quests: kept };
+  const uniqueReviewQueue = [...new Map(reviewQueue.map((item) => [item.id, item])).values()];
+  const board = { schemaVersion: 2, activityDate: targetDate, sourceDate, sourceInputs, title: `${targetDate} quest board`, generatedAt: new Date().toISOString(), sourceCoverage, sourceQuality, sourceWarnings: uniqueWarnings, sourceMetadata: { ...boundary.metadata, ...(plan?.source || {}) }, excluded: uniqueExcluded, reviewQueue: uniqueReviewQueue, missions: makeMissions(kept), quests: kept };
   if (options.output || !options.print) atomicWriteJson(outputPath, board); if (options.print || !options.output) console.log(JSON.stringify(board, null, 2)); else console.log(`Compiled ${board.quests.length} quests from ${sourceInputs.length} plan packet(s): ${outputPath}`); return board;
 }
-function selfTest() { const plan = { artifact_type: "daybridge_quest_plan", source: { quality: "aligned" }, quests: [{ id: "q-a", mission_id: "m-a", title: "Check source", steps: [{ id: "s-a", label: "Open source" }, { id: "s-b", label: "Record result", depends_on: ["s-a"] }], execution: "sequential" }, { id: "q-b", title: "Write note", actor: "automation", kind: "monitor" }] }; const quests = planCandidates(plan, "2026-08-11"); if (quests.length !== 2 || quests[0].steps.length !== 2 || quests[0].execution !== "sequential") throw new Error("Compiler self-test failed"); console.log("compile-quests self-test passed"); }
+function selfTest() { const plan = { artifact_type: "daybridge_quest_plan", source: { quality: "aligned" }, quests: [{ id: "q-a", mission_id: "m-a", title: "Check source", actor: "user", kind: "review", steps: [{ id: "s-a", label: "Open source" }, { id: "s-b", label: "Record result", depends_on: ["s-a"] }], execution: "sequential" }, { id: "q-b", title: "Write note", actor: "user", kind: "execute" }] }; const quests = planCandidates(plan, "2026-08-11"); if (quests.length !== 2 || quests[0].steps.length !== 2 || quests[0].execution !== "sequential") throw new Error("Compiler self-test failed"); console.log("compile-quests self-test passed"); }
 const directExecution = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url); if (directExecution) { const args = parseArgs(process.argv.slice(2)); if (args.selfTest) selfTest(); else compile(args); }

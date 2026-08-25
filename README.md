@@ -13,6 +13,7 @@ Daybridge is a local-first desktop companion. It reduces a detailed daily note t
 - A link back to the evidence that produced each action
 - Detailed closeout plus a separate Quest Extractor: every eligible atomic quest is retained, while system/automation work is excluded with a reason
 - Stable mission and quest IDs for multi-day carryover, with explicit sequential dependencies only when AIHUB declares them
+- A validated `daybridge_quest_plan` input contract: 50-minute `focus_units`, no fixed quest times, and a separate confirmation queue
 - Freshness, record-quality, and source-coverage indicators instead of invented certainty
 
 ## Local development

@@ -76,3 +76,28 @@ test("legacy closeout fallback is visibly attention and future packets are safe"
   const root = mkdtempSync(join(tmpdir(), "daybridge-legacy-")); const system = join(root, "04_Operations_And_Automation", "Memory_System", "reports", "daily", "_system");
   try { const date = "2099-01-01"; const path = join(system, `${date}_briefing_synthesis.json`); mkdirSync(system, { recursive: true }); writeJson(path, { artifact_type: "aihub_briefing_synthesis", phase: "closeout", status: "ready", coverage: { record_quality: "aligned" }, immediate_actions: [{ title: "Check the source", first_step: "Open it" }] }); const board = compile({ source: "closeout", sourceDate: date, targetDate: "2026-08-14", aihubRoot: root, print: true }); assert.equal(board.sourceCoverage, "attention"); assert.equal(board.quests.length, 0); assert.ok(board.sourceWarnings.some((warning) => /future/i.test(warning))); } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("canonical focus units become 50-minute board estimates and confirmation questions stay review-only", () => {
+  const root = mkdtempSync(join(tmpdir(), "daybridge-contract-")); const planPath = join(root, "plan.json"); const output = join(root, "board.json");
+  try {
+    writeJson(planPath, {
+      artifact_type: "daybridge_quest_plan",
+      schema_version: "1.1",
+      source_date: "2026-08-25",
+      schedule_date: "2026-08-26",
+      status: "ready",
+      source: { coverage: "complete", quality: "aligned" },
+      quests: [{ id: "q-two-units", title: "문서 검토", actor: "user", kind: "review", priority: "must", focus_units: 2, remaining_units: 1, first_action: "문서를 연다", done_when: "검토 결과를 기록한다" }],
+      confirmation_questions: ["이 문서를 외부에 공유할까?"]
+    });
+    const board = compile({ questPlan: planPath, sourceDate: "2026-08-25", targetDate: "2026-08-26", output });
+    assert.equal(board.sourceCoverage, "connected");
+    assert.equal(board.quests[0].estimateMinutes, 100);
+    assert.equal(board.quests[0].remainingMinutes, 50);
+    assert.equal(board.quests[0].focusUnits, 2);
+    assert.equal(board.quests[0].remainingUnits, 1);
+    assert.equal(board.quests.length, 1);
+    assert.equal(board.reviewQueue.length, 1);
+    assert.equal(board.reviewQueue[0].question, "이 문서를 외부에 공유할까?");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

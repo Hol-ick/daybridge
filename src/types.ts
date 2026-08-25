@@ -36,7 +36,11 @@ export interface Quest {
   firstStep: string;
   currentAction?: string;
   doneWhen: string;
+  scheduleTitle?: string;
+  focusUnits?: number;
+  remainingUnits?: number;
   estimateMinutes: number;
+  remainingMinutes?: number;
   progress: { completed: number; total: number };
   carryoverCount: number;
   steps: QuestStep[];
@@ -66,6 +70,7 @@ export interface QuestBoard {
   sourceWarnings?: string[];
   sourceMetadata?: Record<string, unknown>;
   excluded?: Array<{ title: string; reason: string; sourceRefs?: string[] }>;
+  reviewQueue?: Array<{ id: string; question: string; reason: string; sourceRefs?: string[] }>;
   missions?: Mission[];
   quests: Quest[];
 }
