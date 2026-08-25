@@ -150,8 +150,6 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
   const workdayCountdown = getWorkdayCountdown(currentTime);
   const canComplete = Boolean(!isBusy && blockId && typeof onComplete === "function");
   const blocks = useMemo(() => getScheduleBlocks(schedule), [schedule]);
-  const focusBlocks = blocks.filter((item) => scheduleBlockKind(item) === "focus");
-  const completedCount = focusBlocks.filter((item) => item.status === "completed").length;
 
   const setExpandedMode = (next) => {
     if (resizeTimerRef.current) window.clearTimeout(resizeTimerRef.current);
@@ -167,6 +165,22 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
       }, 280);
     }
   };
+
+  useEffect(() => {
+    if (!expanded) return undefined;
+    const collapse = () => setExpandedMode(false);
+    const handleWindowBlur = () => collapse();
+    const handleOutsidePointer = (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest('[data-testid="now-focus-overlay-surface"]')) collapse();
+    };
+    window.addEventListener("blur", handleWindowBlur);
+    document.addEventListener("pointerdown", handleOutsidePointer, true);
+    return () => {
+      window.removeEventListener("blur", handleWindowBlur);
+      document.removeEventListener("pointerdown", handleOutsidePointer, true);
+    };
+  }, [expanded]);
 
   const handleComplete = async (targetBlockId, event) => {
     event.stopPropagation();
@@ -248,7 +262,6 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
       <div className={surfaceClassName} onPointerDown={handlePointerDown} data-tauri-drag-region="deep" data-testid="now-focus-overlay-surface">
         <section className={styles.expandedPanel} aria-label="오늘 시간표 관리" aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
           <header className={styles.expandedHeader}>
-            <div><span>오늘 일정</span><strong>{completedCount}/{focusBlocks.length || 0}</strong></div>
             <button type="button" onClick={() => setExpandedMode(false)} data-tauri-drag-region="false" data-testid="now-focus-overlay-collapse" aria-label="시간표 접기">접기</button>
           </header>
           <div className={styles.manualTaskSlot}>

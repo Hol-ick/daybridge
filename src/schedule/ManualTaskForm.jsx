@@ -12,21 +12,27 @@ export default function ManualTaskForm({ onSubmit, compact = false }) {
   const [title, setTitle] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(50);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const close = () => {
     setOpen(false);
     setTitle("");
     setDurationMinutes(50);
+    setError("");
   };
 
   const submit = async (event) => {
     event.preventDefault();
     const clean = title.trim();
     if (!clean || submitting || !onSubmit) return;
+    setError("");
     setSubmitting(true);
     try {
       const result = await onSubmit({ title: clean, durationMinutes });
       if (result !== false) close();
+      else setError("추가하지 못했어요");
+    } catch {
+      setError("추가하지 못했어요");
     } finally {
       setSubmitting(false);
     }
@@ -52,8 +58,11 @@ export default function ManualTaskForm({ onSubmit, compact = false }) {
         <input
           className={styles.titleInput}
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="할 일 추가"
+          onChange={(event) => { setTitle(event.target.value); setError(""); }}
+          placeholder="예: 리눅스 학습…"
+          name="title"
+          type="text"
+          autoComplete="off"
           maxLength={180}
           autoFocus
           required
@@ -69,7 +78,7 @@ export default function ManualTaskForm({ onSubmit, compact = false }) {
               key={minutes}
               type="button"
               className={durationMinutes === minutes ? styles.durationSelected : styles.duration}
-              onClick={() => setDurationMinutes(minutes)}
+              onClick={() => { setDurationMinutes(minutes); setError(""); }}
               disabled={submitting}
               data-tauri-drag-region="false"
               data-testid={`manual-task-duration-${minutes}`}
@@ -80,9 +89,10 @@ export default function ManualTaskForm({ onSubmit, compact = false }) {
           ))}
         </div>
         <button type="submit" className={styles.submit} disabled={!title.trim() || submitting} data-tauri-drag-region="false" data-testid="manual-task-submit">
-          {submitting ? "저장 중" : "배치"}
+          {submitting ? "저장…" : "배치"}
         </button>
       </div>
+      {error ? <p className={styles.error} role="status" aria-live="polite">{error}</p> : null}
     </form>
   );
 }

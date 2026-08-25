@@ -311,6 +311,10 @@ def check_overlay(browser) -> None:
     transform_origin = page.locator('[data-testid="now-focus-overlay-expanded"]').evaluate("element => getComputedStyle(element).transformOrigin")
     assert transform_origin.split()[-1].startswith("456") or transform_origin.split()[-1].startswith("100%"), transform_origin
     assert page.get_by_text("여유 시간", exact=True).count() == 0
+    page.locator('[data-testid="manual-task-add-toggle"]').click()
+    page.locator('[data-testid="manual-task-title"]').fill("리눅스 학습")
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-manual-form.png", full_page=True)
+    page.locator('[data-testid="manual-task-cancel"]').click()
     compact_block = page.locator('[data-testid^="now-focus-overlay-block-"]').first
     if compact_block.count():
         row_style = compact_block.evaluate(
@@ -319,6 +323,10 @@ def check_overlay(browser) -> None:
         assert compact_block.locator('[class*=compactBlockTime]').inner_text().strip().count("–") == 0
         assert row_style["display"] == "grid" and row_style["titleSize"] >= 17 and row_style["timeSize"] >= 17, row_style
     assert page.locator('[data-testid="now-focus-overlay-collapse"]').count() == 1
+    page.mouse.click(310, 10)
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
     page.locator('[data-testid="now-focus-overlay-collapse"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")
     page.wait_for_timeout(100)

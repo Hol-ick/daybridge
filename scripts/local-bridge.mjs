@@ -62,9 +62,10 @@ async function readRequestBody(request) {
   for await (const chunk of request) { total += chunk.length; if (total > 128 * 1024) throw new Error("Request body is too large."); chunks.push(chunk); }
   try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new Error("Request body must be valid JSON."); }
 }
-const allowedOrigins = new Set(["http://127.0.0.1:4173", "http://localhost:4173", "http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5174", "http://localhost:5174", "http://127.0.0.1:5178", "http://localhost:5178"]);
+const allowedOrigins = new Set(["http://127.0.0.1:4173", "http://localhost:4173", "http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5174", "http://localhost:5174", "http://127.0.0.1:5178", "http://localhost:5178", "http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"]);
+function allowedOrigin(origin) { return allowedOrigins.has(origin) || /^https?:\/\/tauri\.localhost(?::\d+)?$/.test(origin || ""); }
 function send(response, status, payload, origin) {
-  response.writeHead(status, { "Access-Control-Allow-Origin": allowedOrigins.has(origin) ? origin : "http://127.0.0.1:4173", "Vary": "Origin", "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  response.writeHead(status, { "Access-Control-Allow-Origin": allowedOrigin(origin) ? origin : "http://127.0.0.1:4173", "Vary": "Origin", "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   response.end(JSON.stringify(payload));
 }
 function sendHtml(response, status, markup) {

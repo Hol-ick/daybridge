@@ -24,10 +24,10 @@
   box-sizing: border-box;
   padding: 0;
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 9px;
-  background: linear-gradient(135deg, rgb(45 47 56 / 97%), rgb(31 32 38 / 98%));
-  box-shadow: 0 8px 22px rgb(0 0 0 / 18%), 0 1px 0 rgb(255 255 255 / 4%) inset;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 11px;
+  background: linear-gradient(155deg, rgb(30 34 43 / 98%), rgb(16 18 23 / 99%));
+  box-shadow: 0 12px 28px rgb(0 0 0 / 26%), 0 1px 0 rgb(255 255 255 / 6%) inset;
   color: inherit;
   isolation: isolate;
   transition: height .28s cubic-bezier(.22, 1, .36, 1), border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
@@ -48,8 +48,8 @@
 }
 
 .surface:hover {
-  border-color: rgb(255 255 255 / 20%);
-  box-shadow: 0 12px 28px rgb(0 0 0 / 23%), 0 1px 0 rgb(255 255 255 / 5%) inset;
+  border-color: rgb(255 255 255 / 25%);
+  box-shadow: 0 15px 32px rgb(0 0 0 / 30%), 0 1px 0 rgb(255 255 255 / 6%) inset;
 }
 
 .open:focus-visible,
@@ -101,16 +101,12 @@
 }
 
 .expandedHeader,
-.expandedHeader > div,
 .expandedFooter {
   display: flex;
   align-items: center;
 }
 
-.expandedHeader { justify-content: space-between; gap: 7px; min-height: 23px; margin-bottom: 7px; }
-.expandedHeader > div { min-width: 0; gap: 8px; }
-.expandedHeader span { color: var(--green, #62dca5); font-size: 13px; font-weight: 850; letter-spacing: -.035em; line-height: 1; }
-.expandedHeader strong { color: #d8ffe9; font-family: "Cascadia Mono", Consolas, monospace; font-size: 13px; font-weight: 850; line-height: 1; }
+.expandedHeader { justify-content: flex-end; min-height: 23px; margin-bottom: 7px; }
 .expandedHeader button,
 .expandedFooter button {
   min-height: 24px;
@@ -128,7 +124,7 @@
 .expandedHeader button:hover,
 .expandedFooter button:hover { border-color: rgb(98 220 165 / 45%); background: rgb(98 220 165 / 10%); color: #eafff3; }
 
-.manualTaskSlot { flex: 0 0 auto; margin-bottom: 6px; }
+.manualTaskSlot { flex: 0 0 auto; margin-bottom: 9px; }
 
 .compactList {
   display: grid;
@@ -169,7 +165,7 @@
 .compactActions button:disabled { cursor: wait; opacity: .45; }
 .compactStatus { flex: 0 0 auto; color: #9ca0ad; font-size: 10px; font-weight: 800; }
 .focus .compactStatus { color: #bfffe0; }
-.compactEmpty { margin: auto 0; padding: 16px 8px; color: #aeb1bc; font-size: 13px; text-align: center; }
+.compactEmpty { margin: 10px 0 0; padding: 18px 8px; border: 1px dashed rgb(255 255 255 / 14%); border-radius: 8px; color: #9ca2b0; font-size: 12px; font-weight: 700; letter-spacing: -.03em; text-align: center; }
 .expandedFooter { gap: 5px; margin-top: 6px; padding: 7px 0 9px; border-top: 1px solid rgb(255 255 255 / 8%); }
 .expandedFooter button { flex: 1; }
 

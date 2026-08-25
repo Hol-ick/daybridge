@@ -45,10 +45,11 @@ test("manual task endpoint saves a task and splits it into 50-minute blocks", as
     await createBoard(dataDir);
     const response = await fetch(`${baseUrl}/api/quests/manual`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Origin: "http://tauri.localhost" },
       body: JSON.stringify({ activityDate: DATE, title: "리눅스 학습", durationMinutes: 100 }),
     });
     assert.equal(response.status, 201);
+    assert.equal(response.headers.get("access-control-allow-origin"), "http://tauri.localhost");
     const result = await response.json();
     assert.equal(result.quest.title, "리눅스 학습");
     assert.equal(result.quest.sourceLabel, "수동 추가");
