@@ -189,6 +189,10 @@ def check_dashboard_actions(browser) -> None:
 
 def check_overlay(browser) -> None:
     context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=EMPTY_SCHEDULE),
+    )
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -204,15 +208,15 @@ def check_overlay(browser) -> None:
     assert page.locator('[data-testid="now-focus-overlay-title"]').evaluate("element => getComputedStyle(element).userSelect") == "none"
     complete = page.locator('[data-testid="now-focus-overlay-complete"]')
     leave_timer = page.locator('[data-testid="now-focus-overlay-leave-time"]')
-    assert complete.count() + leave_timer.count() == 1
+    assert complete.count() + leave_timer.count() <= 1
     if complete.count():
         assert not complete.is_disabled()
         assert complete.text_content() != "열기"
     else:
-        leave_timer_value = page.locator('[data-testid="now-focus-overlay-leave-time-value"]')
-        assert re.fullmatch(r"\d{2}:\d{2}", leave_timer_value.text_content() or "")
-        assert page.locator('[data-testid="now-focus-overlay-leave-time"] [class*=timerLabel]').count() == 1
-        assert re.fullmatch(r"(근무 시작까지|점심시간까지|오후 시작까지|퇴근시간까지|근무 종료) \d{2}:\d{2}", leave_timer.get_attribute("aria-label") or "")
+        idle_copy = re.sub(r"\s+", " ", page.locator('[data-testid="now-focus-overlay-title"]').text_content() or "").strip()
+        assert re.fullmatch(r"(근무 시작까지|점심시간까지|오후 시작까지|퇴근시간까지|근무 종료) \d{2}:\d{2}", idle_copy), idle_copy
+        assert page.locator('[data-testid="now-focus-overlay-title"]').get_attribute("aria-label") == idle_copy
+        assert leave_timer.count() == 0
     title_style = page.locator('[data-testid="now-focus-overlay-title"]').evaluate(
         "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
     )

@@ -21,7 +21,10 @@ function formatTime(value) {
 }
 
 function getFocusBlock(nowFocus) {
-  return nowFocus?.block ?? nowFocus?.focusBlock ?? nowFocus ?? null;
+  if (!nowFocus) return null;
+  if (Object.hasOwn(nowFocus, "block")) return nowFocus.block;
+  if (Object.hasOwn(nowFocus, "focusBlock")) return nowFocus.focusBlock;
+  return nowFocus;
 }
 
 function getScheduleBlocks(schedule) {
@@ -101,6 +104,8 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
   const isBusy = blockKind === "busy" || blockKind === "calendar";
   const sourceTitle = isBusy ? "일정 중" : block?.displayTitle ?? block?.scheduleTitle ?? block?.questTitle ?? block?.taskTitle ?? block?.title ?? "다음 집중 시간 준비 중";
   const title = privateMode && block ? "집중 시간" : sourceTitle;
+  const idle = !block;
+  const showIdleTitle = idle && !feedback;
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
   const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "";
@@ -242,7 +247,19 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
               <span className={styles.time} data-testid="now-focus-overlay-time">{timeLabel}</span>
             </span>
           ) : null}
-          <strong className={styles.title} data-testid="now-focus-overlay-title">{feedback || title}</strong>
+          {showIdleTitle ? (
+            <strong
+              className={`${styles.title} ${styles.idleTitle}`}
+              data-testid="now-focus-overlay-title"
+              aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
+            >
+              <span className={styles.idleLabel}>{workdayCountdown.label}</span>
+              {" "}
+              <span className={styles.idleValue}>{workdayCountdown.time}</span>
+            </strong>
+          ) : (
+            <strong className={styles.title} data-testid="now-focus-overlay-title">{feedback || title}</strong>
+          )}
         </button>
         {canComplete ? (
           <button
@@ -256,7 +273,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
           >
             {actionId === blockId ? "저장" : feedback || "완료"}
           </button>
-        ) : (
+        ) : block ? (
           <time
             className={styles.timer}
             data-testid="now-focus-overlay-leave-time"
@@ -265,7 +282,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
             <span className={styles.timerLabel}>{workdayCountdown.label}</span>
             <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
           </time>
-        )}
+        ) : null}
         </div>
       </div>
     </aside>

@@ -246,6 +246,36 @@
   transition: color .16s ease;
 }
 
+.idleTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.idleLabel {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: #d8ffe9;
+  font-size: 17px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.idleValue {
+  flex: 0 0 auto;
+  color: #c6ffe4;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 27px;
+  font-weight: 850;
+  letter-spacing: .025em;
+  line-height: 1;
+  text-shadow: 0 0 14px rgb(98 220 165 / 28%);
+}
+
 .open:hover .title { color: var(--green, #62dca5); }
 
 .complete {
