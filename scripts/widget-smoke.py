@@ -87,6 +87,23 @@ FUNCTIONAL_COMPLETED = json.dumps({
     },
     "nowFocus": {"state": "free_time", "block": None, "nextFocus": None},
 })
+MANUAL_CREATED = json.dumps({
+    "schedule": {
+        "schemaVersion": 1,
+        "date": "2026-08-24",
+        "timezone": "Asia/Seoul",
+        "generatedAt": "2026-08-24T00:00:00+09:00",
+        "label": "오늘 시간표",
+        "blocks": [
+            {**FUNCTIONAL_BLOCK, "id": "focus-manual-1", "questId": "manual-1", "displayTitle": "리눅스 학습"},
+            {**FUNCTIONAL_BLOCK, "id": "focus-manual-2", "questId": "manual-1", "displayTitle": "리눅스 학습", "startAt": "2026-08-24T10:00:00+09:00", "endAt": "2026-08-24T10:50:00+09:00"},
+        ],
+        "unscheduled": [],
+        "calendar": {"coverage": "fresh"},
+    },
+    "nowFocus": {"state": "focus", "block": {**FUNCTIONAL_BLOCK, "id": "focus-manual-1", "questId": "manual-1", "displayTitle": "리눅스 학습"}, "nextFocus": None},
+    "quest": {"id": "manual-1", "title": "리눅스 학습", "estimateMinutes": 100},
+})
 
 
 def assert_no_page_errors(errors: list[str]) -> None:
@@ -149,6 +166,7 @@ def check_dashboard_actions(browser) -> None:
     context = browser.new_context(viewport={"width": 960, "height": 760}, device_scale_factor=1)
     report_calls: list[dict] = []
     settings_calls: list[dict] = []
+    manual_calls: list[dict] = []
 
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/board(?:\?|$)"),
@@ -164,6 +182,12 @@ def check_dashboard_actions(browser) -> None:
         route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_COMPLETED)
 
     context.route("http://127.0.0.1:39393/api/schedule/block-report", handle_report)
+
+    def handle_manual(route) -> None:
+        manual_calls.append(json.loads(route.request.post_data or "{}"))
+        route.fulfill(status=201, content_type="application/json", body=MANUAL_CREATED)
+
+    context.route("http://127.0.0.1:39393/api/quests/manual", handle_manual)
 
     def handle_settings(route) -> None:
         if route.request.method == "PUT":
@@ -199,6 +223,15 @@ def check_dashboard_actions(browser) -> None:
     page.get_by_role("button", name="저장하고 재배치").click()
     page.wait_for_function("document.querySelector('[role=status]').textContent.includes('시간표 설정을 저장했어요')")
     assert settings_calls and settings_calls[0]["bufferMinutes"] == 5
+
+    page.locator('[data-testid="manual-task-add-toggle"]').click()
+    page.locator('[data-testid="manual-task-title"]').fill("리눅스 학습")
+    page.locator('[data-testid="manual-task-duration-100"]').click()
+    page.screenshot(path="test-artifacts/daybridge-schedule-dashboard-manual-form.png", full_page=True)
+    page.locator('[data-testid="manual-task-submit"]').click()
+    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('100분으로 배치했어요')")
+    assert manual_calls and manual_calls[0]["title"] == "리눅스 학습" and manual_calls[0]["durationMinutes"] == 100
+    assert page.locator('[data-testid="manual-task-form"]').count() == 0
 
     assert_no_page_errors(errors)
     context.close()

@@ -99,6 +99,27 @@ test("buildDailySchedule aligns every focus block to the next hourly boundary", 
   ]);
 });
 
+test("buildDailySchedule splits manual work into one 50-minute unit per hour", () => {
+  const schedule = buildDailySchedule({
+    date: DATE,
+    settings: { dayStart: "09:00", dayEnd: "14:00", bufferMinutes: 0 },
+    taskCandidates: [candidate("manual-linux", "must", 100)],
+  });
+
+  assert.deepEqual(schedule.blocks.filter((block) => block.type === "focus").map((block) => [block.questId, block.startAt.slice(11, 16), block.endAt.slice(11, 16)]), [
+    ["manual-linux", "09:00", "09:50"],
+    ["manual-linux", "10:00", "10:50"],
+  ]);
+  assert.deepEqual(schedule.unscheduled, []);
+
+  const longer = buildDailySchedule({
+    date: DATE,
+    settings: { dayStart: "09:00", dayEnd: "15:00", bufferMinutes: 0 },
+    taskCandidates: [candidate("manual-linux-long", "must", 150)],
+  });
+  assert.equal(longer.blocks.filter((block) => block.type === "focus" && block.questId === "manual-linux-long").length, 3);
+});
+
 test("resolveNowFocus distinguishes active work, calendar time, upcoming work, and free time", () => {
   const schedule = buildDailySchedule({ date: DATE, settings, taskCandidates: [candidate("must", "must", 50)], busyBlocks: [{ id: "busy", startAt: "2026-08-24T11:00:00+09:00", endAt: "2026-08-24T11:30:00+09:00" }] });
 

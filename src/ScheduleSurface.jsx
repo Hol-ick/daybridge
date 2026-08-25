@@ -90,6 +90,24 @@ export default function ScheduleSurface() {
     } catch { setNotice("시간표 설정을 불러오지 못했어요"); }
   }, []);
 
+  const addManualTask = useCallback(async ({ title, durationMinutes }) => {
+    try {
+      const result = await readJson(await fetch(`${BRIDGE_URL}/api/quests/manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityDate, title, durationMinutes }),
+      }));
+      setSchedule(result.schedule);
+      setNowFocus(result.nowFocus);
+      await refresh();
+      setNotice(`${title} · ${durationMinutes}분으로 배치했어요`);
+      return true;
+    } catch {
+      setNotice("작업을 추가하지 못했어요. 제목과 시간을 확인해 주세요");
+      return false;
+    }
+  }, [activityDate, refresh]);
+
   const loadCalendarStatus = useCallback(async ({ quiet = false } = {}) => {
     try {
       const result = await readJson(await fetch(`${BRIDGE_URL}/api/calendar/status`));
@@ -200,6 +218,7 @@ export default function ScheduleSurface() {
       onComplete={(blockId) => reportBlock(blockId, "completed")}
       onDefer={(blockId) => reportBlock(blockId, "deferred")}
       onRebuild={() => loadSchedule({ rebuild: true })}
+      onAddManualTask={addManualTask}
     />;
   }
 
@@ -215,6 +234,7 @@ export default function ScheduleSurface() {
       onRebuild={() => { void loadSchedule({ rebuild: true }); }}
       onOpenSettings={openSettings}
       onConnectCalendar={connectCalendar}
+      onAddManualTask={addManualTask}
     />
     <p className={styles.notice} role="status" data-visible={notice ? "true" : "false"}>{notice}</p>
     {selectedQuest ? <section className={styles.questDetail} aria-label="선택한 작업 상세"><Item quest={selectedQuest} /></section> : null}

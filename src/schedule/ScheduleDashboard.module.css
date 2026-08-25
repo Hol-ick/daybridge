@@ -170,6 +170,7 @@
 
 .sectionHeading { justify-content: space-between; margin-bottom: 12px; }
 .sectionHeading h2 { font-size: 18px; font-weight: 690; }
+.sectionTools { display: flex; align-items: center; gap: 8px; }
 
 .sectionHeading span {
   padding: 4px 8px;
@@ -285,6 +286,7 @@
   .nowContent { align-items: flex-end; gap: 14px; }
   .nowCard h2 { font-size: 19px; }
   .blockActions { display: none; }
+  .sectionTools { gap: 5px; }
   .blockTime { width: 46px; }
   .track { flex-basis: 23px; }
 }

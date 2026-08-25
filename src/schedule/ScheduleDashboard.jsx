@@ -1,4 +1,5 @@
 import styles from "./ScheduleDashboard.module.css";
+import ManualTaskForm from "./ManualTaskForm.jsx";
 
 const TIME_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
   hour: "numeric",
@@ -130,6 +131,7 @@ export default function ScheduleDashboard({
   calendarCoverage,
   calendarConnection,
   onConnectCalendar,
+  onAddManualTask,
 }) {
   const focus = getFocusBlock(nowFocus);
   const focusKind = blockKind(focus);
@@ -186,7 +188,10 @@ export default function ScheduleDashboard({
       <section className={styles.timelineSection} aria-labelledby="timeline-title">
         <div className={styles.sectionHeading}>
           <h2 id="timeline-title">시간표</h2>
-          {unscheduledCount > 0 ? <span data-testid="schedule-unscheduled-count">미배치 {unscheduledCount}</span> : null}
+          <div className={styles.sectionTools}>
+            {unscheduledCount > 0 ? <span data-testid="schedule-unscheduled-count">미배치 {unscheduledCount}</span> : null}
+            <ManualTaskForm onSubmit={onAddManualTask} />
+          </div>
         </div>
         {blocks.length > 0 ? (
           <ol className={styles.timeline} data-testid="schedule-timeline">

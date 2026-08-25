@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { OVERLAY_COLLAPSED_HEIGHT, OVERLAY_EXPANDED_HEIGHT, resizeOverlay, startOverlayDrag } from "../desktopWindow.js";
 import { getWorkdayCountdown } from "./workday-clock.js";
 import styles from "./NowFocusOverlay.module.css";
+import ManualTaskForm from "./ManualTaskForm.jsx";
 
 function asDate(value) {
   if (!value) return null;
@@ -119,7 +120,7 @@ function OverlayScheduleItem({ block, privateMode, actionId, onComplete, onDefer
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, onComplete, onDefer, onRebuild, privateMode = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, onComplete, onDefer, onRebuild, onAddManualTask, privateMode = false }) {
   const dragRef = useRef({ point: null, cleanup: null, suppressClick: false });
   const feedbackTimerRef = useRef(null);
   const resizeTimerRef = useRef(null);
@@ -250,6 +251,9 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
             <div><span>오늘 일정</span><strong>{completedCount}/{focusBlocks.length || 0}</strong></div>
             <button type="button" onClick={() => setExpandedMode(false)} data-tauri-drag-region="false" data-testid="now-focus-overlay-collapse" aria-label="시간표 접기">접기</button>
           </header>
+          <div className={styles.manualTaskSlot}>
+            <ManualTaskForm compact onSubmit={onAddManualTask} />
+          </div>
           {blocks.length ? (
             <ol className={styles.compactList}>
               {blocks.map((item) => (

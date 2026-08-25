@@ -128,6 +128,8 @@
 .expandedHeader button:hover,
 .expandedFooter button:hover { border-color: rgb(98 220 165 / 45%); background: rgb(98 220 165 / 10%); color: #eafff3; }
 
+.manualTaskSlot { flex: 0 0 auto; margin-bottom: 6px; }
+
 .compactList {
   display: grid;
   flex: 1 1 auto;

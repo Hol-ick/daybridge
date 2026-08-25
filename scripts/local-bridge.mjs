@@ -92,6 +92,74 @@ async function handleReport(body) {
   const mirrored = await writeEvent(config, event);
   return { status: 200, body: responseBody(board, mirrored ? "connected" : "local", mirrored) };
 }
+const MANUAL_DURATIONS = new Set([50, 100, 150]);
+function manualDuration(value) {
+  const duration = Number(value);
+  return Number.isInteger(duration) && MANUAL_DURATIONS.has(duration) ? duration : null;
+}
+async function handleManualQuest(body) {
+  const activityDate = safeDate(body.activityDate || body.date);
+  const title = sanitizeText(body.title, 180);
+  const durationMinutes = manualDuration(body.durationMinutes);
+  if (!activityDate || !title || !durationMinutes) {
+    return { status: 400, body: { error: "activityDate, title, and a 50/100/150-minute duration are required." } };
+  }
+  const path = boardPath(activityDate);
+  const board = await readJson(path);
+  if (!board || !Array.isArray(board.quests)) return { status: 404, body: { error: "No quest board exists for this date." } };
+  const occurredAt = now();
+  const questId = `manual-${randomUUID()}`;
+  const stepId = `${questId}-step-1`;
+  const quest = {
+    id: questId,
+    missionId: `mission-${questId}`,
+    title,
+    scheduleTitle: title,
+    displayTitle: title,
+    project: "수동 작업",
+    priority: "must",
+    kind: "execute",
+    execution: "independent",
+    dependsOn: [],
+    state: "ready",
+    status: "ready",
+    summary: `${durationMinutes}분 작업을 50분 집중 단위로 나눠 배치합니다.`,
+    firstStep: title,
+    currentAction: title,
+    doneWhen: `${title}을 완료하고 결과를 기록합니다.`,
+    estimateMinutes: durationMinutes,
+    remainingMinutes: durationMinutes,
+    sourceKind: "briefing",
+    sourceLabel: "수동 추가",
+    sourcePath: "manual://widget",
+    carryoverCount: 0,
+    reports: [],
+    steps: [{ id: stepId, label: title, completed: false, order: 1, dependsOn: [] }],
+    progress: { completed: 0, total: 1 },
+    createdAt: occurredAt,
+    updatedAt: occurredAt,
+  };
+  board.quests = [...board.quests, quest];
+  board.generatedAt = occurredAt;
+  board.sourceCoverage = Array.isArray(board.sourceWarnings) && board.sourceWarnings.length ? "attention" : "connected";
+  const config = await loadConfig();
+  await atomicWrite(path, board);
+  await atomicWrite(join(DATA_DIR, "boards", "latest.json"), board);
+  const event = {
+    schemaVersion: 1,
+    id: randomUUID(),
+    eventType: "manual_quest_created",
+    activityDate,
+    occurredAt,
+    source: "daybridge",
+    sensitivity: "sanitized",
+    quest: { id: quest.id, title: quest.title, project: quest.project, status: quest.status, estimateMinutes: quest.estimateMinutes, sourceLabel: quest.sourceLabel, sourcePath: quest.sourcePath },
+  };
+  const mirrored = await writeEvent(config, event);
+  const schedule = await rebuildSchedule(activityDate);
+  if (!schedule) return { status: 500, body: { error: "The task was saved but its schedule could not be rebuilt." } };
+  return { status: 201, body: { ...responseBody(board, mirrored ? "connected" : "local", mirrored), quest, schedule, nowFocus: nowFocus(schedule) } };
+}
 async function handleBoard(url) {
   const requestedDate = safeDate(url.searchParams.get("date")) || new Date().toISOString().slice(0, 10); const board = await readJson(boardPath(requestedDate));
   if (!board) return { status: 404, body: { error: "No quest board exists for this date." } };
@@ -239,6 +307,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/calendar/codex-busy") { const result = await handleCodexCalendarBusy(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/board") { const result = await handleBoard(url); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/report") { const result = await handleReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/quests/manual") { const result = await handleManualQuest(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule") { const result = await handleSchedule(url); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/rebuild") { const result = await handleScheduleRebuild(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule-settings") { send(response, 200, { settings: await loadScheduleSettings(DATA_DIR) }, origin); return; }
