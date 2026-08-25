@@ -92,7 +92,7 @@ function OverlayTitle({ children, className = "", ...props }) {
   );
 }
 
-function OverlayScheduleItem({ block, privateMode, actionId, onComplete, onDefer, onMove, onDragStart, onDragOver, onDrop, onDragEnd, onKeyboardMove, draggingBlockId, dropTargetId }) {
+function OverlayScheduleItem({ block, privateMode, onMove, onPointerDragStart, onPointerDragMove, onPointerDragEnd, onKeyboardMove, draggingBlockId, dropTargetId }) {
   const kind = scheduleBlockKind(block);
   const status = block?.status;
   const actionable = kind === "focus" && status !== "completed" && status !== "deferred";
@@ -110,29 +110,22 @@ function OverlayScheduleItem({ block, privateMode, actionId, onComplete, onDefer
     <li
       className={[styles.compactBlock, styles[kind], status === "completed" ? styles.completed : "", draggingBlockId === block?.id ? styles.dragging : "", dropTargetId === block?.id ? styles.dropTarget : ""].filter(Boolean).join(" ")}
       data-testid={`now-focus-overlay-block-${block?.id ?? "unknown"}`}
+      data-block-id={block?.id ?? ""}
+      data-drag-enabled={draggable ? "true" : "false"}
       data-dragging={draggingBlockId === block?.id ? "true" : "false"}
       data-drop-target={dropTargetId === block?.id ? "true" : "false"}
-      draggable={draggable}
       tabIndex={draggable ? 0 : undefined}
       onKeyDown={handleKeyDown}
-      onDragStart={draggable ? (event) => onDragStart(event, block) : undefined}
-      onDragOver={draggable ? (event) => onDragOver(event, block) : undefined}
-      onDrop={draggable ? (event) => onDrop(event, block) : undefined}
-      onDragEnd={draggable ? onDragEnd : undefined}
+      onPointerDown={draggable ? (event) => onPointerDragStart(event, block) : undefined}
+      onPointerMove={draggable ? onPointerDragMove : undefined}
+      onPointerUp={draggable ? onPointerDragEnd : undefined}
+      onPointerCancel={draggable ? onPointerDragEnd : undefined}
       data-tauri-drag-region="false"
     >
       <div className={styles.compactBlockTop}>
         <span className={styles.compactBlockTime}>{label}</span>
-        {actionable ? (
-          <div className={styles.compactActions}>
-            <button type="button" disabled={Boolean(actionId)} onClick={(event) => onDefer(block.id, event)} data-tauri-drag-region="false" data-testid={`now-focus-overlay-defer-${block.id}`}>미룸</button>
-            <button type="button" disabled={Boolean(actionId)} onClick={(event) => onComplete(block.id, event)} data-tauri-drag-region="false" data-testid={`now-focus-overlay-complete-${block.id}`}>완료</button>
-          </div>
-        ) : (
-          <span className={styles.compactStatus}>{status === "completed" ? "완료" : status === "deferred" ? "보류" : kind === "busy" ? "일정" : "여유"}</span>
-        )}
       </div>
-      <strong className={styles.compactBlockTitle} title={title}>{title}</strong>
+      <OverlayTitle className={styles.compactBlockTitle} title={title} aria-label={title}>{title}</OverlayTitle>
     </li>
   );
 }
@@ -141,18 +134,15 @@ function OverlayScheduleItem({ block, privateMode, actionId, onComplete, onDefer
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, onComplete, onDefer, onRebuild, onAddManualTask, onMoveBlock, privateMode = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, onRebuild, onAddManualTask, onMoveBlock, privateMode = false }) {
   const dragRef = useRef({ point: null, cleanup: null, suppressClick: false });
-  const feedbackTimerRef = useRef(null);
+  const pointerDragRef = useRef({ blockId: "", pointerId: null, startX: 0, startY: 0, started: false });
   const resizeTimerRef = useRef(null);
-  const [feedback, setFeedback] = useState("");
-  const [actionId, setActionId] = useState("");
   const [draggingBlockId, setDraggingBlockId] = useState("");
   const [dropTargetId, setDropTargetId] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   useEffect(() => () => {
-    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
     if (resizeTimerRef.current) window.clearTimeout(resizeTimerRef.current);
   }, []);
   useEffect(() => {
@@ -160,46 +150,66 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     return () => window.clearInterval(timer);
   }, []);
   const block = getFocusBlock(nowFocus);
-  const blockId = block?.id ?? nowFocus?.blockId;
   const blockKind = block?.kind ?? block?.type ?? block?.blockType;
   const isBusy = blockKind === "busy" || blockKind === "calendar";
   const sourceTitle = isBusy ? (block?.hidden ? block?.title ?? "점심시간" : "일정 중") : block?.displayTitle ?? block?.scheduleTitle ?? block?.questTitle ?? block?.taskTitle ?? block?.title ?? "다음 집중 시간 준비 중";
   const title = privateMode && block ? "집중 시간" : sourceTitle;
   const idle = !block;
-  const showIdleTitle = idle && !feedback;
+  const showIdleTitle = idle;
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
   const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "";
   const workdayCountdown = getWorkdayCountdown(currentTime);
-  const canComplete = Boolean(!isBusy && blockId && typeof onComplete === "function");
   const blocks = useMemo(() => getScheduleBlocks(schedule), [schedule]);
 
   const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks]);
-  const handleScheduleDragStart = (event, item) => {
-    if (!onMoveBlock) return;
-    event.stopPropagation();
-    setDraggingBlockId(item.id);
+  const findDropTarget = (clientX, clientY) => {
+    const element = document.elementFromPoint(clientX, clientY);
+    const card = element instanceof Element ? element.closest("[data-block-id]") : null;
+    const targetId = card?.getAttribute("data-block-id") || "";
+    return movableBlocks.some((item) => item.id === targetId) ? { card, targetId } : { card: null, targetId: "" };
+  };
+  const clearPointerDrag = () => {
+    pointerDragRef.current = { blockId: "", pointerId: null, startX: 0, startY: 0, started: false };
+    setDraggingBlockId("");
     setDropTargetId("");
-    event.dataTransfer?.setData("text/plain", item.id);
-    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
   };
-  const handleScheduleDragOver = (event, item) => {
-    if (!draggingBlockId || draggingBlockId === item.id || !movableBlocks.some((blockItem) => blockItem.id === item.id)) return;
+  const handleSchedulePointerDragStart = (event, item) => {
+    if (!onMoveBlock || event.button !== 0) return;
+    event.stopPropagation();
+    event.preventDefault();
+    try { event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* pointer capture is optional */ }
+    pointerDragRef.current = { blockId: item.id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, started: false };
+  };
+  const handleSchedulePointerDragMove = (event) => {
+    const state = pointerDragRef.current;
+    if (!state.blockId || state.pointerId !== event.pointerId) return;
+    const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
+    if (!state.started && distance < 6) return;
+    if (!state.started) {
+      state.started = true;
+      setDraggingBlockId(state.blockId);
+    }
     event.preventDefault();
     event.stopPropagation();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-    setDropTargetId(item.id);
+    const target = findDropTarget(event.clientX, event.clientY);
+    setDropTargetId(target.targetId && target.targetId !== state.blockId ? target.targetId : "");
   };
-  const clearScheduleDrag = () => { setDraggingBlockId(""); setDropTargetId(""); };
-  const handleScheduleDrop = async (event, item) => {
-    if (!draggingBlockId || draggingBlockId === item.id || !onMoveBlock || !movableBlocks.some((blockItem) => blockItem.id === item.id)) return;
-    event.preventDefault();
+  const handleSchedulePointerDragEnd = async (event) => {
+    const state = pointerDragRef.current;
+    if (!state.blockId || state.pointerId !== event.pointerId) return;
     event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const position = event.clientY < rect.top + (rect.height / 2) ? "before" : "after";
-    const sourceId = draggingBlockId;
-    clearScheduleDrag();
-    try { await onMoveBlock(sourceId, item.id, position); } catch { /* the host reports the failure */ }
+    if (!state.started) {
+      clearPointerDrag();
+      return;
+    }
+    const sourceId = state.blockId;
+    const target = findDropTarget(event.clientX, event.clientY);
+    const targetItem = movableBlocks.find((item) => item.id === target.targetId && item.id !== sourceId);
+    const rect = target.card?.getBoundingClientRect();
+    const position = rect && event.clientY < rect.top + (rect.height / 2) ? "before" : "after";
+    clearPointerDrag();
+    if (targetItem && onMoveBlock) await onMoveBlock(sourceId, targetItem.id, position);
   };
   const handleKeyboardMove = async (sourceId, key) => {
     const index = movableBlocks.findIndex((item) => item.id === sourceId);
@@ -239,28 +249,6 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
       document.removeEventListener("pointerdown", handleOutsidePointer, true);
     };
   }, [expanded]);
-
-  const handleComplete = async (targetBlockId, event) => {
-    event.stopPropagation();
-    if (!targetBlockId || !onComplete || actionId) return;
-    setActionId(targetBlockId);
-    if (targetBlockId === blockId) setFeedback("저장 중");
-    let result = false;
-    try { result = await onComplete(targetBlockId); } catch { result = false; }
-    setActionId("");
-    const succeeded = result !== false;
-    if (targetBlockId !== blockId) return;
-    setFeedback(succeeded ? "완료" : "다시 시도");
-    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
-    feedbackTimerRef.current = window.setTimeout(() => setFeedback(""), succeeded ? 900 : 1800);
-  };
-
-  const handleDefer = async (targetBlockId, event) => {
-    event.stopPropagation();
-    if (!targetBlockId || !onDefer || actionId) return;
-    setActionId(targetBlockId);
-    try { await onDefer(targetBlockId); } finally { setActionId(""); }
-  };
 
   const handlePointerDown = (event) => {
     window.getSelection?.()?.removeAllRanges();
@@ -319,12 +307,6 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     <aside className={styles.overlay} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
       <div className={surfaceClassName} onPointerDown={handlePointerDown} data-tauri-drag-region="deep" data-testid="now-focus-overlay-surface">
         <section className={styles.expandedPanel} aria-label="오늘 시간표 관리" aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
-          <header className={styles.expandedHeader}>
-            <button type="button" onClick={() => setExpandedMode(false)} data-tauri-drag-region="false" data-testid="now-focus-overlay-collapse" aria-label="시간표 접기">접기</button>
-          </header>
-          <div className={styles.manualTaskSlot}>
-            <ManualTaskForm compact onSubmit={onAddManualTask} />
-          </div>
           {blocks.length ? (
             <ol className={styles.compactList}>
               {blocks.map((item) => (
@@ -332,14 +314,10 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
                   key={item.id ?? `${item.startAt}-${scheduleBlockTitle(item)}`}
                   block={item}
                   privateMode={privateMode}
-                  actionId={actionId}
-                  onComplete={handleComplete}
-                  onDefer={handleDefer}
                   onMove={onMoveBlock}
-                  onDragStart={handleScheduleDragStart}
-                  onDragOver={handleScheduleDragOver}
-                  onDrop={handleScheduleDrop}
-                  onDragEnd={clearScheduleDrag}
+                  onPointerDragStart={handleSchedulePointerDragStart}
+                  onPointerDragMove={handleSchedulePointerDragMove}
+                  onPointerDragEnd={handleSchedulePointerDragEnd}
                   onKeyboardMove={handleKeyboardMove}
                   draggingBlockId={draggingBlockId}
                   dropTargetId={dropTargetId}
@@ -347,6 +325,9 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
               ))}
             </ol>
           ) : <p className={styles.compactEmpty}>오늘 배치된 일정이 없습니다.</p>}
+          <div className={styles.manualTaskBottom}>
+            <ManualTaskForm compact onSubmit={onAddManualTask} />
+          </div>
           <footer className={styles.expandedFooter}>
             <button type="button" onClick={onRebuild} disabled={!onRebuild} data-tauri-drag-region="false">재배치</button>
             <button type="button" onClick={handleOpenDashboard} data-tauri-drag-region="false">전체 시간표</button>
@@ -373,31 +354,17 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
               aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
             >{workdayCountdown.label}</OverlayTitle>
           ) : (
-            <OverlayTitle data-testid="now-focus-overlay-title">{feedback || title}</OverlayTitle>
+            <OverlayTitle data-testid="now-focus-overlay-title">{title}</OverlayTitle>
           )}
         </button>
-        {canComplete ? (
-          <button
-            className={styles.complete}
-            type="button"
-            onClick={(event) => { void handleComplete(blockId, event); }}
-            disabled={actionId === blockId}
-            data-tauri-drag-region="false"
-            data-testid="now-focus-overlay-complete"
-            aria-label={`${title} 완료`}
-          >
-            {actionId === blockId ? "저장" : feedback || "완료"}
-          </button>
-        ) : (
-          <time
-            className={styles.timer}
-            data-testid="now-focus-overlay-leave-time"
-            aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
-          >
-            {block ? <span className={styles.timerLabel}>{workdayCountdown.label}</span> : null}
-            <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
-          </time>
-        )}
+        <time
+          className={styles.timer}
+          data-testid="now-focus-overlay-leave-time"
+          aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
+        >
+          {block ? <span className={styles.timerLabel}>{workdayCountdown.label}</span> : null}
+          <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
+        </time>
         </div>
       </div>
     </aside>

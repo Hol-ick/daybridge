@@ -274,19 +274,16 @@ def check_overlay(browser) -> None:
     assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 1
     assert page.get_by_text("시간표 확인", exact=True).count() == 0
     assert page.locator('[data-testid="now-focus-overlay-title"]').evaluate("element => getComputedStyle(element).userSelect") == "none"
-    complete = page.locator('[data-testid="now-focus-overlay-complete"]')
     leave_timer = page.locator('[data-testid="now-focus-overlay-leave-time"]')
-    assert complete.count() + leave_timer.count() == 1
-    if complete.count():
-        assert not complete.is_disabled()
-        assert complete.text_content() != "열기"
-    else:
-        idle_label = re.sub(r"\s+", " ", page.locator('[data-testid="now-focus-overlay-title"]').text_content() or "").strip()
-        assert re.fullmatch(r"(근무 시작까지|점심시간까지|오후 시작까지|퇴근시간까지|근무 종료)", idle_label), idle_label
-        leave_timer_value = page.locator('[data-testid="now-focus-overlay-leave-time-value"]')
-        assert re.fullmatch(r"\d{2}:\d{2}", leave_timer_value.text_content() or "")
-        assert page.locator('[data-testid="now-focus-overlay-leave-time"] [class*=timerLabel]').count() == 0
-        assert page.locator('[data-testid="now-focus-overlay-title"]').get_attribute("aria-label") == f"{idle_label} {leave_timer_value.text_content().strip()}"
+    assert page.locator('[data-testid="now-focus-overlay-complete"]').count() == 0
+    assert page.locator('[data-testid^="now-focus-overlay-defer-"]').count() == 0
+    assert leave_timer.count() == 1
+    idle_label = re.sub(r"\s+", " ", page.locator('[data-testid="now-focus-overlay-title"]').text_content() or "").strip()
+    assert re.fullmatch(r"(근무 시작까지|점심시간까지|오후 시작까지|퇴근시간까지|근무 종료)", idle_label), idle_label
+    leave_timer_value = page.locator('[data-testid="now-focus-overlay-leave-time-value"]')
+    assert re.fullmatch(r"\d{2}:\d{2}", leave_timer_value.text_content() or "")
+    assert page.locator('[data-testid="now-focus-overlay-leave-time"] [class*=timerLabel]').count() == 0
+    assert page.locator('[data-testid="now-focus-overlay-title"]').get_attribute("aria-label") == f"{idle_label} {leave_timer_value.text_content().strip()}"
     title_style = page.locator('[data-testid="now-focus-overlay-title"]').evaluate(
         "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
     )
@@ -340,12 +337,12 @@ def check_overlay(browser) -> None:
         )
         assert compact_block.locator('[class*=compactBlockTime]').inner_text().strip().count("–") == 0
         assert row_style["display"] == "grid" and row_style["titleSize"] >= 17 and row_style["timeSize"] >= 17, row_style
-    assert page.locator('[data-testid="now-focus-overlay-collapse"]').count() == 1
+    assert page.locator('[data-testid="now-focus-overlay-collapse"]').count() == 0
     page.mouse.click(310, 10)
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
-    page.locator('[data-testid="now-focus-overlay-collapse"]').click()
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")
     page.wait_for_timeout(100)
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-animation-close-mid.png", full_page=True)
@@ -362,24 +359,13 @@ def check_overlay(browser) -> None:
     context.close()
 
 
-def check_overlay_actions(browser) -> None:
-    """Prove the compact card acknowledges a real completion request."""
+def check_overlay_long_title(browser) -> None:
+    """Prove long card titles stay on one marquee line and removed controls stay absent."""
     context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
-    report_calls: list[dict] = []
-    context.route(
-        re.compile(r"http://127\.0\.0\.1:39393/api/board(?:\?|$)"),
-        lambda route: route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_BOARD),
-    )
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=LONG_FUNCTIONAL_SCHEDULE),
     )
-
-    def handle_report(route) -> None:
-        report_calls.append(json.loads(route.request.post_data or "{}"))
-        route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_COMPLETED)
-
-    context.route("http://127.0.0.1:39393/api/schedule/block-report", handle_report)
     context.route(
         "http://127.0.0.1:39393/api/calendar/status",
         lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
@@ -388,10 +374,17 @@ def check_overlay_actions(browser) -> None:
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
-    page.wait_for_selector('[data-testid="now-focus-overlay-complete"]:not([disabled])')
-    page.wait_for_selector('[class*=titleTrackMoving]')
-    marquee = page.locator('[data-testid="now-focus-overlay-title"] [class*=titleTrackMoving]')
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_selector('[data-testid="now-focus-overlay-block-focus-1"]')
+    page.wait_for_selector('[data-testid="now-focus-overlay-block-focus-1"] [class*=compactBlockTitle]')
+    assert page.locator('[data-testid="now-focus-overlay-complete"]').count() == 0
+    assert page.locator('[data-testid^="now-focus-overlay-defer-"]').count() == 0
+    assert page.locator('[data-testid="now-focus-overlay-collapse"]').count() == 0
+    title_viewport = page.locator('[data-testid="now-focus-overlay-block-focus-1"] [class*=compactBlockTitle]')
+    marquee = title_viewport.locator('[class*=titleTrackMoving]')
     assert marquee.count() == 1
+    title_style = page.locator('[data-testid="now-focus-overlay-block-focus-1"] [class*=compactBlockTitle]').evaluate("element => { const style = getComputedStyle(element); return { whiteSpace: style.whiteSpace, display: style.display, lineHeight: style.lineHeight }; }")
+    assert title_style["whiteSpace"] == "nowrap" and title_style["display"] == "block", title_style
     animation_name = marquee.evaluate("element => getComputedStyle(element).animationName")
     assert "overlay-title-marquee" in animation_name, animation_name
     initial_transform = marquee.evaluate("element => getComputedStyle(element).transform")
@@ -399,9 +392,6 @@ def check_overlay_actions(browser) -> None:
     page.wait_for_timeout(4_500)
     assert marquee.evaluate("element => getComputedStyle(element).transform") != initial_transform
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-marquee-moved.png", full_page=True)
-    page.locator('[data-testid="now-focus-overlay-complete"]').click()
-    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-title]').textContent === '완료'")
-    assert report_calls and report_calls[0]["blockId"] == "focus-1" and report_calls[0]["status"] == "completed"
     assert_no_page_errors(errors)
     context.close()
 
@@ -430,14 +420,28 @@ def check_overlay_reorder(browser) -> None:
     page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().height) === 520")
     first = page.locator('[data-testid="now-focus-overlay-block-drag-a"]')
     second = page.locator('[data-testid="now-focus-overlay-block-drag-b"]')
-    assert first.get_attribute("draggable") == "true"
+    assert first.get_attribute("data-drag-enabled") == "true"
     card_layout = first.evaluate("element => { const top = element.querySelector('[class*=compactBlockTop]'); const title = element.querySelector('[class*=compactBlockTitle]'); return { display: getComputedStyle(element).display, topDisplay: getComputedStyle(top).display, titleIndex: Array.from(element.children).indexOf(title), titleSize: parseFloat(getComputedStyle(title).fontSize), timeSize: parseFloat(getComputedStyle(element.querySelector('[class*=compactBlockTime]')).fontSize) }; }")
     assert card_layout["display"] == "flex" and card_layout["topDisplay"] == "flex" and card_layout["titleIndex"] == 1, card_layout
-    assert card_layout["titleSize"] >= 19 and card_layout["timeSize"] >= 18, card_layout
-    first.drag_to(second)
-    page.wait_for_timeout(200)
+    assert card_layout["titleSize"] >= 18 and card_layout["timeSize"] >= 18, card_layout
+    first_box = first.bounding_box()
+    second_box = second.bounding_box()
+    assert first_box and second_box
+    manual_box = page.locator('[data-testid="manual-task-add-toggle"]').bounding_box()
+    assert manual_box and manual_box["y"] > second_box["y"] + second_box["height"], manual_box
+    source_x = first_box["x"] + first_box["width"] / 2
+    source_y = first_box["y"] + first_box["height"] / 2
+    target_x = second_box["x"] + second_box["width"] / 2
+    target_y = second_box["y"] + 10
+    pointer_id = 41
+    first.dispatch_event("pointerdown", {"pointerId": pointer_id, "pointerType": "mouse", "button": 0, "clientX": source_x, "clientY": source_y})
+    first.dispatch_event("pointermove", {"pointerId": pointer_id, "pointerType": "mouse", "button": -1, "clientX": source_x + 8, "clientY": source_y + 8})
+    first.dispatch_event("pointermove", {"pointerId": pointer_id, "pointerType": "mouse", "button": -1, "clientX": target_x, "clientY": target_y})
+    first.dispatch_event("pointerup", {"pointerId": pointer_id, "pointerType": "mouse", "button": 0, "clientX": target_x, "clientY": target_y})
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getBoundingClientRect().top < document.querySelector('[data-testid=now-focus-overlay-block-drag-a]')?.getBoundingClientRect().top")
     assert move_calls and move_calls[0]["blockId"] == "drag-a" and move_calls[0]["targetBlockId"] == "drag-b"
     assert move_calls[0]["position"] in {"before", "after"}
     assert page.locator('[data-testid="now-focus-overlay-block-drag-b"]').bounding_box()["y"] < page.locator('[data-testid="now-focus-overlay-block-drag-a"]').bounding_box()["y"]
@@ -456,7 +460,7 @@ def main() -> None:
         check_dashboard(browser)
         check_dashboard_actions(browser)
         check_overlay(browser)
-        check_overlay_actions(browser)
+        check_overlay_long_title(browser)
         check_overlay_reorder(browser)
         browser.close()
 
