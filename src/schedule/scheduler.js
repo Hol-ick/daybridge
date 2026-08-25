@@ -1,6 +1,9 @@
 import { createScheduleShell, isKstIso, normalizeSchedule, toTaskCandidate } from "./model.js";
 
 const PRIORITY_WEIGHT = { must: 0, should: 1, could: 2 };
+const DEFAULT_BREAKS = Object.freeze([
+  { start: "11:30", end: "13:00", label: "점심시간" },
+]);
 
 function atKst(date, time) {
   if (!/^\d{2}:\d{2}$/.test(time || "")) throw new TypeError("Schedule settings need HH:MM times");
@@ -18,13 +21,20 @@ function normalizedSettings(date, supplied = {}) {
   const dayStartAt = atKst(date, dayStart);
   const dayEndAt = atKst(date, dayEnd);
   if (Date.parse(dayEndAt) <= Date.parse(dayStartAt)) throw new RangeError("dayEnd must be after dayStart");
-  return { dayStart, dayEnd, dayStartAt, dayEndAt, focusDurations, bufferMinutes };
+  const suppliedBreaks = Array.isArray(supplied.breaks) && supplied.breaks.length ? supplied.breaks : DEFAULT_BREAKS;
+  const breaks = suppliedBreaks.map((item, index) => {
+    const start = typeof item?.start === "string" ? item.start : "";
+    const end = typeof item?.end === "string" ? item.end : "";
+    if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || start >= end) throw new TypeError(`break ${index + 1} needs valid start/end times`);
+    return { start, end, label: String(item?.label || "휴식 시간") };
+  });
+  return { dayStart, dayEnd, dayStartAt, dayEndAt, focusDurations, bufferMinutes, breaks };
 }
 
 function toBusyBlock(raw, index) {
   if (!raw || typeof raw !== "object" || !isKstIso(raw.startAt) || !isKstIso(raw.endAt)) throw new TypeError("Busy blocks need Korea-time ISO ranges");
   if (Date.parse(raw.endAt) <= Date.parse(raw.startAt)) throw new RangeError("Busy blocks must end after they start");
-  return { id: String(raw.id || `busy-${index + 1}`), type: "busy", startAt: raw.startAt, endAt: raw.endAt, locked: true };
+  return { id: String(raw.id || `busy-${index + 1}`), type: "busy", startAt: raw.startAt, endAt: raw.endAt, locked: true, hidden: Boolean(raw.hidden), title: raw.title || raw.label || undefined };
 }
 
 function dedupeBusyBlocks(blocks) {
@@ -35,6 +45,7 @@ function dedupeBusyBlocks(blocks) {
     if (previous && Date.parse(block.startAt) <= Date.parse(previous.endAt)) {
       if (Date.parse(block.endAt) > Date.parse(previous.endAt)) previous.endAt = block.endAt;
       previous.sourceIds = [...new Set([...(previous.sourceIds || [previous.id]), block.id])];
+      previous.hidden = Boolean(previous.hidden && block.hidden);
     } else merged.push({ ...block });
   }
   return merged;
@@ -44,9 +55,21 @@ function dateBounded(block, date) {
   return block.startAt.startsWith(`${date}T`) && block.endAt.startsWith(`${date}T`);
 }
 
-function makeConstraints({ date, busyBlocks, lockedBlocks }) {
-  const busy = dedupeBusyBlocks((busyBlocks || []).map(toBusyBlock)).filter((block) => dateBounded(block, date));
-  const locked = (lockedBlocks || []).map((block, index) => ({ ...block, id: String(block?.id || `locked-${index + 1}`), locked: true })).filter((block) => dateBounded(block, date));
+function makeConstraints({ date, busyBlocks, lockedBlocks, breaks = DEFAULT_BREAKS }) {
+  const breakBlocks = breaks.map((item, index) => ({
+    id: `lunch-${date}-${index + 1}`,
+    startAt: atKst(date, item.start),
+    endAt: atKst(date, item.end),
+    label: item.label,
+    hidden: true,
+  }));
+  const busy = dedupeBusyBlocks([...(busyBlocks || []), ...breakBlocks].map(toBusyBlock)).filter((block) => dateBounded(block, date));
+  const locked = (lockedBlocks || []).map((block, index) => ({ ...block, id: String(block?.id || `locked-${index + 1}`), locked: true }))
+    .filter((block) => dateBounded(block, date))
+    // A schedule saved before the lunch rule may still contain an old 11:00
+    // or 12:00 focus block. Drop that stale placement so the quest can be
+    // rebuilt into the next legal HH:00 slot instead of overlapping lunch.
+    .filter((block) => block.type !== "focus" || !breakBlocks.some((breakBlock) => Date.parse(block.startAt) < Date.parse(breakBlock.endAt) && Date.parse(block.endAt) > Date.parse(breakBlock.startAt)));
   return normalizeSchedule({ ...createScheduleShell({ date }), blocks: [...busy, ...locked] }).blocks;
 }
 
@@ -58,7 +81,7 @@ function availableSlot(occupied, startMs, endMs, durationMinutes) {
     const blockStart = Date.parse(block.startAt);
     const blockEnd = Date.parse(block.endAt);
     if (blockEnd <= cursor) continue;
-    if (blockStart - cursor >= durationMinutes * 60_000) return [cursor, cursor + durationMinutes * 60_000];
+    if (blockStart - cursor >= durationMinutes * 60_000 && cursor + durationMinutes * 60_000 <= endMs) return [cursor, cursor + durationMinutes * 60_000];
     cursor = alignToHour(Math.max(cursor, blockEnd));
   }
   return endMs - cursor >= durationMinutes * 60_000 ? [cursor, cursor + durationMinutes * 60_000] : null;
@@ -110,7 +133,7 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
   const dayEndMs = Date.parse(config.dayEndAt);
   if (dayStartMs >= dayEndMs) return normalizeSchedule({ ...shell, unscheduled: taskCandidates.map((quest) => ({ questId: quest.id, reason: "outside_schedule_window", remainingMinutes: quest.remainingMinutes || quest.estimateMinutes })).filter((item) => item.questId && item.remainingMinutes) });
 
-  const constraints = makeConstraints({ date, busyBlocks, lockedBlocks });
+  const constraints = makeConstraints({ date, busyBlocks, lockedBlocks, breaks: config.breaks });
   const candidates = taskCandidates.map(toTaskCandidate).filter(Boolean).filter((candidate) => candidate.state !== "blocked");
   const candidateIds = new Set(candidates.map((candidate) => candidate.id));
   const ordering = orderedCandidates(candidates, completedQuestIds);
@@ -156,6 +179,31 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
   return normalizeSchedule({ ...shell, blocks, unscheduled });
 }
 
+/**
+ * Return the fixed HH:00–HH:50 focus units available for a date. Hidden
+ * breaks (including the default 11:30–13:00 lunch window) are treated as
+ * occupied but are never returned as user-facing work blocks.
+ */
+export function getAvailableFocusSlots({ date, settings, busyBlocks = [], focusBlocks = [] } = {}) {
+  const config = normalizedSettings(date, settings);
+  const occupied = makeConstraints({
+    date,
+    busyBlocks: busyBlocks.filter((block) => block?.type === "busy" || !block?.type),
+    lockedBlocks: focusBlocks.filter((block) => block?.type === "focus"),
+    breaks: config.breaks,
+  }).filter((block) => block.type === "busy" || block.type === "focus");
+  const slots = [];
+  let slot = availableSlot(occupied, Date.parse(config.dayStartAt), Date.parse(config.dayEndAt), 50);
+  while (slot) {
+    const [start, end] = slot;
+    slots.push({ startAt: asKstIso(start), endAt: asKstIso(end) });
+    occupied.push({ id: `available-${slots.length}`, type: "focus", startAt: asKstIso(start), endAt: asKstIso(end) });
+    occupied.sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));
+    slot = availableSlot(occupied, Date.parse(config.dayStartAt), Date.parse(config.dayEndAt), 50);
+  }
+  return slots;
+}
+
 function isOpenFocus(block) {
   return block.type === "focus" && !["completed", "skipped", "deferred"].includes(block.status);
 }
@@ -180,7 +228,7 @@ export function rebuildRemainingSchedule({ schedule, now, taskCandidates = [], b
   const previous = normalizeSchedule(schedule);
   if (!isKstIso(now)) throw new TypeError("rebuildRemainingSchedule needs a Korea-time ISO timestamp");
   const nowMs = Date.parse(now);
-  const retained = previous.blocks.filter((block) => block.locked || block.type === "busy" || Date.parse(block.startAt) < nowMs);
+  const retained = previous.blocks.filter((block) => !block.hidden && (block.locked || block.type === "busy" || Date.parse(block.startAt) < nowMs));
   const candidateById = new Map(taskCandidates.map(toTaskCandidate).filter(Boolean).map((candidate) => [candidate.id, candidate]));
   const adjusted = [...candidateById.values()].map((candidate) => {
     const retainedMinutes = scheduledFocusMinutes(retained, candidate.id);

@@ -48,6 +48,24 @@ LONG_FUNCTIONAL_BLOCK = {
     **FUNCTIONAL_BLOCK,
     "displayTitle": "GitHub Actions Verify web-buyback 배포 상태와 첫 실패 로그 확인",
 }
+DRAG_BLOCKS = [
+    {"id": "drag-a", "type": "focus", "title": "첫 번째 긴 작업 이름이 아래 줄에 표시됩니다", "displayTitle": "첫 번째 긴 작업 이름이 아래 줄에 표시됩니다", "startAt": "2026-08-24T09:00:00+09:00", "endAt": "2026-08-24T09:50:00+09:00", "status": "planned"},
+    {"id": "drag-b", "type": "focus", "title": "두 번째 작업", "displayTitle": "두 번째 작업", "startAt": "2026-08-24T10:00:00+09:00", "endAt": "2026-08-24T10:50:00+09:00", "status": "planned"},
+    {"id": "drag-c", "type": "focus", "title": "세 번째 작업", "displayTitle": "세 번째 작업", "startAt": "2026-08-24T13:00:00+09:00", "endAt": "2026-08-24T13:50:00+09:00", "status": "planned"},
+]
+DRAG_SCHEDULE = json.dumps({
+    "schedule": {"schemaVersion": 1, "date": "2026-08-24", "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": DRAG_BLOCKS, "unscheduled": [], "calendar": {"coverage": "fresh"}},
+    "nowFocus": {"state": "focus", "block": DRAG_BLOCKS[0], "nextFocus": DRAG_BLOCKS[1]},
+})
+DRAG_MOVED_BLOCKS = [
+    {**DRAG_BLOCKS[1], "startAt": "2026-08-24T09:00:00+09:00", "endAt": "2026-08-24T09:50:00+09:00", "locked": True, "userPositioned": True},
+    {**DRAG_BLOCKS[2], "startAt": "2026-08-24T10:00:00+09:00", "endAt": "2026-08-24T10:50:00+09:00", "locked": True, "userPositioned": True},
+    {**DRAG_BLOCKS[0], "startAt": "2026-08-24T13:00:00+09:00", "endAt": "2026-08-24T13:50:00+09:00", "locked": True, "userPositioned": True},
+]
+DRAG_MOVED_SCHEDULE = json.dumps({
+    "schedule": {"schemaVersion": 1, "date": "2026-08-24", "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": DRAG_MOVED_BLOCKS, "unscheduled": [], "calendar": {"coverage": "fresh"}},
+    "nowFocus": {"state": "focus", "block": DRAG_MOVED_BLOCKS[0], "nextFocus": DRAG_MOVED_BLOCKS[1]},
+})
 FUNCTIONAL_SCHEDULE = json.dumps({
     "schedule": {
         "schemaVersion": 1,
@@ -388,6 +406,46 @@ def check_overlay_actions(browser) -> None:
     context.close()
 
 
+def check_overlay_reorder(browser) -> None:
+    """Prove cards expose the top controls/lower title layout and persist drag reorder."""
+    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    move_calls: list[dict] = []
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DRAG_SCHEDULE),
+    )
+
+    def handle_move(route) -> None:
+        move_calls.append(json.loads(route.request.post_data or "{}"))
+        route.fulfill(status=200, content_type="application/json", body=DRAG_MOVED_SCHEDULE)
+
+    context.route("http://127.0.0.1:39393/api/schedule/block-move", handle_move)
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
+    first = page.locator('[data-testid="now-focus-overlay-block-drag-a"]')
+    second = page.locator('[data-testid="now-focus-overlay-block-drag-b"]')
+    assert first.get_attribute("draggable") == "true"
+    card_layout = first.evaluate("element => { const top = element.querySelector('[class*=compactBlockTop]'); const title = element.querySelector('[class*=compactBlockTitle]'); return { display: getComputedStyle(element).display, topDisplay: getComputedStyle(top).display, titleIndex: Array.from(element.children).indexOf(title), titleSize: parseFloat(getComputedStyle(title).fontSize), timeSize: parseFloat(getComputedStyle(element.querySelector('[class*=compactBlockTime]')).fontSize) }; }")
+    assert card_layout["display"] == "flex" and card_layout["topDisplay"] == "flex" and card_layout["titleIndex"] == 1, card_layout
+    assert card_layout["titleSize"] >= 19 and card_layout["timeSize"] >= 18, card_layout
+    first.drag_to(second)
+    page.wait_for_timeout(200)
+    assert move_calls and move_calls[0]["blockId"] == "drag-a" and move_calls[0]["targetBlockId"] == "drag-b"
+    assert move_calls[0]["position"] in {"before", "after"}
+    assert page.locator('[data-testid="now-focus-overlay-block-drag-b"]').bounding_box()["y"] < page.locator('[data-testid="now-focus-overlay-block-drag-a"]').bounding_box()["y"]
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-dragged.png", full_page=True)
+    assert_no_page_errors(errors)
+    context.close()
+
+
 def main() -> None:
     with sync_playwright() as playwright:
         launch_options = {"headless": True}
@@ -399,6 +457,7 @@ def main() -> None:
         check_dashboard_actions(browser)
         check_overlay(browser)
         check_overlay_actions(browser)
+        check_overlay_reorder(browser)
         browser.close()
 
 

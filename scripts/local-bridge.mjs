@@ -8,6 +8,7 @@ import { buildRoutineCandidates } from "../src/schedule/routine-planner.js";
 import {
   loadSchedule,
   loadScheduleSettings,
+  moveScheduleBlock,
   reportScheduleBlock,
   saveSchedule,
   saveScheduleSettings,
@@ -200,7 +201,7 @@ function nowFocus(schedule) { return resolveNowFocus(schedule, koreaNow()); }
 function retainedScheduleBlocks(schedule, at) {
   if (!schedule || !Array.isArray(schedule.blocks)) return [];
   const nowAt = Date.parse(at);
-  return schedule.blocks.filter((block) => block?.locked || (typeof block?.endAt === "string" && Date.parse(block.endAt) <= nowAt));
+  return schedule.blocks.filter((block) => !block?.hidden && (block?.locked || (typeof block?.endAt === "string" && Date.parse(block.endAt) <= nowAt)));
 }
 async function rebuildSchedule(activityDate) {
   const board = await readJson(boardPath(activityDate));
@@ -238,6 +239,32 @@ async function handleScheduleBlockReport(body) {
   if (!result.schedule) return { status: 404, body: { error: "Schedule block was not found." } };
   const config = await loadConfig();
   const event = { schemaVersion: 1, id: result.report.id, eventType: "schedule_block_report", activityDate, occurredAt: result.report.occurredAt, source: "daybridge", sensitivity: "sanitized", block: result.report.block, report: { id: result.report.id, occurredAt: result.report.occurredAt, status: result.report.status, note: result.report.note, source: "daybridge" } };
+  const mirrored = await writeEvent(config, event);
+  return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
+}
+async function handleScheduleBlockMove(body) {
+  const activityDate = safeDate(body.activityDate || body.date);
+  if (!activityDate) return { status: 400, body: { error: "activityDate and a valid block move are required." } };
+  let result;
+  try { result = await moveScheduleBlock(DATA_DIR, activityDate, body); } catch (error) { return { status: 400, body: { error: error instanceof Error ? sanitizeText(error.message, 180) : "Invalid block move." } }; }
+  if (!result) return { status: 404, body: { error: "No schedule exists for this date." } };
+  if (!result.schedule) return { status: 404, body: { error: "Schedule block was not found." } };
+  const config = await loadConfig();
+  const event = {
+    schemaVersion: 1,
+    id: result.movement.id,
+    eventType: "schedule_block_moved",
+    activityDate,
+    occurredAt: result.movement.occurredAt,
+    source: "daybridge",
+    sensitivity: "sanitized",
+    movement: {
+      sourceBlockId: result.movement.sourceBlockId,
+      targetBlockId: result.movement.targetBlockId,
+      position: result.movement.position,
+      block: result.movement.block,
+    },
+  };
   const mirrored = await writeEvent(config, event);
   return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
 }
@@ -314,6 +341,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/schedule-settings") { send(response, 200, { settings: await loadScheduleSettings(DATA_DIR) }, origin); return; }
     if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const incoming = await readRequestBody(request); const current = await loadScheduleSettings(DATA_DIR); send(response, 200, { settings: await saveScheduleSettings(DATA_DIR, { ...current, ...incoming }) }, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-report") { const result = await handleScheduleBlockReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/schedule/block-move") { const result = await handleScheduleBlockMove(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     send(response, 404, { error: "Not found." }, origin);
   } catch (error) { send(response, 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error." }, origin); }
 });

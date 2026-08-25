@@ -162,6 +162,24 @@ export default function ScheduleSurface() {
     } catch { setNotice("진행 상태를 저장하지 못했어요"); return false; }
   }, [activityDate, refresh]);
 
+  const moveBlock = useCallback(async (blockId, targetBlockId, position) => {
+    try {
+      const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule/block-move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityDate, blockId, targetBlockId, position }),
+      }));
+      setSchedule(result.schedule);
+      setNowFocus(result.nowFocus);
+      setNotice("시간표 위치를 바꿨어요");
+      void refresh();
+      return true;
+    } catch {
+      setNotice("근무시간 안에서만 순서를 바꿀 수 있어요");
+      return false;
+    }
+  }, [activityDate, refresh]);
+
   const openSettings = useCallback(() => {
     setSettingsOpen(true);
     void loadSettings();
@@ -219,6 +237,7 @@ export default function ScheduleSurface() {
       onDefer={(blockId) => reportBlock(blockId, "deferred")}
       onRebuild={() => loadSchedule({ rebuild: true })}
       onAddManualTask={addManualTask}
+      onMoveBlock={moveBlock}
     />;
   }
 

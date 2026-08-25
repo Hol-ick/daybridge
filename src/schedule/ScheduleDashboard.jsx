@@ -29,7 +29,7 @@ function normalizeBlocks(schedule) {
   const buffer = schedule?.bufferBlocks ?? [];
   const blocks = direct.length ? direct : [...busy, ...focus, ...buffer];
 
-  return [...blocks].sort((left, right) => {
+  return [...blocks].filter((block) => !block?.hidden && blockKind(block) !== "buffer").sort((left, right) => {
     const leftTime = asDate(left.startAt ?? left.start)?.getTime() ?? 0;
     const rightTime = asDate(right.startAt ?? right.start)?.getTime() ?? 0;
     return leftTime - rightTime;

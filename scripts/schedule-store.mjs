@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { getAvailableFocusSlots } from "../src/schedule/scheduler.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -162,4 +163,57 @@ export async function reportScheduleBlock(dataDir, date, input = {}) {
   const updated = await saveSchedule(dataDir, requestedDate, { ...schedule, blocks, updatedAt: occurredAt });
   const block = updated.blocks.find((item) => item.id === blockId);
   return { schedule: updated, report: { ...report, block: { id: block.id, taskId: sanitizeText(block.taskId || block.questId, 120), title: sanitizeText(block.title, 180), status: block.status } } };
+}
+
+export async function moveScheduleBlock(dataDir, date, input = {}) {
+  const requestedDate = assertDate(date);
+  const blockId = typeof input.blockId === "string" ? sanitizeText(input.blockId, 120) : "";
+  const targetBlockId = typeof input.targetBlockId === "string" && input.targetBlockId.trim() ? sanitizeText(input.targetBlockId, 120) : "";
+  const position = input.position === "after" ? "after" : input.position === "before" ? "before" : "";
+  if (!blockId || (targetBlockId && targetBlockId === blockId) || (targetBlockId && !position)) throw new TypeError("blockId, targetBlockId, and position must describe a valid move.");
+  const schedule = await loadSchedule(dataDir, requestedDate);
+  if (!schedule) return null;
+  const source = schedule.blocks.find((block) => block.id === blockId);
+  if (!source) return { schedule: null, movement: null };
+  const terminal = new Set(["completed", "deferred", "skipped"]);
+  if (source.type !== "focus" || terminal.has(source.status)) throw new TypeError("Only an open focus block can be moved.");
+  const target = targetBlockId ? schedule.blocks.find((block) => block.id === targetBlockId) : null;
+  if (targetBlockId && (!target || target.type !== "focus" || terminal.has(target.status))) throw new TypeError("The drop target must be another open focus block.");
+
+  const occurredAt = now();
+  const movable = schedule.blocks.filter((block) => block.type === "focus" && !terminal.has(block.status))
+    .sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));
+  const sourceIndex = movable.findIndex((block) => block.id === blockId);
+  if (sourceIndex < 0) throw new TypeError("The focus block cannot be moved.");
+  const [picked] = movable.splice(sourceIndex, 1);
+  if (!targetBlockId) movable.push(picked);
+  else {
+    const targetIndex = movable.findIndex((block) => block.id === targetBlockId);
+    if (targetIndex < 0) throw new TypeError("The drop target is not movable.");
+    movable.splice(targetIndex + (position === "after" ? 1 : 0), 0, picked);
+  }
+
+  const settings = await loadScheduleSettings(dataDir);
+  const slots = getAvailableFocusSlots({
+    date: requestedDate,
+    settings,
+    busyBlocks: schedule.blocks.filter((block) => block.type === "busy"),
+    focusBlocks: schedule.blocks.filter((block) => block.type === "focus" && terminal.has(block.status)),
+  });
+  if (slots.length < movable.length) throw new RangeError("There are not enough work-hour focus slots for this move.");
+  const movedById = new Map(movable.map((block, index) => [block.id, { ...block, ...slots[index], locked: true, userPositioned: true, updatedAt: occurredAt }]));
+  const blocks = schedule.blocks.map((block) => movedById.get(block.id) || block);
+  const updated = await saveSchedule(dataDir, requestedDate, { ...schedule, blocks, updatedAt: occurredAt });
+  const moved = updated.blocks.find((block) => block.id === blockId);
+  return {
+    schedule: updated,
+    movement: {
+      id: randomUUID(),
+      occurredAt,
+      sourceBlockId: blockId,
+      targetBlockId: targetBlockId || null,
+      position: targetBlockId ? position : "end",
+      block: { id: moved.id, questId: sanitizeText(moved.questId, 120), title: sanitizeText(moved.title, 180), startAt: moved.startAt, endAt: moved.endAt },
+    },
+  };
 }

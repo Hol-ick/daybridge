@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { buildDailySchedule, rebuildRemainingSchedule, resolveNowFocus } from "./scheduler.js";
 
 const DATE = "2026-08-24";
-const settings = { dayStart: "09:00", dayEnd: "13:00", focusDurations: [25, 50], bufferMinutes: 10 };
+const settings = { dayStart: "09:00", dayEnd: "15:00", focusDurations: [25, 50], bufferMinutes: 10 };
 const candidate = (id, priority, estimateMinutes, dependsOn = []) => ({ id, title: id, priority, estimateMinutes, remainingMinutes: estimateMinutes, dependsOn, execution: "independent", state: "ready", sourceRefs: [] });
 
 test("buildDailySchedule gives must work the first available 50-minute block and leaves a transition buffer", () => {
@@ -15,13 +15,13 @@ test("buildDailySchedule gives must work the first available 50-minute block and
     busyBlocks: [{ id: "calendar-busy", startAt: "2026-08-24T10:00:00+09:00", endAt: "2026-08-24T10:30:00+09:00" }],
   });
 
-  assert.deepEqual(schedule.blocks.map((block) => [block.type, block.questId || block.id, block.startAt, block.endAt]), [
+  assert.deepEqual(schedule.blocks.filter((block) => !block.hidden).map((block) => [block.type, block.questId || block.id, block.startAt, block.endAt]), [
     ["focus", "must", "2026-08-24T09:00:00+09:00", "2026-08-24T09:50:00+09:00"],
     ["buffer", "buffer-after-must-1", "2026-08-24T09:50:00+09:00", "2026-08-24T10:00:00+09:00"],
     ["busy", "calendar-busy", "2026-08-24T10:00:00+09:00", "2026-08-24T10:30:00+09:00"],
-    ["focus", "should", "2026-08-24T11:00:00+09:00", "2026-08-24T11:50:00+09:00"],
-    ["buffer", "buffer-after-should-1", "2026-08-24T11:50:00+09:00", "2026-08-24T12:00:00+09:00"],
-    ["focus", "could", "2026-08-24T12:00:00+09:00", "2026-08-24T12:50:00+09:00"],
+    ["focus", "should", "2026-08-24T13:00:00+09:00", "2026-08-24T13:50:00+09:00"],
+    ["buffer", "buffer-after-should-1", "2026-08-24T13:50:00+09:00", "2026-08-24T14:00:00+09:00"],
+    ["focus", "could", "2026-08-24T14:00:00+09:00", "2026-08-24T14:50:00+09:00"],
   ]);
   assert.deepEqual(schedule.unscheduled, []);
 });
@@ -94,8 +94,8 @@ test("buildDailySchedule aligns every focus block to the next hourly boundary", 
   });
 
   assert.deepEqual(schedule.blocks.filter((block) => block.type === "focus").map((block) => [block.startAt, block.endAt]), [
-    ["2026-08-24T11:00:00+09:00", "2026-08-24T11:50:00+09:00"],
-    ["2026-08-24T12:00:00+09:00", "2026-08-24T12:50:00+09:00"],
+    ["2026-08-24T13:00:00+09:00", "2026-08-24T13:50:00+09:00"],
+    ["2026-08-24T14:00:00+09:00", "2026-08-24T14:50:00+09:00"],
   ]);
 });
 
@@ -120,13 +120,42 @@ test("buildDailySchedule splits manual work into one 50-minute unit per hour", (
   assert.equal(longer.blocks.filter((block) => block.type === "focus" && block.questId === "manual-linux-long").length, 3);
 });
 
+test("buildDailySchedule reserves the lunch window and skips a busy afternoon slot", () => {
+  const schedule = buildDailySchedule({
+    date: DATE,
+    settings: { dayStart: "09:00", dayEnd: "16:00", bufferMinutes: 0 },
+    taskCandidates: [candidate("lunch-safe", "must", 150)],
+    busyBlocks: [{ id: "afternoon-busy", startAt: "2026-08-24T13:00:00+09:00", endAt: "2026-08-24T14:00:00+09:00" }],
+  });
+
+  assert.deepEqual(schedule.blocks.filter((block) => block.type === "focus").map((block) => [block.startAt.slice(11, 16), block.endAt.slice(11, 16)]), [
+    ["09:00", "09:50"],
+    ["10:00", "10:50"],
+    ["14:00", "14:50"],
+  ]);
+  assert.equal(schedule.blocks.some((block) => block.type === "focus" && ["11:00", "12:00", "13:00"].includes(block.startAt.slice(11, 16))), false);
+});
+
+test("buildDailySchedule migrates a stale locked lunch placement to a legal slot", () => {
+  const schedule = buildDailySchedule({
+    date: DATE,
+    settings: { dayStart: "09:00", dayEnd: "15:00", bufferMinutes: 0 },
+    taskCandidates: [candidate("migrated", "must", 50)],
+    lockedBlocks: [{ id: "stale-lunch-focus", type: "focus", questId: "old", title: "예전 점심 작업", startAt: "2026-08-24T12:00:00+09:00", endAt: "2026-08-24T12:50:00+09:00", locked: true }],
+  });
+
+  assert.equal(schedule.blocks.some((block) => block.id === "stale-lunch-focus"), false);
+  assert.equal(schedule.blocks.find((block) => block.questId === "migrated")?.startAt.slice(11, 16), "09:00");
+});
+
 test("resolveNowFocus distinguishes active work, calendar time, upcoming work, and free time", () => {
   const schedule = buildDailySchedule({ date: DATE, settings, taskCandidates: [candidate("must", "must", 50)], busyBlocks: [{ id: "busy", startAt: "2026-08-24T11:00:00+09:00", endAt: "2026-08-24T11:30:00+09:00" }] });
 
   assert.equal(resolveNowFocus(schedule, "2026-08-24T09:10:00+09:00").state, "active_focus");
   assert.equal(resolveNowFocus(schedule, "2026-08-24T11:10:00+09:00").state, "in_busy_time");
   assert.equal(resolveNowFocus(schedule, "2026-08-24T08:40:00+09:00").state, "up_next");
-  assert.equal(resolveNowFocus(schedule, "2026-08-24T12:00:00+09:00").state, "free_time");
+  assert.equal(resolveNowFocus(schedule, "2026-08-24T12:00:00+09:00").state, "in_busy_time");
+  assert.equal(resolveNowFocus(schedule, "2026-08-24T13:00:00+09:00").state, "free_time");
 });
 
 test("resolveNowFocus skips completed, skipped, and deferred focus blocks", () => {
@@ -151,5 +180,5 @@ test("rebuildRemainingSchedule preserves elapsed and locked blocks while moving 
 
   assert.ok(rebuilt.blocks.some((block) => block.questId === "must" && block.startAt === "2026-08-24T09:00:00+09:00"));
   assert.ok(rebuilt.blocks.some((block) => block.id === "fixed"));
-  assert.ok(rebuilt.blocks.some((block) => block.questId === "should" && block.startAt === "2026-08-24T11:00:00+09:00"));
+  assert.ok(rebuilt.blocks.some((block) => block.questId === "should" && block.startAt === "2026-08-24T13:00:00+09:00"));
 });
