@@ -455,6 +455,10 @@ def check_overlay_reorder(browser) -> None:
     assert preview_style["position"] == "absolute" and preview_style["opacity"] >= 0.9 and preview_style["pointerEvents"] == "none", preview_style
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-dragging.png", full_page=True)
     first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": target_x, "clientY": target_y})
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getAttribute('data-drop-target') === 'true'")
+    target_style = second.evaluate("element => { const style = getComputedStyle(element); return { animationName: style.animationName, position: element.getAttribute('data-drop-position') }; }")
+    assert "overlay-drop-target-pulse" in target_style["animationName"] and target_style["position"] in {"before", "after"}, target_style
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-drop-target.png", full_page=True)
     first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": target_x, "clientY": target_y})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-drag-preview]') === null")
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getBoundingClientRect().top < document.querySelector('[data-testid=now-focus-overlay-block-drag-a]')?.getBoundingClientRect().top")

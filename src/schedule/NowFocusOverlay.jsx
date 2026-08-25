@@ -109,7 +109,7 @@ function OverlayTitle({ children, className = "", ...props }) {
   );
 }
 
-function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onScheduleDragStart, onKeyboardMove, draggingBlockId, dropTargetId, suppressClickRef }) {
+function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onScheduleDragStart, onKeyboardMove, draggingBlockId, dropTargetId, dropPosition, suppressClickRef }) {
   const kind = scheduleBlockKind(block);
   const status = block?.status;
   const actionable = kind === "focus" && status !== "completed" && status !== "deferred";
@@ -141,12 +141,13 @@ function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onSch
 
   return (
     <li
-      className={[styles.compactBlock, styles[kind], status === "completed" ? styles.completed : "", draggingBlockId === block?.id ? styles.dragging : "", dropTargetId === block?.id ? styles.dropTarget : ""].filter(Boolean).join(" ")}
+      className={[styles.compactBlock, styles[kind], status === "completed" ? styles.completed : "", draggingBlockId === block?.id ? styles.dragging : "", dropTargetId === block?.id ? styles.dropTarget : "", dropTargetId === block?.id && dropPosition ? styles[`drop${dropPosition[0].toUpperCase()}${dropPosition.slice(1)}`] : ""].filter(Boolean).join(" ")}
       data-testid={`now-focus-overlay-block-${block?.id ?? "unknown"}`}
       data-block-id={block?.id ?? ""}
       data-drag-enabled={draggable ? "true" : "false"}
       data-dragging={draggingBlockId === block?.id ? "true" : "false"}
       data-drop-target={dropTargetId === block?.id ? "true" : "false"}
+      data-drop-position={dropTargetId === block?.id ? dropPosition || "" : ""}
       data-status={status || "planned"}
       role={clickable ? "button" : undefined}
       aria-label={clickable ? `${title} · ${blockStatusLabel(status)} · 클릭하여 상태 변경` : title}
@@ -177,6 +178,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
   const resizeTimerRef = useRef(null);
   const [draggingBlockId, setDraggingBlockId] = useState("");
   const [dropTargetId, setDropTargetId] = useState("");
+  const [dropPosition, setDropPosition] = useState("");
   const [dragPreview, setDragPreview] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
@@ -212,6 +214,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     pointerDragRef.current = { blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null };
     setDraggingBlockId("");
     setDropTargetId("");
+    setDropPosition("");
     setDragPreview(null);
   };
   const updateDragPreview = (event, state) => {
@@ -243,6 +246,11 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     updateDragPreview(event, state);
     const target = findDropTarget(event.clientX, event.clientY);
     setDropTargetId(target.targetId && target.targetId !== state.blockId ? target.targetId : "");
+    const targetRect = target.card?.getBoundingClientRect();
+    const nextPosition = target.targetId && target.targetId !== state.blockId && targetRect
+      ? (event.clientY < targetRect.top + (targetRect.height / 2) ? "before" : "after")
+      : "";
+    setDropPosition(nextPosition);
   };
   const handleScheduleDragEnd = async (event) => {
     const state = pointerDragRef.current;
@@ -414,6 +422,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
                   onKeyboardMove={handleKeyboardMove}
                   draggingBlockId={draggingBlockId}
                   dropTargetId={dropTargetId}
+                  dropPosition={dropPosition}
                   suppressClickRef={suppressCardClickRef}
                 />
               ))}
