@@ -449,8 +449,14 @@ def check_overlay_reorder(browser) -> None:
     target_y = second_box["y"] + 10
     first.dispatch_event("mousedown", {"button": 0, "clientX": source_x, "clientY": source_y})
     first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": source_x + 8, "clientY": source_y + 8})
+    page.wait_for_selector('[data-testid="now-focus-overlay-drag-preview"]')
+    preview = page.locator('[data-testid="now-focus-overlay-drag-preview"]')
+    preview_style = preview.evaluate("element => { const style = getComputedStyle(element); return { position: style.position, opacity: parseFloat(style.opacity), transform: style.transform, pointerEvents: style.pointerEvents }; }")
+    assert preview_style["position"] == "absolute" and preview_style["opacity"] >= 0.9 and preview_style["pointerEvents"] == "none", preview_style
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-dragging.png", full_page=True)
     first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": target_x, "clientY": target_y})
     first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": target_x, "clientY": target_y})
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-drag-preview]') === null")
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getBoundingClientRect().top < document.querySelector('[data-testid=now-focus-overlay-block-drag-a]')?.getBoundingClientRect().top")
     assert move_calls and move_calls[0]["blockId"] == "drag-a" and move_calls[0]["targetBlockId"] == "drag-b"
     assert move_calls[0]["position"] in {"before", "after"}

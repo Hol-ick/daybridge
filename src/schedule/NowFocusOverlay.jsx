@@ -172,11 +172,12 @@ function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onSch
  */
 export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, onReportBlock, onRebuild, onAddManualTask, onMoveBlock, privateMode = false }) {
   const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
-  const pointerDragRef = useRef({ blockId: "", inputType: null, pointerId: null, startX: 0, startY: 0, started: false, cleanup: null });
+  const pointerDragRef = useRef({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null });
   const suppressCardClickRef = useRef(false);
   const resizeTimerRef = useRef(null);
   const [draggingBlockId, setDraggingBlockId] = useState("");
   const [dropTargetId, setDropTargetId] = useState("");
+  const [dragPreview, setDragPreview] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   useEffect(() => () => {
@@ -208,9 +209,22 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
   };
   const clearPointerDrag = () => {
     pointerDragRef.current.cleanup?.();
-    pointerDragRef.current = { blockId: "", inputType: null, pointerId: null, startX: 0, startY: 0, started: false, cleanup: null };
+    pointerDragRef.current = { blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null };
     setDraggingBlockId("");
     setDropTargetId("");
+    setDragPreview(null);
+  };
+  const updateDragPreview = (event, state) => {
+    const surface = document.querySelector('[data-testid="now-focus-overlay-surface"]');
+    const surfaceRect = surface?.getBoundingClientRect();
+    if (!surfaceRect || !state.block) return;
+    setDragPreview({
+      block: state.block,
+      left: event.clientX - surfaceRect.left - state.offsetX,
+      top: event.clientY - surfaceRect.top - state.offsetY,
+      width: state.width,
+      height: state.height,
+    });
   };
   const handleScheduleDragMove = (event) => {
     const state = pointerDragRef.current;
@@ -226,6 +240,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     }
     event.preventDefault();
     event.stopPropagation();
+    updateDragPreview(event, state);
     const target = findDropTarget(event.clientX, event.clientY);
     setDropTargetId(target.targetId && target.targetId !== state.blockId ? target.targetId : "");
   };
@@ -255,6 +270,8 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     const moveEvent = inputType === "pointer" ? "pointermove" : "mousemove";
     const endEvent = inputType === "pointer" ? "pointerup" : "mouseup";
     const cancelEvent = inputType === "pointer" ? "pointercancel" : "mouseleave";
+    const element = event.currentTarget instanceof Element ? event.currentTarget : null;
+    const rect = element?.getBoundingClientRect();
     const move = (moveEventValue) => handleScheduleDragMove(moveEventValue);
     const end = (endEventValue) => handleScheduleDragEnd(endEventValue);
     document.addEventListener(moveEvent, move, { passive: false });
@@ -262,10 +279,16 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     document.addEventListener(cancelEvent, end, { once: true });
     pointerDragRef.current = {
       blockId: item.id,
+      block: item,
+      element,
       inputType,
       pointerId: inputType === "pointer" ? event.pointerId : null,
       startX: event.clientX,
       startY: event.clientY,
+      offsetX: rect ? event.clientX - rect.left : 0,
+      offsetY: rect ? event.clientY - rect.top : 0,
+      width: rect?.width ?? 0,
+      height: rect?.height ?? 0,
       started: false,
       cleanup: () => {
         document.removeEventListener(moveEvent, move);
@@ -396,6 +419,20 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
               ))}
             </ol>
           ) : <p className={styles.compactEmpty}>오늘 배치된 일정이 없습니다.</p>}
+          {dragPreview ? (
+            <div
+              className={[styles.compactBlock, styles.focus, styles.dragPreview].join(" ")}
+              data-testid="now-focus-overlay-drag-preview"
+              aria-hidden="true"
+              style={{ left: `${dragPreview.left}px`, top: `${dragPreview.top}px`, width: `${dragPreview.width}px`, height: `${dragPreview.height}px` }}
+            >
+              <div className={styles.compactBlockTop}>
+                <span className={styles.compactBlockTime}>{formatTime(dragPreview.block?.startAt ?? dragPreview.block?.start ?? dragPreview.block?.startTime)}</span>
+                <span className={styles.dragPreviewHint}>이동 중</span>
+              </div>
+              <OverlayTitle className={styles.compactBlockTitle}>{privateMode ? "집중 시간" : scheduleBlockTitle(dragPreview.block)}</OverlayTitle>
+            </div>
+          ) : null}
           <footer className={styles.expandedFooter}>
             <div className={styles.manualTaskFooter}><ManualTaskForm compact onSubmit={onAddManualTask} /></div>
             <button type="button" onClick={onRebuild} disabled={!onRebuild} data-tauri-drag-region="false">재배치</button>

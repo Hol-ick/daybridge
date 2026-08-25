@@ -156,8 +156,10 @@
 .compactBlock[data-drag-enabled="true"] { cursor: grab; touch-action: none; }
 .compactBlock[data-drag-enabled="true"]:active { cursor: grabbing; }
 .compactBlock[data-drag-enabled="true"]:focus-visible { border-color: rgb(98 220 165 / 82%); box-shadow: 0 0 0 2px rgb(98 220 165 / 18%); }
-.compactBlock.dragging { opacity: .42; transform: scale(.985); }
+.compactBlock.dragging { opacity: .25; border-style: dashed; border-color: rgb(98 220 165 / 48%); background: rgb(98 220 165 / 5%); transform: scale(.985); }
 .compactBlock.dropTarget { border-color: rgb(98 220 165 / 86%); background: rgb(98 220 165 / 13%); box-shadow: 0 0 0 1px rgb(98 220 165 / 24%) inset; }
+.dragPreview { position: absolute; z-index: 20; margin: 0; pointer-events: none; opacity: .97; border-color: rgb(127 255 194 / 92%); background: linear-gradient(145deg, rgb(43 74 68 / 98%), rgb(26 44 43 / 98%)); box-shadow: 0 16px 28px rgb(0 0 0 / 42%), 0 0 0 2px rgb(98 220 165 / 22%); transform: rotate(1.5deg) scale(1.025); transform-origin: 18% 50%; transition: left .04s linear, top .04s linear, box-shadow .16s ease; }
+.dragPreviewHint { flex: 0 0 auto; color: #c8ffe0; font-size: 10px; font-weight: 900; letter-spacing: -.04em; white-space: nowrap; }
 .compactBlockTop { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 8px; }
 .compactBlockTime { color: #dce1ee; font-family: "Cascadia Mono", Consolas, monospace; font-size: 18px; font-weight: 850; letter-spacing: -.075em; line-height: 1; white-space: nowrap; }
 .compactBlockStatus { flex: 0 0 auto; color: #aab0bf; font-size: 10px; font-weight: 850; letter-spacing: -.04em; white-space: nowrap; }
