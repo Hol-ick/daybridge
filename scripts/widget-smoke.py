@@ -141,12 +141,12 @@ def assert_no_page_errors(errors: list[str]) -> None:
 def check_dashboard(browser) -> None:
     context = browser.new_context(viewport={"width": 960, "height": 760}, device_scale_factor=1)
     context.route(
-        "http://127.0.0.1:39393/api/schedule-settings",
-        lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
-    )
-    context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=EMPTY_SCHEDULE),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/schedule-settings",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
     )
     context.route(
         "http://127.0.0.1:39393/api/calendar/status",
@@ -271,6 +271,10 @@ def check_overlay(browser) -> None:
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=EMPTY_SCHEDULE),
     )
+    context.route(
+        "http://127.0.0.1:39393/api/schedule-settings",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -361,10 +365,12 @@ def check_overlay(browser) -> None:
     assert collapsed_box and round(collapsed_box["height"]) == 64
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
-    with page.expect_navigation(wait_until="domcontentloaded"):
-        page.locator('[data-testid="now-focus-overlay-expanded"]').get_by_role("button", name="전체 시간표").click()
-    assert "surface=dashboard" in page.url
-    assert page.locator('[data-testid="schedule-dashboard"]').count() == 1
+    page.locator('[data-testid="now-focus-overlay-settings"]').click()
+    page.wait_for_selector('[data-testid="now-focus-overlay-settings-modal"]')
+    assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="dayStart"]').input_value() == "09:00"
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
+    page.locator('[data-testid="now-focus-overlay-settings-modal"] [aria-label="설정 닫기"]').click()
+    assert page.locator('[data-testid="now-focus-overlay-settings-modal"]').count() == 0
     assert_no_page_errors(errors)
     context.close()
 
@@ -407,7 +413,7 @@ def check_overlay_long_title(browser) -> None:
 
 
 def check_overlay_reorder(browser) -> None:
-    """Prove card drag, swap motion, trash discard, status clicks, and footer controls work."""
+    """Prove card drag, FLIP swap motion, trash discard, status clicks, and toolbar controls work."""
     context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
     move_calls: list[dict] = []
     report_calls: list[dict] = []
@@ -475,8 +481,12 @@ def check_overlay_reorder(browser) -> None:
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-a]')?.getAttribute('data-swap-role') === 'source' && document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getAttribute('data-swap-role') === 'target'")
     swap_style = second.evaluate("element => getComputedStyle(element).animationName")
     assert "overlay-swap-target" in swap_style, swap_style
-    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-swap.png", full_page=True)
+    assert page.evaluate("() => [...document.querySelectorAll('[data-block-id]')].some(element => element.getAnimations?.().some(animation => animation.effect?.getTiming?.().duration === 460))")
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getBoundingClientRect().top < document.querySelector('[data-testid=now-focus-overlay-block-drag-a]')?.getBoundingClientRect().top")
+    page.wait_for_timeout(90)
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-swap.png", full_page=True)
+    page.wait_for_timeout(430)
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-swap-settled.png", full_page=True)
     assert move_calls and move_calls[0]["blockId"] == "drag-a" and move_calls[0]["targetBlockId"] == "drag-b"
     assert move_calls[0]["position"] in {"before", "after"}
     assert page.locator('[data-testid="now-focus-overlay-block-drag-b"]').bounding_box()["y"] < page.locator('[data-testid="now-focus-overlay-block-drag-a"]').bounding_box()["y"]

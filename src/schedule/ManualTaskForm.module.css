@@ -27,6 +27,8 @@
 .titleInput:focus-visible { outline: 2px solid #74e7b1; outline-offset: 2px; }
 .compactOpen { width: 100%; justify-content: space-between; min-height: 30px; padding: 0 8px; border-radius: 6px; font-size: 10px; }
 .compactOpen > span { font-size: 14px; }
+.iconOnly { justify-content: center; width: 100%; min-height: 32px; padding: 0; }
+.iconOnly > span { font-size: 24px; font-weight: 500; }
 
 .form {
   display: grid;

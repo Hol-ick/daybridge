@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { OVERLAY_COLLAPSED_HEIGHT, OVERLAY_EXPANDED_HEIGHT, resizeOverlay, startOverlayDrag } from "../desktopWindow.js";
 import { getWorkdayCountdown } from "./workday-clock.js";
 import styles from "./NowFocusOverlay.module.css";
@@ -168,16 +168,46 @@ function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onSch
   );
 }
 
+function OverlaySettingsModal({ settings, privateMode, onClose, onSubmit }) {
+  if (!settings) {
+    return <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="시간표 설정"><div className={styles.settingsLoading}>설정을 불러오는 중…</div></div>;
+  }
+
+  return (
+    <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="시간표 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
+      <form className={styles.settingsForm} onSubmit={onSubmit}>
+        <header className={styles.settingsHeader}>
+          <div><span>시간표 설정</span><strong>오늘의 리듬</strong></div>
+          <button type="button" className={styles.settingsClose} onClick={onClose} aria-label="설정 닫기" data-tauri-drag-region="false">×</button>
+        </header>
+        <div className={styles.settingsRow}>
+          <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} required /></label>
+          <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} required /></label>
+        </div>
+        <div className={styles.settingsRow}>
+          <div className={styles.fixedSetting}><span>집중 단위</span><strong>00–50분</strong></div>
+          <label>완충 시간<select name="bufferMinutes" defaultValue={String(settings.bufferMinutes)}><option value="0">없음</option><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option></select></label>
+        </div>
+        <label className={styles.settingsCheckbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
+        <button className={styles.settingsSave} type="submit">저장하고 재배치</button>
+      </form>
+    </div>
+  );
+}
+
 /**
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, onReportBlock, onRebuild, onAddManualTask, onMoveBlock, onDiscardBlock, privateMode = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settings, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, privateMode = false }) {
   const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
   const pointerDragRef = useRef({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null });
   const suppressCardClickRef = useRef(false);
   const resizeTimerRef = useRef(null);
   const swapTimerRef = useRef(null);
+  const flipRectsRef = useRef(new Map());
+  const flipAnimationsRef = useRef(new Set());
+  const flipReadyRef = useRef(false);
   const [draggingBlockId, setDraggingBlockId] = useState("");
   const [dropTargetId, setDropTargetId] = useState("");
   const [dropPosition, setDropPosition] = useState("");
@@ -189,6 +219,8 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
   useEffect(() => () => {
     if (resizeTimerRef.current) window.clearTimeout(resizeTimerRef.current);
     if (swapTimerRef.current) window.clearTimeout(swapTimerRef.current);
+    flipAnimationsRef.current.forEach((animation) => animation.cancel());
+    flipAnimationsRef.current.clear();
   }, []);
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(new Date()), 30_000);
@@ -206,6 +238,50 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "";
   const workdayCountdown = getWorkdayCountdown(currentTime);
   const blocks = useMemo(() => getScheduleBlocks(schedule), [schedule]);
+
+  useLayoutEffect(() => {
+    const nextRects = new Map();
+    const nodes = document.querySelectorAll('[data-testid^="now-focus-overlay-block-"]');
+    if (!expanded) {
+      nodes.forEach((node) => {
+        const id = node.getAttribute("data-block-id");
+        if (id) nextRects.set(id, node.getBoundingClientRect());
+      });
+      flipRectsRef.current = nextRects;
+      flipReadyRef.current = false;
+      return;
+    }
+    if (!flipReadyRef.current) {
+      nodes.forEach((node) => {
+        const id = node.getAttribute("data-block-id");
+        if (id) nextRects.set(id, node.getBoundingClientRect());
+      });
+      flipRectsRef.current = nextRects;
+      flipReadyRef.current = true;
+      return;
+    }
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    nodes.forEach((node) => {
+      const id = node.getAttribute("data-block-id");
+      if (!id) return;
+      const next = node.getBoundingClientRect();
+      const previous = flipRectsRef.current.get(id);
+      if (previous && !reducedMotion && typeof node.animate === "function") {
+        const deltaX = previous.left - next.left;
+        const deltaY = previous.top - next.top;
+        if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+          const animation = node.animate(
+            [{ transform: `translate(${deltaX}px, ${deltaY}px)` }, { transform: "translate(0, 0)" }],
+            { duration: 460, easing: "cubic-bezier(.22, 1, .36, 1)", fill: "both" },
+          );
+          flipAnimationsRef.current.add(animation);
+          animation.finished.catch(() => {}).finally(() => flipAnimationsRef.current.delete(animation));
+        }
+      }
+      nextRects.set(id, next);
+    });
+    flipRectsRef.current = nextRects;
+  }, [blocks, expanded]);
 
   const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks]);
   const findDropTarget = (clientX, clientY) => {
@@ -421,11 +497,6 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
     setExpandedMode(!expanded);
   };
 
-  const handleOpenDashboard = (event) => {
-    event.stopPropagation();
-    onOpenDashboard?.();
-  };
-
   const surfaceClassName = [styles.surface, expanded ? styles.expanded : ""].filter(Boolean).join(" ");
 
   return (
@@ -481,10 +552,11 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
               <OverlayTitle className={styles.compactBlockTitle}>{privateMode ? "집중 시간" : scheduleBlockTitle(dragPreview.block)}</OverlayTitle>
             </div>
           ) : null}
-          <footer className={styles.expandedFooter}>
-            <div className={styles.manualTaskFooter}><ManualTaskForm compact onSubmit={onAddManualTask} /></div>
-            <button type="button" onClick={onRebuild} disabled={!onRebuild} data-tauri-drag-region="false">재배치</button>
-            <button type="button" onClick={handleOpenDashboard} data-tauri-drag-region="false">전체 시간표</button>
+          <footer className={styles.expandedFooter} aria-label="시간표 도구">
+            <div className={styles.manualTaskFooter}><ManualTaskForm compact iconOnly onSubmit={onAddManualTask} /></div>
+            <button type="button" className={styles.iconAction} onClick={onOpenSettings} disabled={!onOpenSettings} data-tauri-drag-region="false" data-testid="now-focus-overlay-settings" aria-label="시간표 설정">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9.8 3.7 10.4 2h3.2l.6 1.7 1.6.9 1.7-.5 2.2 2.2-.5 1.7.9 1.6 1.7.6v3.2l-1.7.6-.9 1.6.5 1.7-2.2 2.2-1.7-.5-1.6.9-.6 1.7h-3.2l-.6-1.7-1.6-.9-1.7.5-2.2-2.2.5-1.7-.9-1.6-1.7-.6v-3.2l1.7-.6.9-1.6-.5-1.7 2.2-2.2 1.7.5 1.6-.9Z" /><circle cx="12" cy="12" r="3.1" /></svg>
+            </button>
           </footer>
         </section>
         <div className={styles.summary} data-testid="now-focus-overlay-summary">
@@ -520,6 +592,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onOpenDashboard, o
           <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
         </time>
         </div>
+        {settingsOpen ? <OverlaySettingsModal settings={settings} privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} /> : null}
       </div>
     </aside>
   );

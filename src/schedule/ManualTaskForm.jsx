@@ -7,7 +7,7 @@ function durationLabel(minutes) {
   return `${minutes}분`;
 }
 
-export default function ManualTaskForm({ onSubmit, compact = false }) {
+export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = false }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(50);
@@ -42,12 +42,13 @@ export default function ManualTaskForm({ onSubmit, compact = false }) {
     return (
       <button
         type="button"
-        className={[styles.openButton, compact ? styles.compactOpen : ""].filter(Boolean).join(" ")}
+        className={[styles.openButton, compact ? styles.compactOpen : "", iconOnly ? styles.iconOnly : ""].filter(Boolean).join(" ")}
         onClick={() => setOpen(true)}
         data-tauri-drag-region="false"
         data-testid="manual-task-add-toggle"
+        aria-label={iconOnly ? "작업 추가" : undefined}
       >
-        <span aria-hidden="true">＋</span> 작업 추가
+        <span aria-hidden="true">＋</span>{iconOnly ? null : " 작업 추가"}
       </button>
     );
   }

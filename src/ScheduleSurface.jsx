@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useAppActions, useAppState } from "./AppContext.jsx";
-import { bindOverlayMagnet, currentSurface, openDashboard, placeOverlayInCorner } from "./desktopWindow.js";
+import { bindOverlayMagnet, currentSurface, placeOverlayInCorner } from "./desktopWindow.js";
 import Item from "./todometer/components/Item.jsx";
 import NowFocusOverlay from "./schedule/NowFocusOverlay.jsx";
 import ScheduleDashboard from "./schedule/ScheduleDashboard.jsx";
@@ -250,12 +250,15 @@ export default function ScheduleSurface() {
       schedule={schedule}
       nowFocus={nowFocus}
       privateMode={privateMode}
-      onOpenDashboard={() => { void openDashboard(); }}
       onReportBlock={(blockId, status) => { void reportBlock(blockId, status); }}
-      onRebuild={() => loadSchedule({ rebuild: true })}
       onAddManualTask={addManualTask}
       onMoveBlock={moveBlock}
       onDiscardBlock={discardBlock}
+      settings={settings}
+      settingsOpen={settingsOpen}
+      onOpenSettings={openSettings}
+      onCloseSettings={() => setSettingsOpen(false)}
+      onSaveSettings={saveSettings}
     />;
   }
 
