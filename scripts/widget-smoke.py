@@ -214,12 +214,12 @@ def check_overlay(browser) -> None:
     title_style = page.locator('[data-testid="now-focus-overlay-title"]').evaluate(
         "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
     )
-    assert title_style["fontSize"] >= 14 and title_style["fontWeight"] >= 700, title_style
+    assert title_style["fontSize"] >= 17 and title_style["fontWeight"] >= 800, title_style
     if leave_timer.count():
         leave_style = leave_timer.evaluate(
             "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
         )
-        assert leave_style["fontSize"] >= 22 and leave_style["fontWeight"] >= 700, leave_style
+        assert leave_style["fontSize"] >= 27 and leave_style["fontWeight"] >= 800, leave_style
     assert page.locator('[data-testid="now-focus-overlay"] > div').evaluate("element => getComputedStyle(element).cursor") == "grab"
     assert page.locator('[data-testid="schedule-dashboard"]').count() == 0
     assert page.locator('[data-testid="quest-item"]').count() == 0
@@ -259,7 +259,7 @@ def check_overlay(browser) -> None:
             "element => { const style = getComputedStyle(element); const title = element.querySelector('[class*=compactBlockTitle]'); const time = element.querySelector('[class*=compactBlockTime]'); return { display: style.display, columns: style.gridTemplateColumns, titleSize: parseFloat(getComputedStyle(title).fontSize), timeSize: parseFloat(getComputedStyle(time).fontSize) }; }"
         )
         assert compact_block.locator('[class*=compactBlockTime]').inner_text().strip().count("–") == 0
-        assert row_style["display"] == "grid" and row_style["titleSize"] >= 15 and row_style["timeSize"] >= 16, row_style
+        assert row_style["display"] == "grid" and row_style["titleSize"] >= 17 and row_style["timeSize"] >= 17, row_style
     assert page.locator('[data-testid="now-focus-overlay-collapse"]').count() == 1
     page.locator('[data-testid="now-focus-overlay-collapse"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")

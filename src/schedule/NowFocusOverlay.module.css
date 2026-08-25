@@ -63,11 +63,11 @@
   left: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   min-height: 64px;
   box-sizing: border-box;
-  padding: 10px 10px 10px 12px;
+  padding: 9px 9px 9px 10px;
 }
 
 .expandedPanel {
@@ -107,10 +107,10 @@
   align-items: center;
 }
 
-.expandedHeader { justify-content: space-between; gap: 8px; min-height: 23px; margin-bottom: 8px; }
+.expandedHeader { justify-content: space-between; gap: 7px; min-height: 23px; margin-bottom: 7px; }
 .expandedHeader > div { min-width: 0; gap: 8px; }
-.expandedHeader span { color: var(--green, #62dca5); font-size: 10px; font-weight: 800; letter-spacing: -.02em; }
-.expandedHeader strong { color: #d8ffe9; font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px; font-weight: 800; }
+.expandedHeader span { color: var(--green, #62dca5); font-size: 13px; font-weight: 850; letter-spacing: -.035em; line-height: 1; }
+.expandedHeader strong { color: #d8ffe9; font-family: "Cascadia Mono", Consolas, monospace; font-size: 13px; font-weight: 850; line-height: 1; }
 .expandedHeader button,
 .expandedFooter button {
   min-height: 24px;
@@ -121,7 +121,7 @@
   color: #b7bac5;
   cursor: pointer;
   font: inherit;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 750;
   letter-spacing: -.02em;
 }
@@ -143,12 +143,12 @@
 
 .compactBlock {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) auto;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
-  min-height: 52px;
+  gap: 7px;
+  min-height: 50px;
   box-sizing: border-box;
-  padding: 6px 7px;
+  padding: 5px 6px;
   border: 1px solid rgb(255 255 255 / 9%);
   border-radius: 7px;
   background: rgb(255 255 255 / 5%);
@@ -157,18 +157,18 @@
 .compactBlock.busy,
 .compactBlock.buffer { background: rgb(0 0 0 / 10%); color: #9da0ab; }
 .compactBlock.completed { opacity: .58; }
-.compactBlockTime { color: #dce1ee; font-family: "Cascadia Mono", Consolas, monospace; font-size: 16px; font-weight: 850; letter-spacing: -.055em; line-height: 1; white-space: nowrap; }
-.compactBlockTitle { min-width: 0; overflow: hidden; color: #f4f7f5; font-family: "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif; font-size: 15px; font-weight: 800; letter-spacing: -.04em; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.compactBlockTime { color: #dce1ee; font-family: "Cascadia Mono", Consolas, monospace; font-size: 17px; font-weight: 850; letter-spacing: -.075em; line-height: 1; white-space: nowrap; }
+.compactBlockTitle { min-width: 0; overflow: hidden; color: #f4f7f5; font-family: "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif; font-size: 17px; font-weight: 850; letter-spacing: -.055em; line-height: 1.12; text-overflow: ellipsis; white-space: nowrap; }
 .busy .compactBlockTitle { color: #aeb1bc; }
 .compactActions { display: flex; flex: 0 0 auto; gap: 3px; }
-.compactActions button { min-height: 25px; padding: 0 7px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8f93a0; cursor: pointer; font: inherit; font-size: 10px; font-weight: 800; }
+.compactActions button { min-height: 24px; padding: 0 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: #8f93a0; cursor: pointer; font: inherit; font-size: 10px; font-weight: 800; }
 .compactActions button:last-child { border-color: rgb(98 220 165 / 30%); background: rgb(98 220 165 / 9%); color: #bfffe0; }
 .compactActions button:hover:not(:disabled) { border-color: rgb(98 220 165 / 58%); background: rgb(98 220 165 / 18%); color: #eafff3; }
 .compactActions button:disabled { cursor: wait; opacity: .45; }
-.compactStatus { flex: 0 0 auto; color: #9ca0ad; font-size: 9px; font-weight: 750; }
+.compactStatus { flex: 0 0 auto; color: #9ca0ad; font-size: 10px; font-weight: 800; }
 .focus .compactStatus { color: #bfffe0; }
-.compactEmpty { margin: auto 0; padding: 20px 8px; color: #aeb1bc; font-size: 11px; text-align: center; }
-.expandedFooter { gap: 5px; margin-top: 8px; padding: 8px 0 10px; border-top: 1px solid rgb(255 255 255 / 8%); }
+.compactEmpty { margin: auto 0; padding: 16px 8px; color: #aeb1bc; font-size: 13px; text-align: center; }
+.expandedFooter { gap: 5px; margin-top: 6px; padding: 7px 0 9px; border-top: 1px solid rgb(255 255 255 / 8%); }
 .expandedFooter button { flex: 1; }
 
 .open {
@@ -196,19 +196,19 @@
   min-width: 0;
   color: #c8cad4;
   font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 750;
   letter-spacing: .01em;
   line-height: 1.1;
 }
 
 .timer {
   align-self: center;
-  min-width: 74px;
+  min-width: 88px;
   color: #c6ffe4;
   font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 27px;
+  font-weight: 850;
   letter-spacing: .025em;
   line-height: 1;
   text-align: right;
@@ -220,10 +220,10 @@
   overflow: hidden;
   color: var(--font-color, #fafafa);
   font-family: "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: -.035em;
-  line-height: 1.25;
+  font-size: 17px;
+  font-weight: 850;
+  letter-spacing: -.055em;
+  line-height: 1.12;
   text-overflow: ellipsis;
   white-space: nowrap;
   transition: color .16s ease;
@@ -241,8 +241,8 @@
   color: var(--green, #62dca5);
   cursor: pointer;
   font: inherit;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 850;
   letter-spacing: -.02em;
   transition: background-color .16s ease, border-color .16s ease, color .16s ease;
 }
