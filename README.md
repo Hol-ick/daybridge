@@ -14,6 +14,7 @@ Daybridge is a local-first desktop companion. It reduces a detailed daily note t
 - Detailed closeout plus a separate Quest Extractor: every eligible atomic quest is retained, while system/automation work is excluded with a reason
 - Stable mission and quest IDs for multi-day carryover, with explicit sequential dependencies only when AIHUB declares them
 - A validated `daybridge_quest_plan` input contract: 50-minute `focus_units`, no fixed quest times, and a separate confirmation queue
+- A cross-session `daybridge-schedule-writer` Skill: another Codex session can upsert normalized work into a date-scoped Markdown inbox, and the bridge automatically re-plans when its fingerprint changes
 - Freshness, record-quality, and source-coverage indicators instead of invented certainty
 
 ## Local development
@@ -36,6 +37,12 @@ pnpm dev:widget
 ```
 
 `pnpm dev:widget`도 개발 모드라서 저장 시 프런트엔드가 갱신되지만, Rust·MSVC·Windows SDK·WebView2가 필요하다. `pnpm build:widget`은 배포용 설치 파일을 만들 때만 실행한다.
+
+### 세션에서 일정 전달하기
+
+다른 Codex 세션에서 AIHUB closeout·브리핑을 `daybridge-schedule-writer` Skill로 정규화한 뒤, Skill의 `write_schedule_inbox.py upsert` 명령을 실행한다. 파일은 `%LOCALAPPDATA%\Daybridge\inbox\schedule-YYYY-MM-DD.md`에 날짜별로 생성된다. 고정 시각은 전달하지 않으며, Daybridge가 근무시간·점심시간·Google Calendar busy를 합쳐 `HH:00–HH:50` 단위로 배치한다.
+
+반영을 확인하려면 local bridge가 실행 중인 상태에서 `GET /api/schedule/inbox?date=YYYY-MM-DD`로 `valid`, `tasks`, `excluded`, `errors`, `fingerprint`를 먼저 확인한다. 이후 위젯의 자동 조회(최대 60초) 또는 `POST /api/schedule/rebuild`로 시간표를 다시 읽는다. 파일 기록 성공은 업무 완료나 사용자의 receipt를 의미하지 않는다.
 
 ## Data boundary
 
