@@ -1,11 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildDailySchedule, rebuildRemainingSchedule, resolveNowFocus } from "./scheduler.js";
+import { buildDailySchedule, getAvailableFocusSlots, rebuildRemainingSchedule, resolveNowFocus } from "./scheduler.js";
 
 const DATE = "2026-08-24";
 const settings = { dayStart: "09:00", dayEnd: "15:00", focusDurations: [25, 50], bufferMinutes: 10 };
 const candidate = (id, priority, estimateMinutes, dependsOn = []) => ({ id, title: id, priority, estimateMinutes, remainingMinutes: estimateMinutes, dependsOn, execution: "independent", state: "ready", sourceRefs: [] });
+
+test("empty time settings produce an untimed todo list without invented work hours", () => {
+  const schedule = buildDailySchedule({
+    date: DATE,
+    settings: { dayStart: "", dayEnd: "", timeConfigured: false },
+    taskCandidates: [candidate("first", "must", 50), candidate("second", "should", 100)],
+  });
+
+  assert.equal(schedule.mode, "todo");
+  assert.equal(schedule.timeConfigured, false);
+  assert.deepEqual(schedule.blocks.map((block) => [block.questId, block.startAt, block.endAt, block.status]), [
+    ["first", undefined, undefined, "planned"],
+    ["second", undefined, undefined, "planned"],
+  ]);
+  assert.deepEqual(schedule.unscheduled, []);
+  assert.equal(resolveNowFocus(schedule, "2026-08-24T10:00:00+09:00").state, "todo_list");
+  assert.deepEqual(getAvailableFocusSlots({ date: DATE, settings: { timeConfigured: false } }), []);
+});
 
 test("buildDailySchedule gives must work the first available 50-minute block and leaves a transition buffer", () => {
   const schedule = buildDailySchedule({

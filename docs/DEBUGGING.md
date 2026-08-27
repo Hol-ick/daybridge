@@ -66,6 +66,8 @@ Get-Content "$env:LOCALAPPDATA\Daybridge\logs\bridge-events.ndjson" -Tail 100
 
 원인 판별 순서는 `workday_auto_exit_triggered` → `app_exit_requested`가 있는지 먼저 보고, 그 뒤 `tray_quit_requested`, `schedule_load_error`, `board_refresh_error`, `window_destroyed`, `window_error`를 시간순으로 대조한다. 전자의 두 이벤트가 같이 있으면 18:00 이후 자동 종료 경로이고, `tray_quit_requested`가 있으면 사용자가 트레이에서 종료한 경로다. WebView/창 오류만 있으면 충돌·렌더링 경로다. 로그 파일이 없으면 새 패키지 위젯 또는 새 bridge가 아직 실행되지 않은 상태다.
 
+시간 설정을 비워 둔 경우에는 정상적으로 `schedule.mode=todo`, `timeConfigured=false`가 반환된다. 이 모드에서는 `startAt`·`endAt`가 없는 오늘 할 일 목록만 만들고, 시간 슬롯 이동·점심시간 차단·18:00 자동 종료를 사용하지 않는다. `schedule_read`에 `mode=todo`가 찍히면 오류가 아니라 의도된 가벼운 목록 모드다.
+
 ## 3. Check a status report
 
 Use the UI to change a quest status or submit a progress note. The bridge should return `eventRecorded: true`. The event is stored locally and mirrored to the AIHUB automation-owned `reports/daily/_system/daybridge_handoff/YYYY-MM-DD/` folder. The original diary is never edited.

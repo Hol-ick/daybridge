@@ -74,13 +74,16 @@ function blockTime(value, field) {
   return Date.parse(value);
 }
 
-function cloneBlock(raw) {
+function cloneBlock(raw, allowUntimedFocus = false) {
   if (!raw || typeof raw !== "object" || typeof raw.id !== "string" || !raw.id.trim()) {
     throw new TypeError("Each schedule block needs a stable id");
   }
   if (!BLOCK_TYPES.has(raw.type)) throw new TypeError(`Unsupported schedule block type: ${raw.type}`);
   if (raw.type === "focus" && (typeof raw.questId !== "string" || !raw.questId.trim())) {
     throw new TypeError("Focus blocks need a questId");
+  }
+  if (allowUntimedFocus && raw.type === "focus" && !raw.startAt && !raw.endAt) {
+    return { ...raw, id: raw.id.trim(), locked: Boolean(raw.locked), timed: false };
   }
   const start = blockTime(raw.startAt, "startAt");
   const end = blockTime(raw.endAt, "endAt");
@@ -130,16 +133,26 @@ export function createScheduleShell({ date, generatedAt } = {}) {
 export function normalizeSchedule(rawSchedule) {
   const shell = createScheduleShell(rawSchedule);
   if (rawSchedule?.timezone && rawSchedule.timezone !== KST) throw new TypeError("DailySchedule timezone must be Asia/Seoul");
-  const blocks = (Array.isArray(rawSchedule?.blocks) ? rawSchedule.blocks : []).map(cloneBlock);
-  for (const block of blocks) {
+  const allowUntimedFocus = rawSchedule?.mode === "todo" || rawSchedule?.timeConfigured === false;
+  const blocks = (Array.isArray(rawSchedule?.blocks) ? rawSchedule.blocks : []).map((block) => cloneBlock(block, allowUntimedFocus));
+  const timedBlocks = blocks.filter((block) => typeof block.startAt === "string" && typeof block.endAt === "string");
+  for (const block of timedBlocks) {
     if (!block.startAt.startsWith(`${shell.date}T`) || !block.endAt.startsWith(`${shell.date}T`)) {
       throw new RangeError("Schedule blocks must stay within the schedule date");
     }
   }
-  blocks.sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));
-  for (let index = 1; index < blocks.length; index += 1) {
-    if (Date.parse(blocks[index].startAt) < Date.parse(blocks[index - 1].endAt)) {
-      throw new RangeError(`DailySchedule blocks overlap: ${blocks[index - 1].id} and ${blocks[index].id}`);
+  blocks.sort((left, right) => {
+    const leftStart = Date.parse(left.startAt);
+    const rightStart = Date.parse(right.startAt);
+    if (Number.isNaN(leftStart) && Number.isNaN(rightStart)) return (left.order ?? 0) - (right.order ?? 0);
+    if (Number.isNaN(leftStart)) return 1;
+    if (Number.isNaN(rightStart)) return -1;
+    return leftStart - rightStart || left.id.localeCompare(right.id);
+  });
+  timedBlocks.sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));
+  for (let index = 1; index < timedBlocks.length; index += 1) {
+    if (Date.parse(timedBlocks[index].startAt) < Date.parse(timedBlocks[index - 1].endAt)) {
+      throw new RangeError(`DailySchedule blocks overlap: ${timedBlocks[index - 1].id} and ${timedBlocks[index].id}`);
     }
   }
   const unscheduled = (Array.isArray(rawSchedule?.unscheduled) ? rawSchedule.unscheduled : []).map((item) => ({

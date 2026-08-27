@@ -15,6 +15,7 @@ Daybridge is a local-first desktop companion. It reduces a detailed daily note t
 - Stable mission and quest IDs for multi-day carryover, with explicit sequential dependencies only when AIHUB declares them
 - A validated `daybridge_quest_plan` input contract: 50-minute `focus_units`, no fixed quest times, and a separate confirmation queue
 - A cross-session `daybridge-schedule-writer` Skill: another Codex session can upsert normalized work into a date-scoped Markdown inbox, and the bridge automatically re-plans when its fingerprint changes
+- Optional time planning: leave the work window blank to use a lightweight untimed “오늘 할 일” list, or set both start and end times to enable the `HH:00–HH:50` timetable
 - Freshness, record-quality, and source-coverage indicators instead of invented certainty
 
 ## Local development
@@ -41,6 +42,8 @@ pnpm dev:widget
 ### 세션에서 일정 전달하기
 
 어떤 Codex 세션에서든 사용자가 “이 업무는 시간표에 넣자”고 판단하면 `daybridge-schedule-writer` Skill을 즉시 호출한다. closeout·브리핑 생성은 필요하지 않다. Skill이 업무를 정규화한 뒤 `write_schedule_inbox.py upsert` 명령을 실행하면 파일은 `%LOCALAPPDATA%\Daybridge\inbox\schedule-YYYY-MM-DD.md`에 날짜별로 생성된다. 고정 시각은 전달하지 않으며, Daybridge가 근무시간·점심시간·Google Calendar busy를 합쳐 `HH:00–HH:50` 단위로 배치한다.
+
+시간 설정을 하지 않은 상태에서는 시작·마감 시간을 임의로 채우지 않는다. 이때는 `mode=todo`로 오늘의 작업 목록만 보여주며, 시간·점심시간·18:00 자동 종료를 사용하지 않는다. 두 시간을 모두 입력하고 저장하면 기존의 `HH:00–HH:50` 시간표 모드로 전환된다.
 
 반영을 확인하려면 local bridge가 실행 중인 상태에서 `GET /api/schedule/inbox?date=YYYY-MM-DD`로 `valid`, `tasks`, `excluded`, `errors`, `fingerprint`를 먼저 확인한다. 이후 위젯의 자동 조회(최대 60초) 또는 `POST /api/schedule/rebuild`로 시간표를 다시 읽는다. 파일 기록 성공은 업무 완료나 사용자의 receipt를 의미하지 않는다.
 

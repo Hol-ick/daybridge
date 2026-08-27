@@ -10,7 +10,7 @@ Daybridge is an execution layer over AIHUB, not a second diary or a second calen
 4. **Optional completion-driven continuation** — when enabled, closeout automation invokes the Quest Extractor only after a ready synthesis exists. No fixed 17:40 cron is required, and this path is independent of direct inbox writes.
 5. **Calendar busy reader** — a local, user-authorized, read-only adapter that returns only occupied start/end ranges. It has no calendar write path.
 6. **Routine planner** — turns personal, opt-in defaults such as Linux learning into a maximum of two optional candidates. It runs after the session inbox and any board candidates are read and never displaces user-selected work.
-7. **DailySchedule** — combines board candidates, inbox candidates, optional routine candidates, busy windows, user settings, prior receipts, and carryover into deterministic focus, busy, and buffer blocks.
+7. **DailySchedule** — combines board candidates, inbox candidates, optional routine candidates, busy windows, user settings, prior receipts, and carryover. A configured work window produces deterministic focus, busy, and buffer blocks; without one it produces an untimed `mode=todo` list.
 8. **Local bridge and widget** — serves the schedule, preserves receipts, mirrors sanitized user interactions back to AIHUB, and shows one current action plus a compact timeline.
 
 ## Data flow
@@ -40,9 +40,9 @@ The optional continuation runner writes `daybridge_continuation.json` with `wait
 - A **quest** is one concrete result. It becomes one or more fixed 50-minute focus blocks; its `focus_units` value is the scheduling source of truth. It is not replaced by a calendar event.
 - A **step** is a mechanical unit. It is locked only when the plan explicitly declares `depends_on` or sequential execution.
 - A **busy block** is a Calendar time constraint. Its event details never enter the schedule.
-- A **focus block** is an executable window for one quest. A **buffer block** protects transitions and is not a task.
+- A **focus block** is an executable window for one quest when the schedule is timed; in `mode=todo` it is an untimed actionable list item. A **buffer block** protects transitions and is not a task.
 - A **routine candidate** is a personal optional practice block. It is scheduled only after every eligible user-selected quest and is not treated as AIHUB evidence or a briefing-generated obligation.
-- `DailySchedule` returns one of `active_focus`, `in_busy_time`, `up_next`, or `free_time` for the present moment.
+- Timed `DailySchedule` returns one of `active_focus`, `in_busy_time`, `up_next`, or `free_time` for the present moment. An untimed list returns `todo_list`.
 - Deferring unfinished work keeps its stable ID and makes it eligible for tomorrow's schedule as carryover.
 
 ## Ownership and safety

@@ -15,8 +15,9 @@ const localPathPattern = /\b[A-Z]:\\[^\s|]+/gi;
 export const DEFAULT_SCHEDULE_SETTINGS = Object.freeze({
   schemaVersion: 1,
   timeZone: "Asia/Seoul",
-  dayStart: "09:00",
-  dayEnd: "18:00",
+  dayStart: "",
+  dayEnd: "",
+  timeConfigured: false,
   focusDurations: [50],
   defaultFocusMinutes: 50,
   bufferMinutes: 10,
@@ -55,9 +56,17 @@ function arrayOfPositiveIntegers(value, fallback) {
 }
 function normalizeSettings(input = {}) {
   const candidate = input && typeof input === "object" ? input : {};
-  const dayStart = TIME.test(candidate.dayStart) ? candidate.dayStart : DEFAULT_SCHEDULE_SETTINGS.dayStart;
-  const dayEnd = TIME.test(candidate.dayEnd) ? candidate.dayEnd : DEFAULT_SCHEDULE_SETTINGS.dayEnd;
-  if (minutes(dayStart) >= minutes(dayEnd)) throw new TypeError("dayStart must be earlier than dayEnd.");
+  const rawStart = typeof candidate.dayStart === "string" ? candidate.dayStart.trim() : "";
+  const rawEnd = typeof candidate.dayEnd === "string" ? candidate.dayEnd.trim() : "";
+  // Settings written by versions before the optional-time mode used 09:00–18:00
+  // as an implicit default. Treat that exact legacy shape as unconfigured; a
+  // user can still explicitly opt into those hours by saving timeConfigured.
+  const legacyImplicitDefault = !Object.hasOwn(candidate, "timeConfigured") && rawStart === "09:00" && rawEnd === "18:00";
+  const timeConfigured = candidate.timeConfigured === true || (!Object.hasOwn(candidate, "timeConfigured") && !legacyImplicitDefault && TIME.test(rawStart) && TIME.test(rawEnd));
+  const dayStart = timeConfigured && TIME.test(rawStart) ? rawStart : "";
+  const dayEnd = timeConfigured && TIME.test(rawEnd) ? rawEnd : "";
+  if (timeConfigured && (!TIME.test(dayStart) || !TIME.test(dayEnd))) throw new TypeError("dayStart and dayEnd must both be set, or both be empty.");
+  if (timeConfigured && minutes(dayStart) >= minutes(dayEnd)) throw new TypeError("dayStart must be earlier than dayEnd.");
   // Keep the persisted shape for compatibility, but migrate every old setting
   // to the single user-facing HH:00–HH:50 focus unit.
   const focusDurations = [50];
@@ -69,6 +78,7 @@ function normalizeSettings(input = {}) {
     timeZone: candidate.timeZone === "Asia/Seoul" ? candidate.timeZone : DEFAULT_SCHEDULE_SETTINGS.timeZone,
     dayStart,
     dayEnd,
+    timeConfigured,
     focusDurations,
     defaultFocusMinutes,
     bufferMinutes,
@@ -108,12 +118,14 @@ function normalizeSchedule(date, input = {}) {
   const sourceDate = source.date || source.activityDate || date;
   if (sourceDate !== date) throw new TypeError("schedule date must match the requested date.");
   const coverage = CALENDAR_COVERAGE.has(source.calendar?.coverage) ? source.calendar.coverage : "attention";
+  const sanitized = sanitizeValue(source, 600);
+  delete sanitized.timeZone;
   return {
-    ...sanitizeValue(source, 600),
+    ...sanitized,
     schemaVersion: 1,
     date,
     activityDate: date,
-    timeZone: source.timeZone === "Asia/Seoul" ? source.timeZone : DEFAULT_SCHEDULE_SETTINGS.timeZone,
+    timezone: (source.timezone === "Asia/Seoul" || source.timeZone === "Asia/Seoul") ? "Asia/Seoul" : DEFAULT_SCHEDULE_SETTINGS.timeZone,
     calendar: { coverage },
     // Calendar input is normalized to anonymous schedule blocks upstream. Never persist the raw busyBlocks input or event metadata here.
     busyBlocks: [],
@@ -192,6 +204,10 @@ export async function moveScheduleBlock(dataDir, date, input = {}) {
   if (targetBlockId && (!target || target.type !== "focus" || terminal.has(target.status))) throw new TypeError("The drop target must be another open focus block.");
 
   const occurredAt = now();
+  const settings = await loadScheduleSettings(dataDir);
+  if (!settings.timeConfigured || schedule.mode === "todo" || schedule.timeConfigured === false) {
+    throw new TypeError("Untimed todo lists do not support time-slot moves.");
+  }
   const movable = schedule.blocks.filter((block) => block.type === "focus" && !terminal.has(block.status))
     .sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));
   const sourceIndex = movable.findIndex((block) => block.id === blockId);
@@ -204,7 +220,6 @@ export async function moveScheduleBlock(dataDir, date, input = {}) {
     movable.splice(targetIndex + (position === "after" ? 1 : 0), 0, picked);
   }
 
-  const settings = await loadScheduleSettings(dataDir);
   const slots = getAvailableFocusSlots({
     date: requestedDate,
     settings,

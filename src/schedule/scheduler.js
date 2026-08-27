@@ -16,8 +16,12 @@ function normalizedSettings(date, supplied = {}) {
   const focusDurations = [50];
   const bufferMinutes = supplied.bufferMinutes == null ? 10 : Number(supplied.bufferMinutes);
   if (!Number.isInteger(bufferMinutes) || bufferMinutes < 0 || bufferMinutes > 30) throw new TypeError("bufferMinutes must be between 0 and 30");
-  const dayStart = supplied.dayStart || "09:00";
-  const dayEnd = supplied.dayEnd || "18:00";
+  const rawStart = typeof supplied.dayStart === "string" ? supplied.dayStart.trim() : "";
+  const rawEnd = typeof supplied.dayEnd === "string" ? supplied.dayEnd.trim() : "";
+  const timeConfigured = supplied.timeConfigured === true || supplied.timeConfigured !== false && /^\d{2}:\d{2}$/.test(rawStart) && /^\d{2}:\d{2}$/.test(rawEnd);
+  if (!timeConfigured) return { dayStart: "", dayEnd: "", dayStartAt: null, dayEndAt: null, focusDurations, bufferMinutes, breaks: [], timeConfigured: false };
+  const dayStart = rawStart;
+  const dayEnd = rawEnd;
   const dayStartAt = atKst(date, dayStart);
   const dayEndAt = atKst(date, dayEnd);
   if (Date.parse(dayEndAt) <= Date.parse(dayStartAt)) throw new RangeError("dayEnd must be after dayStart");
@@ -28,7 +32,7 @@ function normalizedSettings(date, supplied = {}) {
     if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || start >= end) throw new TypeError(`break ${index + 1} needs valid start/end times`);
     return { start, end, label: String(item?.label || "휴식 시간") };
   });
-  return { dayStart, dayEnd, dayStartAt, dayEndAt, focusDurations, bufferMinutes, breaks };
+  return { dayStart, dayEnd, dayStartAt, dayEndAt, focusDurations, bufferMinutes, breaks, timeConfigured: true };
 }
 
 function toBusyBlock(raw, index) {
@@ -129,14 +133,33 @@ function scheduledFocusMinutes(blocks, questId) {
 export function buildDailySchedule({ date, settings, taskCandidates = [], busyBlocks = [], lockedBlocks = [], completedQuestIds = [], startAt, generatedAt } = {}) {
   const shell = createScheduleShell({ date, generatedAt });
   const config = normalizedSettings(date, settings);
-  const dayStartMs = Math.max(Date.parse(config.dayStartAt), startAt && isKstIso(startAt) ? Date.parse(startAt) : -Infinity);
-  const dayEndMs = Date.parse(config.dayEndAt);
-  if (dayStartMs >= dayEndMs) return normalizeSchedule({ ...shell, unscheduled: taskCandidates.map((quest) => ({ questId: quest.id, reason: "outside_schedule_window", remainingMinutes: quest.remainingMinutes || quest.estimateMinutes })).filter((item) => item.questId && item.remainingMinutes) });
-
-  const constraints = makeConstraints({ date, busyBlocks, lockedBlocks, breaks: config.breaks });
   const candidates = taskCandidates.map(toTaskCandidate).filter(Boolean).filter((candidate) => candidate.state !== "blocked");
   const candidateIds = new Set(candidates.map((candidate) => candidate.id));
   const ordering = orderedCandidates(candidates, completedQuestIds);
+  if (!config.timeConfigured) {
+    // Without a configured work window, keep the product useful as a small
+    // daily todo list. Items remain actionable/status-reportable, but no
+    // synthetic clock times, lunch blocks, or countdown schedule are invented.
+    const listItems = [...ordering.ordered, ...ordering.blocked].map((candidate, index) => ({
+      id: `todo-${candidate.id}`,
+      type: "focus",
+      questId: candidate.id,
+      title: candidate.title,
+      priority: candidate.priority,
+      sourceKind: candidate.sourceKind,
+      category: candidate.category,
+      status: candidate.state === "in_progress" ? "in_progress" : candidate.state === "deferred" ? "deferred" : "planned",
+      order: index,
+      timed: false,
+      locked: false,
+    }));
+    return normalizeSchedule({ ...shell, mode: "todo", timeConfigured: false, blocks: listItems, unscheduled: [] });
+  }
+  const dayStartMs = Math.max(Date.parse(config.dayStartAt), startAt && isKstIso(startAt) ? Date.parse(startAt) : -Infinity);
+  const dayEndMs = Date.parse(config.dayEndAt);
+  if (dayStartMs >= dayEndMs) return normalizeSchedule({ ...shell, timeConfigured: true, unscheduled: taskCandidates.map((quest) => ({ questId: quest.id, reason: "outside_schedule_window", remainingMinutes: quest.remainingMinutes || quest.estimateMinutes })).filter((item) => item.questId && item.remainingMinutes) });
+
+  const constraints = makeConstraints({ date, busyBlocks, lockedBlocks, breaks: config.breaks });
   const blocks = [...constraints];
   const unscheduled = [];
   const satisfiedDependencies = new Set(completedQuestIds);
@@ -176,7 +199,7 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
     if (remaining > 0) unscheduled.push({ questId: candidate.id, reason: "insufficient_time", remainingMinutes: remaining });
     else satisfiedDependencies.add(candidate.id);
   }
-  return normalizeSchedule({ ...shell, blocks, unscheduled });
+  return normalizeSchedule({ ...shell, timeConfigured: true, blocks, unscheduled });
 }
 
 /**
@@ -186,6 +209,7 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
  */
 export function getAvailableFocusSlots({ date, settings, busyBlocks = [], focusBlocks = [] } = {}) {
   const config = normalizedSettings(date, settings);
+  if (!config.timeConfigured) return [];
   const occupied = makeConstraints({
     date,
     busyBlocks: busyBlocks.filter((block) => block?.type === "busy" || !block?.type),
@@ -215,6 +239,9 @@ function nextFocus(schedule, nowMs) {
 export function resolveNowFocus(schedule, now) {
   const normalized = normalizeSchedule(schedule);
   if (!isKstIso(now)) throw new TypeError("resolveNowFocus needs a Korea-time ISO timestamp");
+  if (normalized.mode === "todo" || normalized.timeConfigured === false) {
+    return { state: "todo_list", block: null, nextFocus: null };
+  }
   const nowMs = Date.parse(now);
   const active = normalized.blocks.find((block) => Date.parse(block.startAt) <= nowMs && nowMs < Date.parse(block.endAt) && (block.type !== "focus" || isOpenFocus(block)));
   if (active?.type === "focus") return { state: "active_focus", block: active, nextFocus: nextFocus(normalized, nowMs) };

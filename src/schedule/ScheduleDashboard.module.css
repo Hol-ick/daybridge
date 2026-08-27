@@ -186,6 +186,7 @@
 .timelineRow { align-items: stretch; min-height: 70px; }
 
 .blockTime { width: 54px; padding-top: 16px; color: var(--quiet); text-align: right; }
+.blockTimePlaceholder { flex: 0 0 54px; }
 .track { position: relative; flex: 0 0 30px; }
 
 .rail {
@@ -288,6 +289,7 @@
   .blockActions { display: none; }
   .sectionTools { gap: 5px; }
   .blockTime { width: 46px; }
+  .blockTimePlaceholder { flex-basis: 46px; }
   .track { flex-basis: 23px; }
 }
 

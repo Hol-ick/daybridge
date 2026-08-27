@@ -87,6 +87,10 @@ test("a direct session inbox builds a schedule without a closeout board", async 
     const scheduleBody = await scheduleResponse.json();
     assert.equal(scheduleBody.schedule.inbox.accepted, 1);
     assert.equal(scheduleBody.schedule.blocks.find((block) => block.type === "focus")?.title, "현재 세션 작업");
+    assert.equal(scheduleBody.schedule.mode, "todo");
+    assert.equal(scheduleBody.schedule.timeConfigured, false);
+    assert.equal(scheduleBody.schedule.blocks.find((block) => block.type === "focus")?.startAt, undefined);
+    assert.equal(scheduleBody.nowFocus.state, "todo_list");
 
     const boardResponse = await fetch(`${baseUrl}/api/board?date=${DIRECT_DATE}`);
     assert.equal(boardResponse.status, 200);

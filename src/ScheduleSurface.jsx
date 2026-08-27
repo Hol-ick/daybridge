@@ -49,7 +49,7 @@ export default function ScheduleSurface() {
   }, [surface]);
 
   useEffect(() => {
-    if (surface !== "overlay" || !isTauri() || import.meta.env.DEV) return undefined;
+    if (surface !== "overlay" || !isTauri() || import.meta.env.DEV || !settings || settings.timeConfigured === false) return undefined;
     let timeoutId;
     let disposed = false;
     const checkWorkdayEnd = () => {
@@ -70,7 +70,7 @@ export default function ScheduleSurface() {
       disposed = true;
       if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, [surface]);
+  }, [surface, settings]);
 
   const loadSchedule = useCallback(async ({ rebuild = false, quiet = false } = {}) => {
     const requestDate = activityDate;
@@ -97,7 +97,7 @@ export default function ScheduleSurface() {
     try {
       const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule-settings`));
       setSettings(result.settings);
-      recordRuntimeEvent("settings_load_success", { dayStart: result.settings?.dayStart, dayEnd: result.settings?.dayEnd });
+      recordRuntimeEvent("settings_load_success", { dayStart: result.settings?.dayStart, dayEnd: result.settings?.dayEnd, timeConfigured: result.settings?.timeConfigured });
     } catch (error) {
       recordRuntimeEvent("settings_load_error", { error: error?.message || String(error) });
       setNotice("시간표 설정을 불러오지 못했어요");
@@ -115,7 +115,7 @@ export default function ScheduleSurface() {
       setNowFocus(result.nowFocus);
       await refresh();
       recordRuntimeEvent("manual_task_added", { date: activityDate, title, durationMinutes });
-      setNotice(`${title} · ${durationMinutes}분으로 배치했어요`);
+      setNotice(result.schedule?.mode === "todo" ? `${title}을 오늘 할 일에 추가했어요` : `${title} · ${durationMinutes}분으로 배치했어요`);
       return true;
     } catch (error) {
       recordRuntimeEvent("manual_task_add_error", { date: activityDate, title, durationMinutes, error: error?.message || String(error) });
@@ -256,6 +256,7 @@ export default function ScheduleSurface() {
     const nextSettings = {
       dayStart: form.get("dayStart"),
       dayEnd: form.get("dayEnd"),
+      timeConfigured: Boolean(form.get("dayStart") && form.get("dayEnd")),
       focusDurations: [50],
       defaultFocusMinutes: 50,
       bufferMinutes: Number(form.get("bufferMinutes")),
@@ -309,8 +310,8 @@ export default function ScheduleSurface() {
       <form className={styles.settingsSheet} onSubmit={saveSettings} aria-label="시간표 설정">
         <header><div><p>시간표 설정</p><strong>오늘의 리듬</strong></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="설정 닫기">×</button></header>
         <div className={styles.settingsRow}>
-          <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} required /></label>
-          <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} required /></label>
+          <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} /></label>
+          <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} /></label>
         </div>
         <div className={styles.settingsRow}>
           <div className={styles.fixedSetting}><span>집중 단위</span><strong>00–50분</strong></div>

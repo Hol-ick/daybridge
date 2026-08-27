@@ -34,7 +34,9 @@ function getScheduleBlocks(schedule) {
   const busy = schedule?.busyBlocks ?? [];
   const buffer = schedule?.bufferBlocks ?? [];
   const blocks = direct.length ? direct : [...busy, ...focus, ...buffer];
+  const listMode = schedule?.mode === "todo" || schedule?.timeConfigured === false;
   return [...blocks].filter((block) => !block?.hidden && scheduleBlockKind(block) !== "buffer").sort((left, right) => {
+    if (listMode) return (left.order ?? 0) - (right.order ?? 0);
     const leftTime = asDate(left.startAt ?? left.start)?.getTime() ?? 0;
     const rightTime = asDate(right.startAt ?? right.start)?.getTime() ?? 0;
     return leftTime - rightTime;
@@ -160,7 +162,7 @@ function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onSch
       data-tauri-drag-region="false"
     >
       <div className={styles.compactBlockTop}>
-        <span className={styles.compactBlockTime}>{label}</span>
+        {label ? <span className={styles.compactBlockTime}>{label}</span> : <span aria-hidden="true" />}
         {clickable ? <span className={styles.compactBlockStatus} data-testid={`now-focus-overlay-status-${block.id}`}>{blockStatusLabel(status)}</span> : null}
       </div>
       <OverlayTitle className={styles.compactBlockTitle} title={title} aria-label={title}>{title}</OverlayTitle>
@@ -181,8 +183,8 @@ function OverlaySettingsModal({ settings, privateMode, onClose, onSubmit }) {
           <button type="button" className={styles.settingsClose} onClick={onClose} aria-label="설정 닫기" data-tauri-drag-region="false">×</button>
         </header>
         <div className={styles.settingsRow}>
-          <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} required /></label>
-          <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} required /></label>
+          <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} /></label>
+          <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} /></label>
         </div>
         <div className={styles.settingsRow}>
           <div className={styles.fixedSetting}><span>집중 단위</span><strong>00–50분</strong></div>
@@ -228,17 +230,20 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     return () => window.clearInterval(timer);
   }, []);
   const block = getFocusBlock(nowFocus);
+  const blocks = useMemo(() => getScheduleBlocks(schedule), [schedule]);
+  const todoListMode = schedule?.mode === "todo" || schedule?.timeConfigured === false;
+  const todoCount = blocks.filter((item) => scheduleBlockKind(item) === "focus").length;
   const blockKind = block?.kind ?? block?.type ?? block?.blockType;
   const isBusy = blockKind === "busy" || blockKind === "calendar";
   const sourceTitle = isBusy ? (block?.hidden ? block?.title ?? "점심시간" : "일정 중") : block?.displayTitle ?? block?.scheduleTitle ?? block?.questTitle ?? block?.taskTitle ?? block?.title ?? "다음 집중 시간 준비 중";
   const title = privateMode && block ? "집중 시간" : sourceTitle;
   const idle = !block;
-  const showIdleTitle = idle;
+  const showIdleTitle = idle || todoListMode;
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
   const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "";
   const workdayCountdown = getWorkdayCountdown(currentTime);
-  const blocks = useMemo(() => getScheduleBlocks(schedule), [schedule]);
+  const summaryTitle = todoListMode ? (todoCount ? `오늘 할 일 · ${todoCount}개` : "오늘 할 일") : idle ? workdayCountdown.label : title;
 
   useLayoutEffect(() => {
     const nextRects = new Map();
@@ -284,7 +289,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     flipRectsRef.current = nextRects;
   }, [blocks, expanded]);
 
-  const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks]);
+  const movableBlocks = useMemo(() => todoListMode ? [] : blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks, todoListMode]);
   const findDropTarget = (clientX, clientY) => {
     const element = document.elementFromPoint(clientX, clientY);
     const node = element instanceof Element ? element : null;
@@ -510,7 +515,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   return (
     <aside className={[styles.overlay, modalOpen ? styles.modalOpen : ""].filter(Boolean).join(" ")} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
       <div className={surfaceClassName} onPointerDown={handlePointerDown} onMouseDown={handlePointerDown} data-testid="now-focus-overlay-surface">
-        <section className={styles.expandedPanel} aria-label="오늘 시간표 관리" aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
+        <section className={styles.expandedPanel} aria-label={todoListMode ? "오늘 할 일 목록" : "오늘 시간표 관리"} aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
           {blocks.length ? (
             <ol className={styles.compactList}>
               {blocks.map((item) => (
@@ -518,7 +523,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
                   key={item.id ?? `${item.startAt}-${scheduleBlockTitle(item)}`}
                   block={item}
                   privateMode={privateMode}
-                  onMove={onMoveBlock}
+                  onMove={todoListMode ? undefined : onMoveBlock}
                   onStatusChange={onReportBlock}
                   onScheduleDragStart={handleScheduleDragStart}
                   onKeyboardMove={handleKeyboardMove}
@@ -531,7 +536,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
                 />
               ))}
             </ol>
-          ) : <p className={styles.compactEmpty}>오늘 배치된 일정이 없습니다.</p>}
+          ) : <p className={styles.compactEmpty}>{todoListMode ? "오늘 할 일이 없습니다." : "오늘 배치된 일정이 없습니다."}</p>}
           {draggingBlockId ? (
             <div
               className={[styles.trashZone, trashActive ? styles.trashActive : ""].filter(Boolean).join(" ")}
@@ -585,20 +590,22 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
           {showIdleTitle ? (
             <OverlayTitle
               data-testid="now-focus-overlay-title"
-              aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
-            >{workdayCountdown.label}</OverlayTitle>
+              aria-label={todoListMode ? summaryTitle : `${workdayCountdown.label} ${workdayCountdown.time}`}
+            >{summaryTitle}</OverlayTitle>
           ) : (
             <OverlayTitle data-testid="now-focus-overlay-title">{title}</OverlayTitle>
           )}
         </button>
-        <time
-          className={styles.timer}
-          data-testid="now-focus-overlay-leave-time"
-          aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
-        >
-          {block ? <span className={styles.timerLabel}>{workdayCountdown.label}</span> : null}
-          <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
-        </time>
+        {!todoListMode ? (
+          <time
+            className={styles.timer}
+            data-testid="now-focus-overlay-leave-time"
+            aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
+          >
+            {block ? <span className={styles.timerLabel}>{workdayCountdown.label}</span> : null}
+            <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
+          </time>
+        ) : null}
         </div>
         {settingsOpen ? <OverlaySettingsModal settings={settings} privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} /> : null}
       </div>

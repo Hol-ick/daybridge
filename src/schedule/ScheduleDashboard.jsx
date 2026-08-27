@@ -29,7 +29,9 @@ function normalizeBlocks(schedule) {
   const buffer = schedule?.bufferBlocks ?? [];
   const blocks = direct.length ? direct : [...busy, ...focus, ...buffer];
 
+  const listMode = schedule?.mode === "todo" || schedule?.timeConfigured === false;
   return [...blocks].filter((block) => !block?.hidden && blockKind(block) !== "buffer").sort((left, right) => {
+    if (listMode) return (left.order ?? 0) - (right.order ?? 0);
     const leftTime = asDate(left.startAt ?? left.start)?.getTime() ?? 0;
     const rightTime = asDate(right.startAt ?? right.start)?.getTime() ?? 0;
     return leftTime - rightTime;
@@ -60,12 +62,13 @@ function isCurrentBlock(block, nowFocus) {
   return Boolean(currentId && block?.id === currentId);
 }
 
-function TimelineBlock({ block, nowFocus, onOpenQuest, onCompleteBlock, onDeferBlock }) {
+function TimelineBlock({ block, nowFocus, onOpenQuest, onCompleteBlock, onDeferBlock, listMode = false }) {
   const kind = blockKind(block);
   const current = isCurrentBlock(block, nowFocus);
   const title = getBlockTitle(block);
   const start = formatTime(block.startAt ?? block.start ?? block.startTime);
   const end = formatTime(block.endAt ?? block.end ?? block.endTime);
+  const hasTime = !listMode && start !== "—";
   const blockId = block.id;
   const questId = block.questId ?? block.taskId ?? block.id;
 
@@ -88,7 +91,7 @@ function TimelineBlock({ block, nowFocus, onOpenQuest, onCompleteBlock, onDeferB
 
   return (
     <li className={styles.timelineRow} data-testid={`schedule-block-${blockId ?? "unknown"}`}>
-      <time className={styles.blockTime}>{start}</time>
+      {hasTime ? <time className={styles.blockTime}>{start}</time> : <span className={styles.blockTimePlaceholder} aria-hidden="true" />}
       <div className={styles.track} aria-hidden="true">
         <span className={styles.rail} />
         <span className={styles.blockDot} />
@@ -97,12 +100,12 @@ function TimelineBlock({ block, nowFocus, onOpenQuest, onCompleteBlock, onDeferB
         {interactive ? (
           <button type="button" className={styles.blockOpen} onClick={handleOpenQuest} data-testid={`schedule-block-open-${blockId}`}>
             <span>{title}</span>
-            <small>{end}</small>
+            {hasTime ? <small>{end}</small> : null}
           </button>
         ) : (
           <div className={styles.blockStatic}>
             <span>{title}</span>
-            <small>{end}</small>
+            {hasTime ? <small>{end}</small> : null}
           </div>
         )}
         {kind === "focus" ? (
@@ -134,14 +137,15 @@ export default function ScheduleDashboard({
   onAddManualTask,
 }) {
   const focus = getFocusBlock(nowFocus);
+  const listMode = schedule?.mode === "todo" || schedule?.timeConfigured === false;
   const focusKind = blockKind(focus);
   const focusId = focusKind === "busy" ? "" : focus?.id ?? nowFocus?.blockId;
-  const focusTitle = focusKind === "busy" ? "일정 중" : focus?.displayTitle ?? focus?.scheduleTitle ?? focus?.questTitle ?? focus?.taskTitle ?? focus?.title ?? "다음 집중 시간 준비 중";
+  const focusTitle = listMode ? "오늘 할 일을 하나씩 진행하세요" : focusKind === "busy" ? "일정 중" : focus?.displayTitle ?? focus?.scheduleTitle ?? focus?.questTitle ?? focus?.taskTitle ?? focus?.title ?? "다음 집중 시간 준비 중";
   const focusStart = formatTime(focus?.startAt ?? focus?.start ?? focus?.startTime);
   const focusEnd = formatTime(focus?.endAt ?? focus?.end ?? focus?.endTime);
   const blocks = normalizeBlocks(schedule);
   const unscheduledCount = getUnscheduledCount(schedule);
-  const scheduleLabel = schedule?.label ?? schedule?.dateLabel ?? "오늘 시간표";
+  const scheduleLabel = listMode ? "오늘 할 일" : schedule?.label ?? schedule?.dateLabel ?? "오늘 시간표";
   const coverageState = calendarConnection?.state ?? calendarCoverage?.state ?? calendarCoverage ?? "unknown";
   const coverageLabel = coverageState === "connected"
     ? "Google Calendar 연결됨"
@@ -167,27 +171,27 @@ export default function ScheduleDashboard({
       </header>
 
       <section className={styles.nowCard} aria-labelledby="now-focus-title" data-testid="schedule-now-focus">
-        <p id="now-focus-title">지금 할 일</p>
+        <p id="now-focus-title">{listMode ? "오늘 할 일" : "지금 할 일"}</p>
         <div className={styles.nowContent}>
           <div>
-            <span className={styles.nowTime}>{focusStart} — {focusEnd}</span>
+            {!listMode ? <span className={styles.nowTime}>{focusStart} — {focusEnd}</span> : null}
             <h2>{focusTitle}</h2>
           </div>
-          <button
-            type="button"
-            className={styles.nowComplete}
-            onClick={() => focusId && onCompleteBlock?.(focusId)}
-            disabled={!focusId || !onCompleteBlock}
-            data-testid="schedule-now-focus-complete"
-          >
-            완료
-          </button>
+          {!listMode ? <button
+              type="button"
+              className={styles.nowComplete}
+              onClick={() => focusId && onCompleteBlock?.(focusId)}
+              disabled={!focusId || !onCompleteBlock}
+              data-testid="schedule-now-focus-complete"
+            >
+              완료
+            </button> : null}
         </div>
       </section>
 
       <section className={styles.timelineSection} aria-labelledby="timeline-title">
         <div className={styles.sectionHeading}>
-          <h2 id="timeline-title">시간표</h2>
+          <h2 id="timeline-title">{listMode ? "목록" : "시간표"}</h2>
           <div className={styles.sectionTools}>
             {unscheduledCount > 0 ? <span data-testid="schedule-unscheduled-count">미배치 {unscheduledCount}</span> : null}
             <ManualTaskForm onSubmit={onAddManualTask} />
@@ -203,11 +207,12 @@ export default function ScheduleDashboard({
                 onOpenQuest={onOpenQuest}
                 onCompleteBlock={onCompleteBlock}
                 onDeferBlock={onDeferBlock}
+                listMode={listMode}
               />
             ))}
           </ol>
         ) : (
-          <div className={styles.empty} data-testid="schedule-empty">시간표를 만들면 오늘의 집중 시간이 여기에 놓입니다.</div>
+          <div className={styles.empty} data-testid="schedule-empty">{listMode ? "오늘 할 일이 없습니다." : "시간표를 만들면 오늘의 집중 시간이 여기에 놓입니다."}</div>
         )}
       </section>
     </main>

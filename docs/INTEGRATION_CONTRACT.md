@@ -166,7 +166,7 @@ DailySchedule + 사용자 receipt
 2. `accepted` 중 완료·차단 후보를 제외하고, 누락된 의존성은 숨기지 않고 `dependency_missing`으로 표시한다.
 3. 기존 receipt와 같은 `id`는 상태·완료 step을 이어받는다. 날짜가 바뀌고 미완료면 `carryover`로 재배치한다.
 4. briefing 후보를 먼저 정렬하고 routine 후보는 남는 슬롯에만 넣는다. 우선순위는 `must → should → could`다.
-5. Daybridge 설정의 근무시간(기본 09:00–18:00), 점심시간(기본 11:30–13:00), Calendar busy block을 합친 뒤 `HH:00–HH:50` 슬롯만 생성한다.
+5. Daybridge에서 근무시간을 설정한 경우에만 근무시간·점심시간(11:30–13:00)·Calendar busy block을 합쳐 `HH:00–HH:50` 슬롯을 생성한다. 시간을 비워 두면 `mode=todo`, `timeConfigured=false`인 무시간 오늘 할 일 목록을 반환한다.
 6. 후보에 고정 시각이 있으면 후보를 조용히 이동하지 않고 `fixed_time_not_allowed`로 제외한다. 회의·약속은 Calendar에서 읽어 busy block으로만 반영한다.
 7. 시간이 부족하면 후보를 삭제하지 않고 `unscheduled`에 `insufficient_time`과 남은 단위를 기록한다.
 8. `review_queue`와 `excluded`는 화면·receipt에서 확인 가능해야 하지만 자동 작업으로 승격하지 않는다.

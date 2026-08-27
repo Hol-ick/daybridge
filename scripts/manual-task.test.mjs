@@ -35,6 +35,7 @@ async function createBoard(dataDir) {
   const boards = join(dataDir, "boards");
   await mkdir(boards, { recursive: true });
   await writeFile(join(dataDir, "config.json"), JSON.stringify({ handoffSinkDir: null }));
+  await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "09:00", dayEnd: "18:00", timeConfigured: true, bufferMinutes: 10 }));
   await writeFile(join(boards, `${DATE}.json`), JSON.stringify({ schemaVersion: 2, activityDate: DATE, quests: [], sourceWarnings: [] }));
 }
 

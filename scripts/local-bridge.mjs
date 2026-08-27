@@ -43,7 +43,7 @@ function inboxPath(activityDate) { return join(DATA_DIR, "inbox", `schedule-${ac
 function codexCalendarCachePath(activityDate) { return join(DATA_DIR, "calendar-codex-busy", activityDate + ".json"); }
 const RUNTIME_LOG_PATH = join(DATA_DIR, "logs", "bridge-events.ndjson");
 let runtimeLogQueue = Promise.resolve();
-const LOG_DETAIL_KEYS = new Set(["date", "activityDate", "surface", "status", "state", "error", "message", "reason", "connection", "sourceKind", "event", "clientOccurredAt", "announce", "quiet", "rebuild", "mode", "window", "debug", "blocks", "focusBlocks", "nowFocus", "questCount", "accepted", "excluded", "valid", "exists", "inboxChanged", "boardExists", "inboxExists", "blockId", "targetBlockId", "position", "durationMinutes", "title", "dayStart", "dayEnd"]);
+const LOG_DETAIL_KEYS = new Set(["date", "activityDate", "surface", "status", "state", "error", "message", "reason", "connection", "sourceKind", "event", "clientOccurredAt", "announce", "quiet", "rebuild", "mode", "window", "debug", "timeConfigured", "blocks", "focusBlocks", "nowFocus", "questCount", "accepted", "excluded", "valid", "exists", "inboxChanged", "boardExists", "inboxExists", "blockId", "targetBlockId", "position", "durationMinutes", "title", "dayStart", "dayEnd"]);
 function logDetails(details) {
   if (!details || typeof details !== "object" || Array.isArray(details)) return {};
   const result = {};
@@ -385,8 +385,12 @@ async function handleSchedule(url) {
   const existing = await loadSchedule(DATA_DIR, activityDate);
   const inbox = await readScheduleInbox(activityDate);
   const inboxChanged = existing && inbox.valid && existing.inbox?.fingerprint !== inbox.fingerprint;
-  const schedule = (!existing || inboxChanged) ? await rebuildSchedule(activityDate) : existing;
-  logRuntimeEvent("schedule_read", { date: activityDate, exists: Boolean(schedule), inboxExists: inbox.exists, valid: inbox.valid, accepted: inbox.tasks.length, excluded: inbox.excluded.length, inboxChanged, blocks: Array.isArray(schedule?.blocks) ? schedule.blocks.length : 0, focusBlocks: Array.isArray(schedule?.blocks) ? schedule.blocks.filter((block) => block?.type === "focus").length : 0 });
+  const settings = await loadScheduleSettings(DATA_DIR);
+  const existingMode = existing?.mode === "todo" || existing?.timeConfigured === false ? "todo" : "timed";
+  const requestedMode = settings.timeConfigured ? "timed" : "todo";
+  const settingsChanged = Boolean(existing && existingMode !== requestedMode);
+  const schedule = (!existing || inboxChanged || settingsChanged) ? await rebuildSchedule(activityDate) : existing;
+  logRuntimeEvent("schedule_read", { date: activityDate, exists: Boolean(schedule), inboxExists: inbox.exists, valid: inbox.valid, accepted: inbox.tasks.length, excluded: inbox.excluded.length, inboxChanged, settingsChanged, mode: schedule?.mode || "timed", timeConfigured: schedule?.timeConfigured !== false, blocks: Array.isArray(schedule?.blocks) ? schedule.blocks.length : 0, focusBlocks: Array.isArray(schedule?.blocks) ? schedule.blocks.filter((block) => block?.type === "focus").length : 0 });
   if (!schedule) return { status: 404, body: { error: "No quest board exists for this date." } };
   return { status: 200, body: { schedule, nowFocus: nowFocus(schedule) } };
 }

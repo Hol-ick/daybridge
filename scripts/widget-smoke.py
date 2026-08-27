@@ -9,8 +9,9 @@ from playwright.sync_api import sync_playwright
 
 DEFAULT_SETTINGS = json.dumps({
     "settings": {
-        "dayStart": "09:00",
-        "dayEnd": "18:00",
+        "dayStart": "",
+        "dayEnd": "",
+        "timeConfigured": False,
         "defaultFocusMinutes": 50,
         "bufferMinutes": 10,
     }
@@ -20,6 +21,8 @@ EMPTY_SCHEDULE = json.dumps({
     "schedule": {
         "schemaVersion": 1,
         "date": "2026-08-24",
+        "mode": "todo",
+        "timeConfigured": False,
         "timezone": "Asia/Seoul",
         "generatedAt": "2026-08-24T00:00:00+09:00",
         "blocks": [],
@@ -27,6 +30,14 @@ EMPTY_SCHEDULE = json.dumps({
         "calendar": {"coverage": "attention"},
     },
     "nowFocus": {"state": "free_time", "block": None, "nextFocus": None},
+})
+TODO_BLOCKS = [
+    {"id": "todo-linux", "type": "focus", "questId": "quest-linux", "title": "리눅스 학습", "order": 0, "timed": False, "status": "planned"},
+    {"id": "todo-docs", "type": "focus", "questId": "quest-docs", "title": "문서 검토", "order": 1, "timed": False, "status": "in_progress"},
+]
+TODO_SCHEDULE = json.dumps({
+    "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": TODO_BLOCKS, "unscheduled": [], "calendar": {"coverage": "attention"}},
+    "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
 })
 FUNCTIONAL_BOARD = json.dumps({
     "board": {
@@ -176,8 +187,8 @@ def check_dashboard(browser) -> None:
 
     page.locator('[data-testid="schedule-settings"]').click()
     page.wait_for_selector('form[aria-label="시간표 설정"]')
-    assert page.get_by_label("시작 시간").input_value() == "09:00"
-    assert page.get_by_label("마감 시간").input_value() == "18:00"
+    assert page.get_by_label("시작 시간").input_value() == ""
+    assert page.get_by_label("마감 시간").input_value() == ""
     assert page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
     settings_box = page.locator('form[aria-label="시간표 설정"]').bounding_box()
     assert settings_box and round(settings_box["width"]) == 288
@@ -291,22 +302,14 @@ def check_overlay(browser) -> None:
     leave_timer = page.locator('[data-testid="now-focus-overlay-leave-time"]')
     assert page.locator('[data-testid="now-focus-overlay-complete"]').count() == 0
     assert page.locator('[data-testid^="now-focus-overlay-defer-"]').count() == 0
-    assert leave_timer.count() == 1
+    assert leave_timer.count() == 0
     idle_label = re.sub(r"\s+", " ", page.locator('[data-testid="now-focus-overlay-title"]').text_content() or "").strip()
-    assert re.fullmatch(r"(근무 시작까지|점심시간까지|오후 시작까지|퇴근시간까지|근무 종료)", idle_label), idle_label
-    leave_timer_value = page.locator('[data-testid="now-focus-overlay-leave-time-value"]')
-    assert re.fullmatch(r"\d{2}:\d{2}", leave_timer_value.text_content() or "")
-    assert page.locator('[data-testid="now-focus-overlay-leave-time"] [class*=timerLabel]').count() == 0
-    assert page.locator('[data-testid="now-focus-overlay-title"]').get_attribute("aria-label") == f"{idle_label} {leave_timer_value.text_content().strip()}"
+    assert re.fullmatch(r"오늘 할 일(?: · \d+개)?", idle_label), idle_label
+    assert page.locator('[data-testid="now-focus-overlay-title"]').get_attribute("aria-label") == idle_label
     title_style = page.locator('[data-testid="now-focus-overlay-title"]').evaluate(
         "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
     )
     assert title_style["fontSize"] >= 17 and title_style["fontWeight"] >= 800, title_style
-    if leave_timer.count():
-        leave_style = page.locator('[data-testid="now-focus-overlay-leave-time-value"]').evaluate(
-            "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
-        )
-        assert leave_style["fontSize"] >= 27 and leave_style["fontWeight"] >= 800, leave_style
     assert page.locator('[data-testid="now-focus-overlay"] > div').evaluate("element => getComputedStyle(element).cursor") == "grab"
     assert page.locator('[data-testid="schedule-dashboard"]').count() == 0
     assert page.locator('[data-testid="quest-item"]').count() == 0
@@ -370,11 +373,45 @@ def check_overlay(browser) -> None:
     page.locator('[data-testid="now-focus-overlay-settings"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-settings-modal"]')
     page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 420")
-    assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="dayStart"]').input_value() == "09:00"
+    assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="dayStart"]').input_value() == ""
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
     page.locator('[data-testid="now-focus-overlay-settings-modal"] [aria-label="설정 닫기"]').click()
     assert page.locator('[data-testid="now-focus-overlay-settings-modal"]').count() == 0
     page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 288")
+    assert_no_page_errors(errors)
+    context.close()
+
+
+def check_overlay_todo_items(browser) -> None:
+    """Prove an unconfigured day renders as an untimed actionable list."""
+    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=TODO_SCHEDULE),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/schedule-settings",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-title]')?.textContent.includes('오늘 할 일 · 2개')")
+    title = page.locator('[data-testid="now-focus-overlay-title"]')
+    assert "오늘 할 일 · 2개" in (title.text_content() or "")
+    assert page.locator('[data-testid="now-focus-overlay-leave-time"]').count() == 0
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_selector('[data-testid="now-focus-overlay-block-todo-linux"]')
+    assert page.locator('[data-testid^="now-focus-overlay-block-"]').count() == 2
+    assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"]').get_attribute("data-drag-enabled") == "false"
+    assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"] [class*=compactBlockTime]').count() == 0
+    assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"] [class*=compactBlockTitle]').inner_text() == "리눅스 학습"
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-todo-items.png", full_page=True)
     assert_no_page_errors(errors)
     context.close()
 
@@ -532,6 +569,7 @@ def main() -> None:
         check_dashboard(browser)
         check_dashboard_actions(browser)
         check_overlay(browser)
+        check_overlay_todo_items(browser)
         check_overlay_long_title(browser)
         check_overlay_reorder(browser)
         browser.close()

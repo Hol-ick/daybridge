@@ -33,6 +33,7 @@ async function startBridge(dataDir) {
 async function createBoard(dataDir) {
   await mkdir(join(dataDir, "boards"), { recursive: true });
   await writeFile(join(dataDir, "config.json"), JSON.stringify({ handoffSinkDir: null }));
+  await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "09:00", dayEnd: "18:00", timeConfigured: true, bufferMinutes: 10 }));
   const quests = ["GitHub Actions에서 Verify web-buyback 배포 상태와 첫 실패 로그 확인", "리눅스 학습", "내일 계획"].map((title, index) => ({
     id: `quest-${index + 1}`,
     title,

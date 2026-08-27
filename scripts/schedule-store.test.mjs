@@ -37,6 +37,27 @@ test("settings persist atomically in the injected data directory", async () => {
   } finally { remove(dataDir); }
 });
 
+test("empty time settings keep the store in lightweight todo-list mode", async () => {
+  const dataDir = temporaryStore();
+  try {
+    const settings = await saveScheduleSettings(dataDir, { dayStart: "", dayEnd: "", bufferMinutes: 10 });
+    assert.equal(settings.dayStart, "");
+    assert.equal(settings.dayEnd, "");
+    assert.equal(settings.timeConfigured, false);
+    assert.deepEqual(await loadScheduleSettings(dataDir), settings);
+  } finally { remove(dataDir); }
+});
+
+test("legacy implicit 09:00–18:00 defaults migrate to empty time settings", async () => {
+  const dataDir = temporaryStore();
+  try {
+    const migrated = await saveScheduleSettings(dataDir, { dayStart: "09:00", dayEnd: "18:00" });
+    assert.equal(migrated.timeConfigured, false);
+    const explicit = await saveScheduleSettings(dataDir, { dayStart: "09:00", dayEnd: "18:00", timeConfigured: true });
+    assert.equal(explicit.timeConfigured, true);
+  } finally { remove(dataDir); }
+});
+
 test("schedule persistence removes calendar metadata and never saves busy event ranges", async () => {
   const dataDir = temporaryStore();
   try {
