@@ -5,6 +5,7 @@ import { bindOverlayMagnet, currentSurface, placeOverlayInCorner } from "./deskt
 import Item from "./todometer/components/Item.jsx";
 import NowFocusOverlay from "./schedule/NowFocusOverlay.jsx";
 import ScheduleDashboard from "./schedule/ScheduleDashboard.jsx";
+import { resolveActivityDate } from "./schedule/activity-date.js";
 import { getWorkdayCountdown } from "./schedule/workday-clock.js";
 import styles from "./ScheduleSurface.module.css";
 
@@ -36,7 +37,9 @@ export default function ScheduleSurface() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [privateMode, setPrivateMode] = useState(initialPrivateMode);
   const [notice, setNotice] = useState("");
-  const activityDate = board?.activityDate || kstDate();
+  // The overlay always represents today. A board persisted while the bridge
+  // was unavailable must not pin schedule requests to yesterday's date.
+  const activityDate = resolveActivityDate(board, kstDate());
 
   useEffect(() => {
     document.body.dataset.surface = surface;
