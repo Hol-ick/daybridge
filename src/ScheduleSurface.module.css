@@ -135,7 +135,24 @@
 
 .save:hover { background: #84e7bb; }
 .save:active { transform: translateY(1px); }
+.utility {
+  min-height: 32px;
+  border: 1px solid rgb(98 220 165 / 34%);
+  border-radius: 7px;
+  background: rgb(98 220 165 / 8%);
+  color: #bff8da;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: -.02em;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+}
+.utility:hover:not(:disabled) { border-color: rgb(98 220 165 / 68%); background: rgb(98 220 165 / 16%); color: #effff6; }
+.utility:active:not(:disabled) { transform: translateY(1px); }
+.utility:disabled { cursor: wait; opacity: .58; }
 .save:focus-visible,
+.utility:focus-visible,
 .settingsSheet header button:focus-visible { outline: 2px solid var(--green, #62dca5); outline-offset: 2px; }
 
 @media (max-width: 600px) {

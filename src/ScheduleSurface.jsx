@@ -38,6 +38,7 @@ export default function ScheduleSurface() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [privateMode, setPrivateMode] = useState(initialPrivateMode);
   const [notice, setNotice] = useState("");
+  const [refreshingWidget, setRefreshingWidget] = useState(false);
   // The overlay always represents today. A board persisted while the bridge
   // was unavailable must not pin schedule requests to yesterday's date.
   const activityDate = resolveActivityDate(board, kstDate());
@@ -80,6 +81,7 @@ export default function ScheduleSurface() {
         ? fetch(`${BRIDGE_URL}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: requestDate }) })
         : fetch(`${BRIDGE_URL}/api/schedule?date=${requestDate}`);
       const result = await readJson(await request);
+      if (!result?.schedule) throw new Error("schedule payload missing");
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       setCalendarCoverage(result.schedule?.calendar?.coverage || "attention");
@@ -96,11 +98,14 @@ export default function ScheduleSurface() {
   const loadSettings = useCallback(async () => {
     try {
       const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule-settings`));
+      if (!result?.settings) throw new Error("settings payload missing");
       setSettings(result.settings);
       recordRuntimeEvent("settings_load_success", { dayStart: result.settings?.dayStart, dayEnd: result.settings?.dayEnd, timeConfigured: result.settings?.timeConfigured });
+      return result;
     } catch (error) {
       recordRuntimeEvent("settings_load_error", { error: error?.message || String(error) });
       setNotice("시간표 설정을 불러오지 못했어요");
+      return null;
     }
   }, []);
 
@@ -127,6 +132,7 @@ export default function ScheduleSurface() {
   const loadCalendarStatus = useCallback(async ({ quiet = false } = {}) => {
     try {
       const result = await readJson(await fetch(`${BRIDGE_URL}/api/calendar/status`));
+      if (!result?.calendar) throw new Error("calendar payload missing");
       setCalendarConnection(result.calendar || { state: "attention", reason: "status_unavailable" });
       recordRuntimeEvent("calendar_status", { state: result.calendar?.state, reason: result.calendar?.reason });
       return result.calendar;
@@ -254,6 +260,30 @@ export default function ScheduleSurface() {
     void loadSettings();
   }, [loadSettings]);
 
+  const refreshWidget = useCallback(async () => {
+    if (refreshingWidget) return;
+    setRefreshingWidget(true);
+    try {
+      if (isTauri()) await invoke("show_overlay");
+      const [scheduleResult, calendarResult] = await Promise.all([
+        loadSchedule({ quiet: true }),
+        loadCalendarStatus({ quiet: true }),
+      ]);
+      if (!scheduleResult || !calendarResult) throw new Error("refresh data unavailable");
+      if (settingsOpen) {
+        const settingsResult = await loadSettings();
+        if (!settingsResult) throw new Error("settings refresh unavailable");
+      }
+      recordRuntimeEvent("overlay_manual_refresh", { source: "settings", surface });
+      setNotice("위젯을 새로고침했어요");
+    } catch (error) {
+      recordRuntimeEvent("overlay_manual_refresh_error", { source: "settings", surface, error: error?.message || String(error) });
+      setNotice("위젯을 새로고침하지 못했어요");
+    } finally {
+      setRefreshingWidget(false);
+    }
+  }, [loadCalendarStatus, loadSchedule, loadSettings, refreshingWidget, settingsOpen, surface]);
+
   const connectCalendar = useCallback(async () => {
     try {
       const result = await readJson(await fetch(`${BRIDGE_URL}/api/calendar/connect`, { method: "POST" }));
@@ -311,6 +341,8 @@ export default function ScheduleSurface() {
       onOpenSettings={openSettings}
       onCloseSettings={() => setSettingsOpen(false)}
       onSaveSettings={saveSettings}
+      onRefreshWidget={refreshWidget}
+      refreshingWidget={refreshingWidget}
     />;
   }
 
@@ -342,6 +374,7 @@ export default function ScheduleSurface() {
           <label>완충 시간<select name="bufferMinutes" defaultValue={String(settings.bufferMinutes)}><option value="0">없음</option><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option></select></label>
         </div>
         <label className={styles.checkbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
+        <button className={styles.utility} type="button" onClick={refreshWidget} disabled={refreshingWidget} data-testid="schedule-widget-refresh">{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</button>
         <button className={styles.save} type="submit">저장하고 재배치</button>
       </form>
     </div> : null}

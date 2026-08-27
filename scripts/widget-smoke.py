@@ -196,6 +196,11 @@ def check_dashboard(browser) -> None:
     artifact = Path("test-artifacts/daybridge-schedule-dashboard.png")
     artifact.parent.mkdir(exist_ok=True)
     page.screenshot(path=str(artifact), full_page=True)
+    refresh_button = page.locator('[data-testid="schedule-widget-refresh"]')
+    assert refresh_button.is_visible()
+    refresh_button.click()
+    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('위젯을 새로고침했어요')")
+    assert refresh_button.inner_text() == "위젯 새로고침"
     assert_no_page_errors(errors)
     context.close()
 
@@ -285,6 +290,10 @@ def check_overlay(browser) -> None:
     context.route(
         "http://127.0.0.1:39393/api/schedule-settings",
         lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
     )
     page = context.new_page()
     errors: list[str] = []
@@ -377,6 +386,10 @@ def check_overlay(browser) -> None:
     page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 420")
     assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="dayStart"]').input_value() == ""
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
+    overlay_refresh = page.locator('[data-testid="now-focus-overlay-refresh"]')
+    assert overlay_refresh.is_visible()
+    overlay_refresh.click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-refresh]')?.textContent?.includes('위젯 새로고침')")
     page.locator('[data-testid="now-focus-overlay-settings-modal"] [aria-label="설정 닫기"]').click()
     assert page.locator('[data-testid="now-focus-overlay-settings-modal"]').count() == 0
     page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 288")

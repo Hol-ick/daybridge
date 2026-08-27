@@ -135,6 +135,8 @@ pnpm dev
 
 The compact card should show at most three current focus quests. Select **전체 보기** to inspect all parent quests, change a status, and open **진행 보고**. In the native shell, use `pnpm dev:widget`; an OS close request on the persistent overlay is ignored and logged, while the tray menu provides **위젯 다시 표시** and the explicit Quit command. The packaged widget also reasserts visibility and topmost order periodically without taking focus from the active application.
 
+위젯이 보이지 않을 때는 대시보드 또는 오버레이의 **설정**을 열어 **위젯 새로고침**을 누른다. 이 동작은 저장·재배치와 분리되어 위젯 표시를 복구하고 일정·캘린더 상태를 다시 읽는다. 성공하면 `위젯을 새로고침했어요` 알림과 `overlay_manual_refresh` 이벤트가 남고, 조회 실패는 `overlay_manual_refresh_error`로 기록된다.
+
 For an installer build, check the native prerequisites first:
 
 ```powershell

@@ -225,6 +225,10 @@
 .settingsCheckbox input { accent-color: #62dca5; }
 .settingsSave { min-height: 38px; border: 1px solid #74e7b1; border-radius: 6px; background: #74e7b1; color: #0d2118; cursor: pointer; font: inherit; font-size: 12px; font-weight: 900; }
 .settingsSave:hover { background: #a0f4c8; }
+.settingsUtility { min-height: 32px; border: 1px solid rgb(98 220 165 / 34%); border-radius: 6px; background: rgb(98 220 165 / 8%); color: #bff8da; cursor: pointer; font: inherit; font-size: 11px; font-weight: 800; transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease; }
+.settingsUtility:hover:not(:disabled) { border-color: rgb(98 220 165 / 68%); background: rgb(98 220 165 / 16%); color: #effff6; }
+.settingsUtility:active:not(:disabled) { transform: translateY(1px); }
+.settingsUtility:disabled { cursor: wait; opacity: .58; }
 .settingsLoading { color: #b9bdc9; font-size: 11px; font-weight: 750; }
 
 .open {
