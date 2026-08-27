@@ -596,16 +596,14 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
             <OverlayTitle data-testid="now-focus-overlay-title">{title}</OverlayTitle>
           )}
         </button>
-        {!todoListMode ? (
-          <time
-            className={styles.timer}
-            data-testid="now-focus-overlay-leave-time"
-            aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
-          >
-            {block ? <span className={styles.timerLabel}>{workdayCountdown.label}</span> : null}
-            <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
-          </time>
-        ) : null}
+        <time
+          className={styles.timer}
+          data-testid="now-focus-overlay-leave-time"
+          aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
+        >
+          <span className={styles.timerLabel}>{workdayCountdown.label}</span>
+          <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
+        </time>
         </div>
         {settingsOpen ? <OverlaySettingsModal settings={settings} privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} /> : null}
       </div>

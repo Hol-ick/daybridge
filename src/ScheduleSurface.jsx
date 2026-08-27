@@ -49,7 +49,7 @@ export default function ScheduleSurface() {
   }, [surface]);
 
   useEffect(() => {
-    if (surface !== "overlay" || !isTauri() || import.meta.env.DEV || !settings || settings.timeConfigured === false) return undefined;
+    if (surface !== "overlay" || !isTauri() || import.meta.env.DEV) return undefined;
     let timeoutId;
     let disposed = false;
     const checkWorkdayEnd = () => {
@@ -70,7 +70,7 @@ export default function ScheduleSurface() {
       disposed = true;
       if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, [surface, settings]);
+  }, [surface]);
 
   const loadSchedule = useCallback(async ({ rebuild = false, quiet = false } = {}) => {
     const requestDate = activityDate;

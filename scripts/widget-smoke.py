@@ -302,7 +302,9 @@ def check_overlay(browser) -> None:
     leave_timer = page.locator('[data-testid="now-focus-overlay-leave-time"]')
     assert page.locator('[data-testid="now-focus-overlay-complete"]').count() == 0
     assert page.locator('[data-testid^="now-focus-overlay-defer-"]').count() == 0
-    assert leave_timer.count() == 0
+    assert leave_timer.count() == 1
+    assert re.fullmatch(r"\d{2}:\d{2}", leave_timer.locator('[data-testid="now-focus-overlay-leave-time-value"]').inner_text())
+    assert leave_timer.locator('[class*=timerLabel]').count() == 1
     idle_label = re.sub(r"\s+", " ", page.locator('[data-testid="now-focus-overlay-title"]').text_content() or "").strip()
     assert re.fullmatch(r"오늘 할 일(?: · \d+개)?", idle_label), idle_label
     assert page.locator('[data-testid="now-focus-overlay-title"]').get_attribute("aria-label") == idle_label
@@ -404,7 +406,9 @@ def check_overlay_todo_items(browser) -> None:
     page.wait_for_function("(() => { const value = document.querySelector('[data-testid=now-focus-overlay-title]')?.textContent?.trim() || ''; return value && value !== '오늘 할 일'; })()")
     title = page.locator('[data-testid="now-focus-overlay-title"]')
     assert (title.text_content() or "").strip() in {"리눅스 학습", "문서 검토"}
-    assert page.locator('[data-testid="now-focus-overlay-leave-time"]').count() == 0
+    leave_timer = page.locator('[data-testid="now-focus-overlay-leave-time"]')
+    assert leave_timer.count() == 1
+    assert re.fullmatch(r"\d{2}:\d{2}", leave_timer.locator('[data-testid="now-focus-overlay-leave-time-value"]').inner_text())
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-block-todo-linux"]')
     assert page.locator('[data-testid^="now-focus-overlay-block-"]').count() == 2
