@@ -133,7 +133,7 @@ pnpm bridge
 pnpm dev
 ```
 
-The compact card should show at most three current focus quests. Select **전체 보기** to inspect all parent quests, change a status, and open **진행 보고**. In the native shell, use `pnpm dev:widget`; its close control hides the widget to the tray, while the tray menu has the explicit Quit command.
+The compact card should show at most three current focus quests. Select **전체 보기** to inspect all parent quests, change a status, and open **진행 보고**. In the native shell, use `pnpm dev:widget`; an OS close request on the persistent overlay is ignored and logged, while the tray menu provides **위젯 다시 표시** and the explicit Quit command. The packaged widget also reasserts visibility and topmost order periodically without taking focus from the active application.
 
 For an installer build, check the native prerequisites first:
 

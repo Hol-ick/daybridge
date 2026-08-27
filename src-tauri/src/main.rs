@@ -105,11 +105,28 @@ fn append_runtime_event(app: &tauri::AppHandle, event: &str, details: &str) -> R
     writeln!(file, "{record}").map_err(|error| error.to_string())
 }
 
-fn show_overlay(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("overlay") {
-        let _ = window.unminimize();
-        let _ = window.show();
+fn ensure_overlay_visible(app: &tauri::AppHandle) -> Result<bool, String> {
+    let window = app
+        .get_webview_window("overlay")
+        .ok_or_else(|| "오버레이 창을 찾을 수 없습니다.".to_string())?;
+    let was_visible = window.is_visible().unwrap_or(false);
+    window.unminimize().map_err(|error| error.to_string())?;
+    // A transparent window can remain visible but lose its place in the
+    // topmost z-order after a display/full-screen transition. Re-assert the
+    // native flag whenever the tray or the visibility watchdog asks for a
+    // recovery, without stealing focus from the user's current application.
+    window
+        .set_always_on_top(true)
+        .map_err(|error| error.to_string())?;
+    window.show().map_err(|error| error.to_string())?;
+    if !was_visible {
+        let _ = append_runtime_event(
+            app,
+            "overlay_visibility_recovered",
+            &json!({ "previouslyVisible": false }).to_string(),
+        );
     }
+    Ok(!was_visible)
 }
 
 fn dashboard_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
@@ -132,12 +149,17 @@ fn dashboard_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
 }
 
 fn show_dashboard(app: &tauri::AppHandle) -> tauri::Result<()> {
-    show_overlay(app);
+    let _ = ensure_overlay_visible(app);
     let window = dashboard_window(app)?;
     window.unminimize()?;
     window.show()?;
     window.set_focus()?;
     Ok(())
+}
+
+#[tauri::command]
+fn show_overlay(app: tauri::AppHandle) -> Result<bool, String> {
+    ensure_overlay_visible(&app)
 }
 
 #[tauri::command]
@@ -196,10 +218,13 @@ fn main() {
             if let Some(window) = app.get_webview_window("overlay") {
                 let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
             }
+            let _ = ensure_overlay_visible(app.handle());
             let show = MenuItem::with_id(app, "show", "Daybridge 열기", true, None::<&str>)?;
+            let show_overlay_item =
+                MenuItem::with_id(app, "show_overlay", "위젯 다시 표시", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "숨기기", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &hide, &quit])?;
+            let menu = Menu::with_items(app, &[&show, &show_overlay_item, &hide, &quit])?;
 
             TrayIconBuilder::with_id("daybridge-tray")
                 .icon(
@@ -212,6 +237,9 @@ fn main() {
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
                         let _ = show_dashboard(app);
+                    }
+                    "show_overlay" => {
+                        let _ = ensure_overlay_visible(app);
                     }
                     "hide" => {
                         if let Some(window) = app.get_webview_window("dashboard") {
@@ -240,6 +268,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             open_dashboard,
+            show_overlay,
             get_overlay_position,
             save_overlay_position,
             record_runtime_event,
@@ -259,8 +288,23 @@ fn main() {
                     "window_close_requested",
                     &json!({ "window": window.label() }).to_string(),
                 );
-                let _ = window.hide();
-                api.prevent_close();
+                if window.label() == "overlay" {
+                    // The overlay has no user-facing close button. Treat an
+                    // OS close request (for example Alt+F4 or a display
+                    // manager action) as a visibility recovery request so a
+                    // transient close cannot make the widget disappear while
+                    // the Daybridge process is still running.
+                    api.prevent_close();
+                    let _ = append_runtime_event(
+                        &window.app_handle(),
+                        "overlay_close_ignored",
+                        "{\"reason\":\"overlay_is_persistent\"}",
+                    );
+                    let _ = ensure_overlay_visible(&window.app_handle());
+                } else {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
             }
             if let WindowEvent::Destroyed = event {
                 let _ = append_runtime_event(

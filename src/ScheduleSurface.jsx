@@ -152,6 +152,30 @@ export default function ScheduleSurface() {
   }, []);
   useEffect(() => { if (surface === "overlay") void placeOverlayInCorner(); }, [surface]);
   useEffect(() => {
+    if (surface !== "overlay" || !isTauri() || import.meta.env.DEV) return undefined;
+    let disposed = false;
+    const ensureVisible = async () => {
+      try {
+        await invoke("show_overlay");
+      } catch (error) {
+        if (!disposed) {
+          recordRuntimeEvent("overlay_visibility_check_error", { error: error?.message || String(error) });
+        }
+      }
+    };
+    // A transparent always-on-top window can be covered by a display or
+    // full-screen transition without the process or WebView terminating.
+    // Reassert visibility/z-order without taking focus from the active app.
+    void ensureVisible();
+    const intervalId = window.setInterval(ensureVisible, 15_000);
+    document.addEventListener("visibilitychange", ensureVisible);
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", ensureVisible);
+    };
+  }, [surface]);
+  useEffect(() => {
     if (surface !== "overlay") return undefined;
     let disposed = false;
     let cleanup;
