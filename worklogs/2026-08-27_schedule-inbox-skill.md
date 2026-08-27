@@ -21,7 +21,7 @@
 - `quick_validate.py`로 Skill 구조 검증 성공.
 - Skill writer의 격리 임시 디렉터리 upsert/check 실행 성공.
 - Daybridge inbox parser 3개 테스트와 local bridge fingerprint 재배치 통합 테스트 성공.
-- 기존 schedule model/scheduler 테스트 포함 22개 테스트 성공(전체 테스트·빌드는 최종 확인에서 다시 실행).
+- 기존 schedule model/scheduler 테스트 포함 저장소 전체 Node 테스트 59개와 `pnpm build`가 성공했다. `git diff --check`도 통과했고 `origin/main`은 `d63e585`로 정렬됐다.
 
 ## 남은 확인
 
