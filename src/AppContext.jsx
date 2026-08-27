@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { demoQuestBoard } from "./demo-data";
+import { recordRuntimeEvent } from "./runtime-log.js";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
 const STORAGE_KEY = "daybridge.quest-board.v4";
@@ -74,11 +75,14 @@ export function AppStateProvider({ children }) {
   }, []);
   const refresh = useCallback(async ({ announce = false } = {}) => {
     setLoading(true);
+    const requestDate = currentKstDate();
+    recordRuntimeEvent("board_refresh_start", { date: requestDate, announce });
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 1800);
     try {
-      const response = await fetch(`${BRIDGE_URL}/api/board?date=${currentKstDate()}`, { signal: controller.signal });
+      const response = await fetch(`${BRIDGE_URL}/api/board?date=${requestDate}`, { signal: controller.signal });
       if (!response.ok) {
+        recordRuntimeEvent("board_refresh_http_error", { date: requestDate, status: response.status });
         if (announce) showNotice("브리핑을 불러오지 못했어요");
         return false;
       }
@@ -86,9 +90,11 @@ export function AppStateProvider({ children }) {
       boardRef.current = result.board;
       dispatch({ type: "INIT", board: result.board });
       persistBoard(result.board);
+      recordRuntimeEvent("board_refresh_success", { date: requestDate, activityDate: result.board?.activityDate, questCount: Array.isArray(result.board?.quests) ? result.board.quests.length : 0, connection: result.connection || "unknown" });
       if (announce) showNotice("브리핑을 업데이트했어요");
       return true;
-    } catch {
+    } catch (error) {
+      recordRuntimeEvent("board_refresh_error", { date: requestDate, error: error?.message || String(error) });
       if (announce) showNotice("브리지를 확인할 수 없어요");
       return false;
     } finally {

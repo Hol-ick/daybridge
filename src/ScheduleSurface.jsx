@@ -7,6 +7,7 @@ import NowFocusOverlay from "./schedule/NowFocusOverlay.jsx";
 import ScheduleDashboard from "./schedule/ScheduleDashboard.jsx";
 import { resolveActivityDate } from "./schedule/activity-date.js";
 import { getWorkdayCountdown } from "./schedule/workday-clock.js";
+import { recordRuntimeEvent } from "./runtime-log.js";
 import styles from "./ScheduleSurface.module.css";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
@@ -43,6 +44,7 @@ export default function ScheduleSurface() {
 
   useEffect(() => {
     document.body.dataset.surface = surface;
+    recordRuntimeEvent("surface_mounted", { surface });
     return () => { delete document.body.dataset.surface; };
   }, [surface]);
 
@@ -53,7 +55,8 @@ export default function ScheduleSurface() {
     const checkWorkdayEnd = () => {
       if (disposed) return;
       if (getWorkdayCountdown(new Date()).phase === "after_work") {
-        void invoke("exit_app");
+        recordRuntimeEvent("workday_auto_exit_triggered", { reason: "after_workday", surface });
+        void invoke("exit_app", { reason: "after_workday" }).catch((error) => recordRuntimeEvent("workday_auto_exit_error", { error: error?.message || String(error) }));
         return;
       }
       const now = new Date();
@@ -70,17 +73,21 @@ export default function ScheduleSurface() {
   }, [surface]);
 
   const loadSchedule = useCallback(async ({ rebuild = false, quiet = false } = {}) => {
-    const request = rebuild
-      ? fetch(`${BRIDGE_URL}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate }) })
-      : fetch(`${BRIDGE_URL}/api/schedule?date=${activityDate}`);
+    const requestDate = activityDate;
+    recordRuntimeEvent("schedule_load_start", { date: requestDate, rebuild, quiet });
     try {
+      const request = rebuild
+        ? fetch(`${BRIDGE_URL}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: requestDate }) })
+        : fetch(`${BRIDGE_URL}/api/schedule?date=${requestDate}`);
       const result = await readJson(await request);
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       setCalendarCoverage(result.schedule?.calendar?.coverage || "attention");
+      recordRuntimeEvent("schedule_load_success", { date: requestDate, rebuild, blocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.length : 0, focusBlocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.filter((block) => block?.type === "focus").length : 0, nowFocus: result.nowFocus?.state || "none" });
       if (!quiet) setNotice(rebuild ? "오늘 남은 시간을 다시 배치했어요" : "");
       return result;
-    } catch {
+    } catch (error) {
+      recordRuntimeEvent("schedule_load_error", { date: requestDate, rebuild, error: error?.message || String(error) });
       if (!quiet) setNotice("시간표를 불러오지 못했어요");
       return null;
     }
@@ -90,7 +97,11 @@ export default function ScheduleSurface() {
     try {
       const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule-settings`));
       setSettings(result.settings);
-    } catch { setNotice("시간표 설정을 불러오지 못했어요"); }
+      recordRuntimeEvent("settings_load_success", { dayStart: result.settings?.dayStart, dayEnd: result.settings?.dayEnd });
+    } catch (error) {
+      recordRuntimeEvent("settings_load_error", { error: error?.message || String(error) });
+      setNotice("시간표 설정을 불러오지 못했어요");
+    }
   }, []);
 
   const addManualTask = useCallback(async ({ title, durationMinutes }) => {
@@ -103,9 +114,11 @@ export default function ScheduleSurface() {
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       await refresh();
+      recordRuntimeEvent("manual_task_added", { date: activityDate, title, durationMinutes });
       setNotice(`${title} · ${durationMinutes}분으로 배치했어요`);
       return true;
-    } catch {
+    } catch (error) {
+      recordRuntimeEvent("manual_task_add_error", { date: activityDate, title, durationMinutes, error: error?.message || String(error) });
       setNotice("작업을 추가하지 못했어요. 제목과 시간을 확인해 주세요");
       return false;
     }
@@ -115,8 +128,10 @@ export default function ScheduleSurface() {
     try {
       const result = await readJson(await fetch(`${BRIDGE_URL}/api/calendar/status`));
       setCalendarConnection(result.calendar || { state: "attention", reason: "status_unavailable" });
+      recordRuntimeEvent("calendar_status", { state: result.calendar?.state, reason: result.calendar?.reason });
       return result.calendar;
-    } catch {
+    } catch (error) {
+      recordRuntimeEvent("calendar_status_error", { error: error?.message || String(error) });
       if (!quiet) setNotice("캘린더 연결 상태를 확인하지 못했어요");
       return null;
     }
@@ -160,9 +175,14 @@ export default function ScheduleSurface() {
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       setNotice(status === "completed" ? "집중 시간을 완료했어요" : "이 작업은 다음 계획으로 넘겼어요");
+      recordRuntimeEvent("schedule_block_reported", { date: activityDate, blockId, status });
       void refresh();
       return true;
-    } catch { setNotice("진행 상태를 저장하지 못했어요"); return false; }
+    } catch (error) {
+      recordRuntimeEvent("schedule_block_report_error", { date: activityDate, blockId, status, error: error?.message || String(error) });
+      setNotice("진행 상태를 저장하지 못했어요");
+      return false;
+    }
   }, [activityDate, refresh]);
 
   const moveBlock = useCallback(async (blockId, targetBlockId, position) => {
@@ -175,9 +195,11 @@ export default function ScheduleSurface() {
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       setNotice("시간표 위치를 바꿨어요");
+      recordRuntimeEvent("schedule_block_moved", { date: activityDate, blockId, targetBlockId, position });
       void refresh();
       return true;
-    } catch {
+    } catch (error) {
+      recordRuntimeEvent("schedule_block_move_error", { date: activityDate, blockId, targetBlockId, position, error: error?.message || String(error) });
       setNotice("근무시간 안에서만 순서를 바꿀 수 있어요");
       return false;
     }
@@ -193,9 +215,11 @@ export default function ScheduleSurface() {
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       setNotice("작업을 오늘 시간표에서 폐기했어요");
+      recordRuntimeEvent("schedule_block_discarded", { date: activityDate, blockId });
       void refresh();
       return true;
-    } catch {
+    } catch (error) {
+      recordRuntimeEvent("schedule_block_discard_error", { date: activityDate, blockId, error: error?.message || String(error) });
       setNotice("이 작업을 폐기하지 못했어요");
       return false;
     }

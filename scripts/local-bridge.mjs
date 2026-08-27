@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { buildDailySchedule, resolveNowFocus } from "../src/schedule/scheduler.js";
 import { toScheduleTitle } from "../src/schedule/model.js";
 import { parseScheduleInboxMarkdown } from "../src/schedule/inbox.js";
@@ -41,6 +41,34 @@ function sanitizeText(value, limit = 600) {
 function boardPath(activityDate) { return join(DATA_DIR, "boards", activityDate + ".json"); }
 function inboxPath(activityDate) { return join(DATA_DIR, "inbox", `schedule-${activityDate}.md`); }
 function codexCalendarCachePath(activityDate) { return join(DATA_DIR, "calendar-codex-busy", activityDate + ".json"); }
+const RUNTIME_LOG_PATH = join(DATA_DIR, "logs", "bridge-events.ndjson");
+let runtimeLogQueue = Promise.resolve();
+const LOG_DETAIL_KEYS = new Set(["date", "activityDate", "surface", "status", "state", "error", "message", "reason", "connection", "sourceKind", "event", "clientOccurredAt", "announce", "quiet", "rebuild", "mode", "window", "debug", "blocks", "focusBlocks", "nowFocus", "questCount", "accepted", "excluded", "valid", "exists", "inboxChanged", "boardExists", "inboxExists", "blockId", "targetBlockId", "position", "durationMinutes", "title", "dayStart", "dayEnd"]);
+function logDetails(details) {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return {};
+  const result = {};
+  for (const [key, value] of Object.entries(details)) {
+    if (!LOG_DETAIL_KEYS.has(key)) continue;
+    if (typeof value === "string") result[key] = sanitizeText(value, 500);
+    else if (typeof value === "number" || typeof value === "boolean" || value === null) result[key] = value;
+  }
+  return result;
+}
+function logRuntimeEvent(event, details = {}) {
+  const record = {
+    schemaVersion: 1,
+    source: "bridge",
+    event: sanitizeText(event, 80).replace(/[^a-zA-Z0-9_.:-]/g, "_") || "unknown",
+    occurredAt: now(),
+    details: logDetails(details),
+  };
+  runtimeLogQueue = runtimeLogQueue
+    .then(async () => {
+      await mkdir(dirname(RUNTIME_LOG_PATH), { recursive: true });
+      await appendFile(RUNTIME_LOG_PATH, JSON.stringify(record) + "\n", "utf8");
+    })
+    .catch(() => {});
+}
 async function readJson(path) { try { return JSON.parse(await readFile(path, "utf8")); } catch { return null; } }
 function emptyBoard(activityDate, source = "session_inbox") {
   return {
@@ -236,9 +264,22 @@ async function handleBoard(url) {
   const requestedDate = safeDate(url.searchParams.get("date")) || new Date().toISOString().slice(0, 10);
   const inbox = await readScheduleInbox(requestedDate);
   const board = mergeInboxIntoBoard(await readJson(boardPath(requestedDate)), inbox);
+  logRuntimeEvent("board_read", { date: requestedDate, boardExists: Boolean(board), inboxExists: inbox.exists, valid: inbox.valid, accepted: inbox.tasks.length, excluded: inbox.excluded.length });
   if (!board) return { status: 404, body: { error: "No quest board exists for this date." } };
   const config = await loadConfig(); const connected = typeof config.handoffSinkDir === "string" && config.handoffSinkDir.trim().length > 0;
   return { status: 200, body: responseBody(board, connected ? "connected" : "local") };
+}
+
+async function handleRuntimeEvent(body) {
+  const event = typeof body?.event === "string" ? body.event : "";
+  if (!event) return { status: 400, body: { error: "event is required." } };
+  logRuntimeEvent(`client:${event}`, {
+    ...(body?.details && typeof body.details === "object" && !Array.isArray(body.details) ? body.details : {}),
+    event,
+    clientOccurredAt: body?.occurredAt,
+    surface: body?.surface,
+  });
+  return { status: 202, body: { accepted: true } };
 }
 function toTaskCandidate(quest) {
   if (!quest || typeof quest !== "object" || typeof quest.id !== "string") return null;
@@ -345,6 +386,7 @@ async function handleSchedule(url) {
   const inbox = await readScheduleInbox(activityDate);
   const inboxChanged = existing && inbox.valid && existing.inbox?.fingerprint !== inbox.fingerprint;
   const schedule = (!existing || inboxChanged) ? await rebuildSchedule(activityDate) : existing;
+  logRuntimeEvent("schedule_read", { date: activityDate, exists: Boolean(schedule), inboxExists: inbox.exists, valid: inbox.valid, accepted: inbox.tasks.length, excluded: inbox.excluded.length, inboxChanged, blocks: Array.isArray(schedule?.blocks) ? schedule.blocks.length : 0, focusBlocks: Array.isArray(schedule?.blocks) ? schedule.blocks.filter((block) => block?.type === "focus").length : 0 });
   if (!schedule) return { status: 404, body: { error: "No quest board exists for this date." } };
   return { status: 200, body: { schedule, nowFocus: nowFocus(schedule) } };
 }
@@ -493,6 +535,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/calendar/status") { const result = await handleCalendarStatus(); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/calendar/connect") { const result = await handleCalendarConnect(); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/calendar/codex-busy") { const result = await handleCodexCalendarBusy(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/runtime-events") { const result = await handleRuntimeEvent(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/board") { const result = await handleBoard(url); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/report") { const result = await handleReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/quests/manual") { const result = await handleManualQuest(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
@@ -508,4 +551,14 @@ const server = createServer(async (request, response) => {
   } catch (error) { send(response, 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error." }, origin); }
 });
 await mkdir(join(DATA_DIR, "boards"), { recursive: true });
+logRuntimeEvent("bridge_started", { accepted: true, connection: "local" });
+process.on("uncaughtException", (error) => {
+  logRuntimeEvent("bridge_uncaught_exception", { error: error?.message || String(error) });
+  console.error(error);
+  process.exitCode = 1;
+});
+process.on("unhandledRejection", (reason) => {
+  logRuntimeEvent("bridge_unhandled_rejection", { error: reason?.message || String(reason) });
+  console.error(reason);
+});
 server.listen(PORT, "127.0.0.1", () => console.log("Daybridge local bridge listening on http://127.0.0.1:" + PORT));

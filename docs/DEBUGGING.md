@@ -52,6 +52,20 @@ Invoke-RestMethod "http://127.0.0.1:39393/api/board?date=2026-08-11"
 
 `connected: true` means the machine-local AIHUB profile resolved a handoff sink. A local-only response is still usable, but it will not reach AIHUB until the bridge is restarted with a valid profile or explicit `DAYBRIDGE_DATA_DIR`/config.
 
+### 실행이 사라졌을 때 런타임 이벤트 확인
+
+패키지 위젯과 local bridge는 서로 다른 프로세스이므로 로그도 분리한다. 다음 두 파일은 민감한 원문 대신 이벤트명·날짜·상태·오류·블록 수 같은 진단 정보만 NDJSON으로 기록한다.
+
+```powershell
+# 네이티브 위젯: 시작·자동 종료·창 종료·WebView 오류
+Get-Content "$env:APPDATA\com.daybridge.widget\logs\runtime-events.ndjson" -Tail 100
+
+# local bridge: inbox/보드/시간표 조회와 API 오류
+Get-Content "$env:LOCALAPPDATA\Daybridge\logs\bridge-events.ndjson" -Tail 100
+```
+
+원인 판별 순서는 `workday_auto_exit_triggered` → `app_exit_requested`가 있는지 먼저 보고, 그 뒤 `tray_quit_requested`, `schedule_load_error`, `board_refresh_error`, `window_destroyed`, `window_error`를 시간순으로 대조한다. 전자의 두 이벤트가 같이 있으면 18:00 이후 자동 종료 경로이고, `tray_quit_requested`가 있으면 사용자가 트레이에서 종료한 경로다. WebView/창 오류만 있으면 충돌·렌더링 경로다. 로그 파일이 없으면 새 패키지 위젯 또는 새 bridge가 아직 실행되지 않은 상태다.
+
 ## 3. Check a status report
 
 Use the UI to change a quest status or submit a progress note. The bridge should return `eventRecorded: true`. The event is stored locally and mirrored to the AIHUB automation-owned `reports/daily/_system/daybridge_handoff/YYYY-MM-DD/` folder. The original diary is never edited.
