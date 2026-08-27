@@ -7,10 +7,11 @@ Daybridge is an execution layer over AIHUB, not a second diary or a second calen
 1. **AIHUB closeout** — produces the detailed, evidence-linked report. It is the source of truth and is never edited by Daybridge.
 2. **Completion-driven continuation** — the closeout automation invokes the Quest Extractor only after a ready synthesis exists. No fixed 17:40 cron is required.
 3. **Quest Plan** — a sanitized derived artifact. Stable `mission_id` and `quest_id` let a multi-day mission continue without resetting progress. The input contract is validated before any candidate reaches the scheduler; confirmation questions remain in `review_queue`.
-4. **Calendar busy reader** — a local, user-authorized, read-only adapter that returns only occupied start/end ranges. It has no calendar write path.
-5. **Routine planner** — turns personal, opt-in defaults such as Linux learning into a maximum of two optional candidates. It runs after the briefing board is read and never displaces briefing work.
-6. **DailySchedule** — combines briefing candidates, optional routine candidates, busy windows, user settings, prior receipts, and carryover into deterministic focus, busy, and buffer blocks.
-7. **Local bridge and widget** — serves the schedule, preserves receipts, mirrors sanitized user interactions back to AIHUB, and shows one current action plus a compact timeline.
+4. **Session Markdown inbox** — the `daybridge-schedule-writer` Skill turns another Codex session's normalized tasks into a date-scoped, fingerprinted local Markdown handoff. It is a queue of candidates, not a second source of truth.
+5. **Calendar busy reader** — a local, user-authorized, read-only adapter that returns only occupied start/end ranges. It has no calendar write path.
+6. **Routine planner** — turns personal, opt-in defaults such as Linux learning into a maximum of two optional candidates. It runs after the briefing board and inbox are read and never displaces briefing work.
+7. **DailySchedule** — combines board candidates, inbox candidates, optional routine candidates, busy windows, user settings, prior receipts, and carryover into deterministic focus, busy, and buffer blocks.
+8. **Local bridge and widget** — serves the schedule, preserves receipts, mirrors sanitized user interactions back to AIHUB, and shows one current action plus a compact timeline.
 
 ## Data flow
 
@@ -24,6 +25,8 @@ morning Calendar busy sync (read-only) + local cache fallback
 Daybridge schedule refresh → Current focus / timetable / unscheduled carryover
         ↓ user receipts: start, complete, defer, skip, rebalance remaining blocks
 AIHUB handoff sink → next closeout reconciliation
+
+다른 세션이 `Daybridge/inbox/schedule-YYYY-MM-DD.md`를 원자적으로 갱신하면, 다음 `/api/schedule` 조회가 fingerprint를 비교해 변경된 경우에만 재배치한다. `/api/schedule/inbox`는 파싱·제외·오류 상태를 별도로 보여준다.
 ```
 
 The continuation runner writes `daybridge_continuation.json` with `waiting`, `blocked`, or `ready`. A delayed closeout is therefore picked up when it actually finishes rather than being missed by a clock-based follow-up.

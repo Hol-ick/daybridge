@@ -1,10 +1,11 @@
 import { createServer } from "node:http";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { buildDailySchedule, resolveNowFocus } from "../src/schedule/scheduler.js";
 import { toScheduleTitle } from "../src/schedule/model.js";
+import { parseScheduleInboxMarkdown } from "../src/schedule/inbox.js";
 import { buildRoutineCandidates } from "../src/schedule/routine-planner.js";
 import {
   loadSchedule,
@@ -38,8 +39,21 @@ function sanitizeText(value, limit = 600) {
   return text.length > limit ? text.slice(0, limit - 1).trimEnd() + "…" : text;
 }
 function boardPath(activityDate) { return join(DATA_DIR, "boards", activityDate + ".json"); }
+function inboxPath(activityDate) { return join(DATA_DIR, "inbox", `schedule-${activityDate}.md`); }
 function codexCalendarCachePath(activityDate) { return join(DATA_DIR, "calendar-codex-busy", activityDate + ".json"); }
 async function readJson(path) { try { return JSON.parse(await readFile(path, "utf8")); } catch { return null; } }
+async function readScheduleInbox(activityDate) {
+  const path = inboxPath(activityDate);
+  try {
+    const markdown = await readFile(path, "utf8");
+    const parsed = parseScheduleInboxMarkdown(markdown, { date: activityDate });
+    const fingerprint = createHash("sha256").update(markdown, "utf8").digest("hex");
+    return { ...parsed, fingerprint, exists: true };
+  } catch (error) {
+    if (error?.code === "ENOENT") return { valid: true, date: activityDate, timezone: "Asia/Seoul", updatedAt: null, tasks: [], excluded: [], warnings: [], errors: [], fingerprint: null, exists: false };
+    return { valid: false, date: activityDate, timezone: null, updatedAt: null, tasks: [], excluded: [], warnings: [], errors: ["inbox 파일을 읽지 못했습니다."], fingerprint: null, exists: true };
+  }
+}
 async function atomicWrite(path, value) {
   await mkdir(dirname(path), { recursive: true });
   const temporary = path + "." + randomUUID() + ".tmp";
@@ -236,19 +250,58 @@ async function rebuildSchedule(activityDate) {
   const existingSchedule = await loadSchedule(DATA_DIR, activityDate);
   const generatedAt = koreaNow();
   const briefingTasks = board.quests.map(toTaskCandidate).filter(Boolean);
+  const inbox = await readScheduleInbox(activityDate);
+  // A malformed handoff must never erase a previously usable timetable.
+  if (!inbox.valid && existingSchedule) return existingSchedule;
+  const inboxTasks = inbox.valid ? inbox.tasks.map(toTaskCandidate).filter(Boolean) : [];
   const routineTasks = buildRoutineCandidates({ date: activityDate, board });
-  const tasks = applyDiscardedUnits([...briefingTasks, ...routineTasks], existingSchedule);
+  const taskMap = new Map();
+  for (const task of [...briefingTasks, ...inboxTasks, ...routineTasks]) if (!taskMap.has(task.id)) taskMap.set(task.id, task);
+  const tasks = applyDiscardedUnits([...taskMap.values()], existingSchedule);
   const completedQuestIds = board.quests.filter((quest) => (quest?.state || quest?.status) === "completed").map((quest) => quest.id).filter((id) => typeof id === "string");
   const calendarResult = await readCalendarBusyBlocks(activityDate);
   const coverage = calendarResult.calendar.state === "connected" ? "connected" : "attention";
   const generated = buildDailySchedule({ date: activityDate, settings, taskCandidates: tasks, busyBlocks: calendarResult.busyBlocks, lockedBlocks: retainedScheduleBlocks(existingSchedule, generatedAt), completedQuestIds, startAt: generatedAt, generatedAt });
-  return saveSchedule(DATA_DIR, activityDate, { ...generated, date: activityDate, timezone: "Asia/Seoul", calendar: { coverage }, busyBlocks: [], discardedBlocks: existingSchedule?.discardedBlocks || [] });
+  return saveSchedule(DATA_DIR, activityDate, {
+    ...generated,
+    date: activityDate,
+    timezone: "Asia/Seoul",
+    calendar: { coverage },
+    busyBlocks: [],
+    discardedBlocks: existingSchedule?.discardedBlocks || [],
+    inbox: {
+      exists: inbox.exists,
+      valid: inbox.valid,
+      fingerprint: inbox.fingerprint,
+      accepted: inbox.tasks.length,
+      excluded: inbox.excluded.length,
+      errors: inbox.errors.slice(0, 10),
+    },
+  });
 }
 async function handleSchedule(url) {
   const activityDate = safeDate(url.searchParams.get("date")) || new Date().toISOString().slice(0, 10);
-  const schedule = await loadSchedule(DATA_DIR, activityDate) || await rebuildSchedule(activityDate);
+  const existing = await loadSchedule(DATA_DIR, activityDate);
+  const inbox = await readScheduleInbox(activityDate);
+  const inboxChanged = existing && inbox.valid && existing.inbox?.fingerprint !== inbox.fingerprint;
+  const schedule = (!existing || inboxChanged) ? await rebuildSchedule(activityDate) : existing;
   if (!schedule) return { status: 404, body: { error: "No quest board exists for this date." } };
   return { status: 200, body: { schedule, nowFocus: nowFocus(schedule) } };
+}
+async function handleScheduleInbox(url) {
+  const activityDate = safeDate(url.searchParams.get("date")) || new Date().toISOString().slice(0, 10);
+  const inbox = await readScheduleInbox(activityDate);
+  return { status: 200, body: {
+    date: activityDate,
+    exists: inbox.exists,
+    valid: inbox.valid,
+    fingerprint: inbox.fingerprint,
+    updatedAt: inbox.updatedAt,
+    tasks: inbox.tasks,
+    excluded: inbox.excluded,
+    warnings: inbox.warnings,
+    errors: inbox.errors,
+  } };
 }
 async function handleScheduleRebuild(body) {
   const activityDate = scheduleDate(body);
@@ -384,6 +437,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/report") { const result = await handleReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/quests/manual") { const result = await handleManualQuest(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule") { const result = await handleSchedule(url); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/schedule/inbox") { const result = await handleScheduleInbox(url); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/rebuild") { const result = await handleScheduleRebuild(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule-settings") { send(response, 200, { settings: await loadScheduleSettings(DATA_DIR) }, origin); return; }
     if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const incoming = await readRequestBody(request); const current = await loadScheduleSettings(DATA_DIR); send(response, 200, { settings: await saveScheduleSettings(DATA_DIR, { ...current, ...incoming }) }, origin); return; }

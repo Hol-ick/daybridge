@@ -17,6 +17,8 @@ AIHUB 상세 closeout
         ↓ 근거·보안·coverage 확인
 AIHUB Quest Extractor
         ↓ daybridge_quest_plan
+다른 Codex 세션 → 날짜별 Markdown inbox
+        ↓ 로컬 파일 fingerprint 감시
 Daybridge 입력 검증기
         ↓ accepted / review_queue / excluded / warnings
 50분 슬롯 스케줄러
@@ -30,9 +32,18 @@ DailySchedule + 사용자 receipt
 |---|---|---|
 | closeout·일기·worklog | AIHUB | 읽기 전용 소비 |
 | `daybridge_quest_plan` | AIHUB Quest Extractor | 읽기 전용 소비 |
+| 날짜별 `schedule-YYYY-MM-DD.md` | `daybridge-schedule-writer` Skill을 실행한 Codex 세션 | 검증·upsert 후 읽기 전용 소비 |
 | Calendar busy range | 사용자 캘린더 | 시작·종료 시각만 읽기 |
 | `DailySchedule`·receipt | Daybridge | 생성·수정 |
 | `review_queue` | AIHUB | 표시·확인 대기, 자동 실행 금지 |
+
+## 세션 간 전달: 날짜별 Markdown inbox
+
+closeout을 만든 세션과 위젯을 실행하는 세션의 결합을 피하기 위해, 일정 후보를 별도의 로컬 파일로 인계할 수 있다. 정본 위치는 `Daybridge/inbox/schedule-YYYY-MM-DD.md`이며, 실제 기본 경로는 `%LOCALAPPDATA%\Daybridge\inbox\schedule-YYYY-MM-DD.md`다. 파일은 날짜별로 분리하므로 다음 날 기록이 전날 큐를 덮어쓰지 않는다.
+
+파일은 `daybridge-schedule-writer` Skill이 생성한다. Skill은 업무 제목·50분 단위·상태·선행 관계·첫 행동·완료 기준을 검증하고 stable `id` 기준으로 upsert한다. 고정 시각, Calendar 이벤트 내용, 내부 절대 경로와 민감정보는 거부한다. Daybridge는 파일의 fingerprint가 바뀌었을 때 `/api/schedule` 요청에서 자동으로 다시 배치하며, 파싱 오류가 있으면 기존 시간표를 지운 채 교체하지 않는다.
+
+디버깅에는 `GET /api/schedule/inbox?date=YYYY-MM-DD`를 사용한다. 이 응답의 `valid`, `tasks`, `excluded`, `errors`, `fingerprint`를 먼저 확인한 뒤 `POST /api/schedule/rebuild` 또는 위젯의 재배치를 실행한다. 파일 기록 성공은 일정 후보 전달 성공을 뜻할 뿐, 업무 완료나 실제 시간표 반영을 뜻하지 않는다.
 
 ## 정식 전달 포맷: `daybridge_quest_plan` 1.1
 
