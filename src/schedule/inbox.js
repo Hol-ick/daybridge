@@ -147,8 +147,8 @@ export function parseScheduleInboxMarkdown(markdown, { date = null } = {}) {
       currentAction: row.first_action || row.title,
       firstStep: row.first_action || row.title,
       doneWhen: row.done_when || null,
-      sourceKind: "briefing",
-      sourceLabel: "AIHUB 일정 inbox",
+      sourceKind: "session",
+      sourceLabel: "현재 Codex 세션 inbox",
       sourceRefs,
     });
   }

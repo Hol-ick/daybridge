@@ -2,7 +2,7 @@
   "name": "daybridge",
   "version": "0.1.0",
   "private": true,
-  "description": "Turn daily notes into a focused next-day action list.",
+  "description": "Turn session-selected work into a focused, calendar-aware action list.",
   "type": "module",
   "packageManager": "pnpm@11.16.0",
   "engines": {

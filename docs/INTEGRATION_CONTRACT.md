@@ -1,10 +1,10 @@
 # AIHUB → Daybridge 일정 입력 계약
 
-이 문서는 AIHUB가 만든 상세 closeout에서 Daybridge가 **실행 가능한 작업 후보**를 받아 시간표에 배치하는 경계를 정의한다. closeout 원문과 캘린더 원본은 이 계약의 입력이 아니다.
+이 문서는 어떤 Codex 세션에서든 사용자가 등록을 결정한 업무를 Daybridge가 **실행 가능한 작업 후보**로 받아 시간표에 배치하는 경계를 정의한다. closeout·브리핑은 선택적인 원문 공급원이며, 일정 등록의 선행 조건이 아니다. closeout 원문과 캘린더 원본 자체를 시간표에 넣지는 않는다.
 
 ## 결론
 
-- AIHUB는 고정 시각이 없는 **작업 후보(Quest Plan)** 를 전달한다.
+- Codex 세션은 고정 시각이 없는 **작업 후보(Quest Plan 또는 Markdown inbox)** 를 전달한다.
 - Daybridge는 후보를 검증한 뒤, Google Calendar의 busy block과 근무시간 규칙을 합쳐 `DailySchedule`을 만든다.
 - 시간표의 한 칸은 항상 `HH:00–HH:50`인 50분 집중 단위다. 후보의 분량은 `focus_units`로 전달한다.
 - `start_at`, `end_at` 같은 고정 시각은 Quest에 넣지 않는다. 약속·회의·점심시간은 Calendar busy block 또는 Daybridge 설정으로만 전달한다.
@@ -13,12 +13,15 @@
 ## 데이터 흐름과 책임
 
 ```text
-AIHUB 상세 closeout
-        ↓ 근거·보안·coverage 확인
-AIHUB Quest Extractor
-        ↓ daybridge_quest_plan
-다른 Codex 세션 → 날짜별 Markdown inbox
-        ↓ 로컬 파일 fingerprint 감시
+현재 Codex 세션에서 사용자가 등록 결정
+        ↓ 업무 정규화·보안 확인
+daybridge-schedule-writer Skill
+        ↓ 날짜별 Markdown inbox (기본 경로)
+        ├──────────────────────────────┐
+        │                              │
+선택: AIHUB 상세 closeout → Quest Extractor → daybridge_quest_plan
+        └────────────── 선택 경로 ───────┘
+                       ↓ 로컬 파일 fingerprint 감시
 Daybridge 입력 검증기
         ↓ accepted / review_queue / excluded / warnings
 50분 슬롯 스케줄러
@@ -39,7 +42,7 @@ DailySchedule + 사용자 receipt
 
 ## 세션 간 전달: 날짜별 Markdown inbox
 
-closeout을 만든 세션과 위젯을 실행하는 세션의 결합을 피하기 위해, 일정 후보를 별도의 로컬 파일로 인계할 수 있다. 정본 위치는 `Daybridge/inbox/schedule-YYYY-MM-DD.md`이며, 실제 기본 경로는 `%LOCALAPPDATA%\Daybridge\inbox\schedule-YYYY-MM-DD.md`다. 파일은 날짜별로 분리하므로 다음 날 기록이 전날 큐를 덮어쓰지 않는다.
+어떤 Codex 세션에서든 사용자가 등록을 결정한 순간, 일정 후보를 별도의 로컬 파일로 인계할 수 있다. closeout을 만든 세션과 위젯을 실행하는 세션을 결합할 필요가 없다. 정본 위치는 `Daybridge/inbox/schedule-YYYY-MM-DD.md`이며, 실제 기본 경로는 `%LOCALAPPDATA%\Daybridge\inbox\schedule-YYYY-MM-DD.md`다. 파일은 날짜별로 분리하므로 다음 날 기록이 전날 큐를 덮어쓰지 않는다.
 
 파일은 `daybridge-schedule-writer` Skill이 생성한다. Skill은 업무 제목·50분 단위·상태·선행 관계·첫 행동·완료 기준을 검증하고 stable `id` 기준으로 upsert한다. 고정 시각, Calendar 이벤트 내용, 내부 절대 경로와 민감정보는 거부한다. Daybridge는 파일의 fingerprint가 바뀌었을 때 `/api/schedule` 요청에서 자동으로 다시 배치하며, 파싱 오류가 있으면 기존 시간표를 지운 채 교체하지 않는다.
 
@@ -170,7 +173,7 @@ closeout을 만든 세션과 위젯을 실행하는 세션의 결합을 피하�
 
 ## 검증 결과 형태
 
-입력 검증기는 다음 구조를 반환한다. 이 결과는 시간표와 함께 디버깅·closeout에 남긴다.
+입력 검증기는 다음 구조를 반환한다. 이 결과는 시간표와 함께 디버깅·후속 회고에 남긴다.
 
 ```json
 {

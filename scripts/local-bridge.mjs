@@ -42,6 +42,51 @@ function boardPath(activityDate) { return join(DATA_DIR, "boards", activityDate 
 function inboxPath(activityDate) { return join(DATA_DIR, "inbox", `schedule-${activityDate}.md`); }
 function codexCalendarCachePath(activityDate) { return join(DATA_DIR, "calendar-codex-busy", activityDate + ".json"); }
 async function readJson(path) { try { return JSON.parse(await readFile(path, "utf8")); } catch { return null; } }
+function emptyBoard(activityDate, source = "session_inbox") {
+  return {
+    schemaVersion: 2,
+    activityDate,
+    sourceCoverage: "connected",
+    source: { kind: source },
+    sourceWarnings: [],
+    quests: [],
+    missions: [],
+  };
+}
+function inboxTaskToQuest(task) {
+  const id = typeof task?.id === "string" ? task.id : "";
+  if (!id) return null;
+  const firstStep = task.firstStep || task.currentAction || task.title;
+  return {
+    id,
+    missionId: `mission-${id}`,
+    title: task.title,
+    scheduleTitle: task.scheduleTitle || task.title,
+    displayTitle: task.displayTitle || task.title,
+    project: "현재 세션 일정",
+    priority: task.priority || "should",
+    kind: "execute",
+    execution: task.execution || "independent",
+    dependsOn: Array.isArray(task.dependsOn) ? task.dependsOn : [],
+    state: task.state || "ready",
+    status: task.status || task.state || "ready",
+    firstStep,
+    currentAction: firstStep,
+    doneWhen: task.doneWhen || null,
+    focusUnits: task.focusUnits,
+    remainingUnits: task.remainingUnits,
+    estimateMinutes: task.estimateMinutes,
+    remainingMinutes: task.remainingMinutes,
+    sourceKind: "session",
+    sourceLabel: "현재 Codex 세션",
+    sourcePath: Array.isArray(task.sourceRefs) && task.sourceRefs[0] ? task.sourceRefs[0] : "daybridge://session-inbox",
+    sourceRefs: Array.isArray(task.sourceRefs) ? task.sourceRefs : [],
+    carryoverCount: 0,
+    reports: [],
+    steps: [{ id: `${id}-step-1`, label: firstStep, completed: false, order: 1, dependsOn: [] }],
+    progress: { completed: 0, total: 1 },
+  };
+}
 async function readScheduleInbox(activityDate) {
   const path = inboxPath(activityDate);
   try {
@@ -53,6 +98,15 @@ async function readScheduleInbox(activityDate) {
     if (error?.code === "ENOENT") return { valid: true, date: activityDate, timezone: "Asia/Seoul", updatedAt: null, tasks: [], excluded: [], warnings: [], errors: [], fingerprint: null, exists: false };
     return { valid: false, date: activityDate, timezone: null, updatedAt: null, tasks: [], excluded: [], warnings: [], errors: ["inbox 파일을 읽지 못했습니다."], fingerprint: null, exists: true };
   }
+}
+function mergeInboxIntoBoard(board, inbox) {
+  if (!inbox?.valid || !inbox.exists) return board;
+  const quests = new Map((Array.isArray(board?.quests) ? board.quests : []).map((quest) => [quest.id, quest]));
+  for (const task of inbox.tasks) {
+    const quest = inboxTaskToQuest(task);
+    if (quest) quests.set(quest.id, quest);
+  }
+  return { ...(board || emptyBoard(inbox.date)), quests: [...quests.values()] };
 }
 async function atomicWrite(path, value) {
   await mkdir(dirname(path), { recursive: true });
@@ -98,7 +152,7 @@ async function writeEvent(config, event) {
 async function handleReport(body) {
   const activityDate = safeDate(body.activityDate); const questId = typeof body.questId === "string" ? body.questId : ""; const status = typeof body.status === "string" ? body.status : "";
   if (!activityDate || !questId || !VALID_STATUSES.has(status)) return { status: 400, body: { error: "activityDate, questId, and status are required." } };
-  const path = boardPath(activityDate); const board = await readJson(path);
+  const path = boardPath(activityDate); const inbox = await readScheduleInbox(activityDate); const board = mergeInboxIntoBoard(await readJson(path), inbox);
   if (!board || !Array.isArray(board.quests)) return { status: 404, body: { error: "No quest board exists for this date." } };
   const quest = board.quests.find((item) => item && item.id === questId);
   if (!quest) return { status: 404, body: { error: "Quest was not found." } };
@@ -123,8 +177,8 @@ async function handleManualQuest(body) {
     return { status: 400, body: { error: "activityDate, title, and a 50/100/150-minute duration are required." } };
   }
   const path = boardPath(activityDate);
-  const board = await readJson(path);
-  if (!board || !Array.isArray(board.quests)) return { status: 404, body: { error: "No quest board exists for this date." } };
+  const inbox = await readScheduleInbox(activityDate);
+  const board = mergeInboxIntoBoard(await readJson(path), inbox) || emptyBoard(activityDate, "manual");
   const occurredAt = now();
   const questId = `manual-${randomUUID()}`;
   const stepId = `${questId}-step-1`;
@@ -147,7 +201,7 @@ async function handleManualQuest(body) {
     doneWhen: `${title}을 완료하고 결과를 기록합니다.`,
     estimateMinutes: durationMinutes,
     remainingMinutes: durationMinutes,
-    sourceKind: "briefing",
+    sourceKind: "session",
     sourceLabel: "수동 추가",
     sourcePath: "manual://widget",
     carryoverCount: 0,
@@ -179,7 +233,9 @@ async function handleManualQuest(body) {
   return { status: 201, body: { ...responseBody(board, mirrored ? "connected" : "local", mirrored), quest, schedule, nowFocus: nowFocus(schedule) } };
 }
 async function handleBoard(url) {
-  const requestedDate = safeDate(url.searchParams.get("date")) || new Date().toISOString().slice(0, 10); const board = await readJson(boardPath(requestedDate));
+  const requestedDate = safeDate(url.searchParams.get("date")) || new Date().toISOString().slice(0, 10);
+  const inbox = await readScheduleInbox(requestedDate);
+  const board = mergeInboxIntoBoard(await readJson(boardPath(requestedDate)), inbox);
   if (!board) return { status: 404, body: { error: "No quest board exists for this date." } };
   const config = await loadConfig(); const connected = typeof config.handoffSinkDir === "string" && config.handoffSinkDir.trim().length > 0;
   return { status: 200, body: responseBody(board, connected ? "connected" : "local") };
@@ -215,6 +271,7 @@ function toTaskCandidate(quest) {
     remainingMinutes,
     currentAction: sanitizeText(quest.currentAction || quest.firstStep || quest.title, 240),
     steps: Array.isArray(quest.steps) ? quest.steps.map((step) => ({ id: sanitizeText(step?.id, 120), label: sanitizeText(step?.label, 180), completed: Boolean(step?.completed), dependsOn: Array.isArray(step?.dependsOn) ? step.dependsOn.filter((id) => typeof id === "string") : [] })).filter((step) => step.id && step.label) : [],
+    sourceKind: quest.sourceKind === "routine" ? "routine" : quest.sourceKind === "session" ? "session" : "briefing",
     sourceRefs: Array.isArray(quest.sourceRefs) ? quest.sourceRefs.map((ref) => sanitizeText(ref, 240)).filter(Boolean) : [],
   };
 }
@@ -244,19 +301,22 @@ function applyDiscardedUnits(tasks, schedule) {
   }).filter((task) => task.remainingMinutes > 0);
 }
 async function rebuildSchedule(activityDate) {
-  const board = await readJson(boardPath(activityDate));
-  if (!board || !Array.isArray(board.quests)) return null;
+  const inbox = await readScheduleInbox(activityDate);
+  let board = await readJson(boardPath(activityDate));
+  if (!board || !Array.isArray(board.quests)) {
+    if (!inbox.valid || !inbox.exists) return null;
+    board = emptyBoard(activityDate);
+  }
   const settings = await loadScheduleSettings(DATA_DIR);
   const existingSchedule = await loadSchedule(DATA_DIR, activityDate);
   const generatedAt = koreaNow();
   const briefingTasks = board.quests.map(toTaskCandidate).filter(Boolean);
-  const inbox = await readScheduleInbox(activityDate);
   // A malformed handoff must never erase a previously usable timetable.
   if (!inbox.valid && existingSchedule) return existingSchedule;
   const inboxTasks = inbox.valid ? inbox.tasks.map(toTaskCandidate).filter(Boolean) : [];
   const routineTasks = buildRoutineCandidates({ date: activityDate, board });
   const taskMap = new Map();
-  for (const task of [...briefingTasks, ...inboxTasks, ...routineTasks]) if (!taskMap.has(task.id)) taskMap.set(task.id, task);
+  for (const task of [...briefingTasks, ...inboxTasks, ...routineTasks]) taskMap.set(task.id, task);
   const tasks = applyDiscardedUnits([...taskMap.values()], existingSchedule);
   const completedQuestIds = board.quests.filter((quest) => (quest?.state || quest?.status) === "completed").map((quest) => quest.id).filter((id) => typeof id === "string");
   const calendarResult = await readCalendarBusyBlocks(activityDate);

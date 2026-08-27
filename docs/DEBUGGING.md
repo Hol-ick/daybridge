@@ -1,8 +1,19 @@
 # Debugging Daybridge
 
-Daybridge is easiest to debug one layer at a time: closeout synthesis, compiler, local bridge, widget UI, then AIHUB handoff.
+Daybridge is easiest to debug one layer at a time: direct Skill/inbox or optional closeout synthesis, compiler, local bridge, widget UI, then AIHUB handoff.
 
-## 1. Rebuild a board from one closeout
+## 0. Directly add one task from any Codex session
+
+closeout·브리핑을 기다릴 필요 없이, 사용자가 등록을 결정한 업무를 `daybridge-schedule-writer` Skill로 정규화한다. Skill이 만든 JSON을 날짜와 함께 기록한 뒤 local bridge에서 inbox를 확인한다.
+
+```powershell
+python -B "$env:USERPROFILE\.codex\skills\daybridge-schedule-writer\scripts\write_schedule_inbox.py" upsert --date 2026-08-27 --json-file .\daybridge-quests.json
+Invoke-RestMethod "http://127.0.0.1:39393/api/schedule/inbox?date=2026-08-27"
+```
+
+응답의 `valid`, `tasks`, `excluded`, `errors`, `fingerprint`를 확인한다. 파일 기록이 성공했지만 `tasks`가 0이면 제목·상태·단위·source ref 경계를 먼저 고친다. `valid=true`이고 일정이 갱신되지 않으면 `/api/schedule`를 다시 조회하거나 `POST /api/schedule/rebuild`를 호출한다.
+
+## 1. (선택) Rebuild a board from one closeout
 
 From the repository root:
 
@@ -132,7 +143,7 @@ Inspect the generated JSON/Markdown for `status`, `event_count`, `completed`, `o
 | Symptom | Check |
 | --- | --- |
 | Demo board remains visible | Start `pnpm bridge`, compile today's board, and reload the browser. |
-| Board is empty | Run the closeout compiler with `--print` and inspect the source date, packet phase, and action-first fields. |
+| Board is empty | First inspect `/api/schedule/inbox` and its `valid`, `tasks`, and `errors`; only if using the optional closeout path, run the closeout compiler with `--print`. |
 | Status changes disappear after reload | Check that the bridge is running; browser storage is only a local fallback. |
 | `connected: false` | Check `%LOCALAPPDATA%\AIHUB\environment.json` and the `aihub_root` value. |
 | Handoff has zero events | Confirm `eventRecorded: true`, the activity date, and that closeout collected the same date. |
