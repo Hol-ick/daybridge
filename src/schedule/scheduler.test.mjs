@@ -25,6 +25,25 @@ test("empty time settings produce an untimed todo list without invented work hou
   assert.deepEqual(getAvailableFocusSlots({ date: DATE, settings: { timeConfigured: false } }), []);
 });
 
+test("untimed todo items use a stable daily shuffle without breaking dependencies", () => {
+  const candidates = [
+    candidate("alpha", "must", 50),
+    candidate("beta", "should", 50),
+    candidate("gamma", "could", 50),
+    candidate("alpha-follow-up", "should", 50, ["alpha"]),
+  ];
+  const settingsWithoutTime = { dayStart: "", dayEnd: "", timeConfigured: false };
+  const today = buildDailySchedule({ date: DATE, settings: settingsWithoutTime, taskCandidates: candidates });
+  const repeat = buildDailySchedule({ date: DATE, settings: settingsWithoutTime, taskCandidates: candidates });
+  const tomorrow = buildDailySchedule({ date: "2026-08-25", settings: settingsWithoutTime, taskCandidates: candidates });
+  const todayOrder = today.blocks.map((block) => block.questId);
+
+  assert.deepEqual(todayOrder, repeat.blocks.map((block) => block.questId));
+  assert.notDeepEqual(todayOrder.slice(0, 3), ["alpha", "beta", "gamma"]);
+  assert(todayOrder.indexOf("alpha") < todayOrder.indexOf("alpha-follow-up"));
+  assert.notDeepEqual(todayOrder, tomorrow.blocks.map((block) => block.questId));
+});
+
 test("buildDailySchedule gives must work the first available 50-minute block and leaves a transition buffer", () => {
   const schedule = buildDailySchedule({
     date: DATE,

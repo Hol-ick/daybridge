@@ -232,7 +232,6 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const block = getFocusBlock(nowFocus);
   const blocks = useMemo(() => getScheduleBlocks(schedule), [schedule]);
   const todoListMode = schedule?.mode === "todo" || schedule?.timeConfigured === false;
-  const todoCount = blocks.filter((item) => scheduleBlockKind(item) === "focus").length;
   const blockKind = block?.kind ?? block?.type ?? block?.blockType;
   const isBusy = blockKind === "busy" || blockKind === "calendar";
   const sourceTitle = isBusy ? (block?.hidden ? block?.title ?? "점심시간" : "일정 중") : block?.displayTitle ?? block?.scheduleTitle ?? block?.questTitle ?? block?.taskTitle ?? block?.title ?? "다음 집중 시간 준비 중";
@@ -243,7 +242,8 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "";
   const workdayCountdown = getWorkdayCountdown(currentTime);
-  const summaryTitle = todoListMode ? (todoCount ? `오늘 할 일 · ${todoCount}개` : "오늘 할 일") : idle ? workdayCountdown.label : title;
+  const todoSummaryBlock = blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)) ?? blocks[0];
+  const summaryTitle = todoListMode ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "오늘 할 일") : idle ? workdayCountdown.label : title;
 
   useLayoutEffect(() => {
     const nextRects = new Map();
@@ -590,7 +590,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
           {showIdleTitle ? (
             <OverlayTitle
               data-testid="now-focus-overlay-title"
-              aria-label={todoListMode ? summaryTitle : `${workdayCountdown.label} ${workdayCountdown.time}`}
+              aria-label={todoListMode ? (todoSummaryBlock ? `오늘 할 일: ${summaryTitle}` : summaryTitle) : `${workdayCountdown.label} ${workdayCountdown.time}`}
             >{summaryTitle}</OverlayTitle>
           ) : (
             <OverlayTitle data-testid="now-focus-overlay-title">{title}</OverlayTitle>

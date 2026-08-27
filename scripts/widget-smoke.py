@@ -401,9 +401,9 @@ def check_overlay_todo_items(browser) -> None:
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
-    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-title]')?.textContent.includes('오늘 할 일 · 2개')")
+    page.wait_for_function("(() => { const value = document.querySelector('[data-testid=now-focus-overlay-title]')?.textContent?.trim() || ''; return value && value !== '오늘 할 일'; })()")
     title = page.locator('[data-testid="now-focus-overlay-title"]')
-    assert "오늘 할 일 · 2개" in (title.text_content() or "")
+    assert (title.text_content() or "").strip() in {"리눅스 학습", "문서 검토"}
     assert page.locator('[data-testid="now-focus-overlay-leave-time"]').count() == 0
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-block-todo-linux"]')

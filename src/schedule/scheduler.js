@@ -105,7 +105,16 @@ function asKstIso(milliseconds) {
   return `${koreaClock.getUTCFullYear()}-${two(koreaClock.getUTCMonth() + 1)}-${two(koreaClock.getUTCDate())}T${two(koreaClock.getUTCHours())}:${two(koreaClock.getUTCMinutes())}:${two(koreaClock.getUTCSeconds())}+09:00`;
 }
 
-function orderedCandidates(candidates, completedQuestIds) {
+function stableOrderScore(seed, id) {
+  let hash = 2166136261;
+  for (const character of `${seed}:${id}`) {
+    hash ^= character.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function orderedCandidates(candidates, completedQuestIds, randomSeed = "") {
   const pending = [...candidates];
   const ready = new Set(completedQuestIds || []);
   const ordered = [];
@@ -116,7 +125,9 @@ function orderedCandidates(candidates, completedQuestIds) {
       blocked.push(...pending);
       break;
     }
-    eligible.sort((left, right) => (left.sourceKind === "routine") - (right.sourceKind === "routine") || PRIORITY_WEIGHT[left.priority] - PRIORITY_WEIGHT[right.priority] || left.id.localeCompare(right.id));
+    eligible.sort((left, right) => randomSeed
+      ? stableOrderScore(randomSeed, left.id) - stableOrderScore(randomSeed, right.id) || left.id.localeCompare(right.id)
+      : (left.sourceKind === "routine") - (right.sourceKind === "routine") || PRIORITY_WEIGHT[left.priority] - PRIORITY_WEIGHT[right.priority] || left.id.localeCompare(right.id));
     const next = eligible[0];
     pending.splice(pending.indexOf(next), 1);
     ordered.push(next);
@@ -135,7 +146,11 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
   const config = normalizedSettings(date, settings);
   const candidates = taskCandidates.map(toTaskCandidate).filter(Boolean).filter((candidate) => candidate.state !== "blocked");
   const candidateIds = new Set(candidates.map((candidate) => candidate.id));
-  const ordering = orderedCandidates(candidates, completedQuestIds);
+  // Untimed days are still a deliberate daily queue. Shuffle only the
+  // currently eligible cards with a date seed so independent work feels fresh
+  // while the same day remains stable across reloads and dependency chains
+  // still stay in A → B → C order.
+  const ordering = orderedCandidates(candidates, completedQuestIds, config.timeConfigured ? "" : date);
   if (!config.timeConfigured) {
     // Without a configured work window, keep the product useful as a small
     // daily todo list. Items remain actionable/status-reportable, but no

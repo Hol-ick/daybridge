@@ -40,7 +40,7 @@ The optional continuation runner writes `daybridge_continuation.json` with `wait
 - A **quest** is one concrete result. It becomes one or more fixed 50-minute focus blocks; its `focus_units` value is the scheduling source of truth. It is not replaced by a calendar event.
 - A **step** is a mechanical unit. It is locked only when the plan explicitly declares `depends_on` or sequential execution.
 - A **busy block** is a Calendar time constraint. Its event details never enter the schedule.
-- A **focus block** is an executable window for one quest when the schedule is timed; in `mode=todo` it is an untimed actionable list item. A **buffer block** protects transitions and is not a task.
+- A **focus block** is an executable window for one quest when the schedule is timed; in `mode=todo` it is an untimed actionable list item. Todo items use a date-seeded stable shuffle among dependency-ready work so reloads do not reshuffle the day, while A → B → C dependencies remain intact. A **buffer block** protects transitions and is not a task.
 - A **routine candidate** is a personal optional practice block. It is scheduled only after every eligible user-selected quest and is not treated as AIHUB evidence or a briefing-generated obligation.
 - Timed `DailySchedule` returns one of `active_focus`, `in_busy_time`, `up_next`, or `free_time` for the present moment. An untimed list returns `todo_list`.
 - Deferring unfinished work keeps its stable ID and makes it eligible for tomorrow's schedule as carryover.
