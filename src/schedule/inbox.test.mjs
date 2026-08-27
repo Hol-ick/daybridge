@@ -69,3 +69,13 @@ test("excludes a row that smuggles a clock time into its title", () => {
   assert.equal(parsed.tasks.length, 0);
   assert.match(parsed.excluded[0].reason, /고정 시각/);
 });
+
+test("excludes rows that contain machine paths in source references", () => {
+  const parsed = parseScheduleInboxMarkdown(inbox([
+    "| unsafe | 경로 확인 | 1 | 1 | ready | should | independent |  |  |  | C:\\\\private\\\\note.md |",
+  ]), { date: "2026-08-27" });
+
+  assert.equal(parsed.valid, true);
+  assert.equal(parsed.tasks.length, 0);
+  assert.match(parsed.excluded[0].reason, /source_refs/);
+});

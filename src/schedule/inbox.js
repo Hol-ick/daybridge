@@ -6,6 +6,7 @@ const ALLOWED_STATES = new Set(["ready", "in_progress", "deferred"]);
 const ALLOWED_PRIORITIES = new Set(["must", "should", "could"]);
 const ALLOWED_EXECUTION = new Set(["independent", "sequential"]);
 const CLOCK_PATTERN = /(?<!\d)(?:[01]\d|2[0-3]):[0-5]\d(?!\d)/;
+const SOURCE_REF_PATTERN = /^(?:aihub|record|daybridge):\/\/[^\s|]+$/;
 const COLUMNS = ["id", "title", "focus_units", "remaining_units", "state", "priority", "execution", "depends_on", "first_action", "done_when", "source_refs"];
 
 function unescapeCell(value) {
@@ -121,6 +122,8 @@ export function parseScheduleInboxMarkdown(markdown, { date = null } = {}) {
     if (!ALLOWED_PRIORITIES.has(row.priority)) rowErrors.push(`허용되지 않은 priority입니다: ${row.priority}`);
     if (!ALLOWED_EXECUTION.has(row.execution)) rowErrors.push(`허용되지 않은 execution입니다: ${row.execution}`);
     if (hasForbiddenTimeField(row)) rowErrors.push("고정 시각 필드는 허용하지 않습니다.");
+    const sourceRefs = parseList(row.source_refs);
+    if (sourceRefs.some((reference) => !SOURCE_REF_PATTERN.test(reference))) rowErrors.push("source_refs는 안전한 논리 경로만 허용합니다.");
     if (rowErrors.length) {
       result.excluded.push({ row: rowNumber, id: row.id || null, reason: rowErrors.join(" ") });
       continue;
@@ -146,7 +149,7 @@ export function parseScheduleInboxMarkdown(markdown, { date = null } = {}) {
       doneWhen: row.done_when || null,
       sourceKind: "briefing",
       sourceLabel: "AIHUB 일정 inbox",
-      sourceRefs: parseList(row.source_refs),
+      sourceRefs,
     });
   }
   result.valid = result.errors.length === 0;
