@@ -3,7 +3,11 @@
 use serde_json::json;
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::net::{SocketAddr, TcpStream};
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -13,6 +17,8 @@ use tauri::{
 const OVERLAY_POSITION_FILE: &str = "overlay-position.json";
 const RUNTIME_LOG_FILE: &str = "runtime-events.ndjson";
 const WINDOWS_STARTUP_VALUE: &str = "Daybridge";
+const LOCAL_BRIDGE_PORT: u16 = 39393;
+const LOCAL_BRIDGE_SCRIPT: &str = "scripts/local-bridge.mjs";
 
 #[cfg(windows)]
 fn configure_windows_startup() -> Result<(), String> {
@@ -28,6 +34,101 @@ fn configure_windows_startup() -> Result<(), String> {
     run_key
         .set_value(WINDOWS_STARTUP_VALUE, &quoted_executable)
         .map_err(|error| format!("Windows 시작 항목을 저장할 수 없습니다: {error}"))
+}
+
+fn bridge_endpoint() -> SocketAddr {
+    SocketAddr::from(([127, 0, 0, 1], LOCAL_BRIDGE_PORT))
+}
+
+fn bridge_is_reachable() -> bool {
+    TcpStream::connect_timeout(&bridge_endpoint(), Duration::from_millis(200)).is_ok()
+}
+
+fn bridge_project_root() -> Option<PathBuf> {
+    let executable = std::env::current_exe().ok()?;
+    // Packaged local builds live at <project>/src-tauri/target/<profile>/daybridge.exe.
+    // Walking up four parents also keeps this working for target/debug builds.
+    executable
+        .parent()?
+        .parent()?
+        .parent()?
+        .parent()
+        .map(PathBuf::from)
+}
+
+fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
+    if bridge_is_reachable() {
+        let _ = append_runtime_event(
+            app,
+            "bridge_autostart_already_running",
+            &json!({ "port": LOCAL_BRIDGE_PORT }).to_string(),
+        );
+        return Ok(());
+    }
+
+    let project_root = bridge_project_root()
+        .ok_or_else(|| "Daybridge 프로젝트 경로를 확인할 수 없습니다.".to_string())?;
+    let script = project_root.join(LOCAL_BRIDGE_SCRIPT);
+    if !script.is_file() {
+        let error = format!("로컬 브리지 스크립트를 찾을 수 없습니다: {}", script.display());
+        let _ = append_runtime_event(
+            app,
+            "bridge_autostart_unavailable",
+            &json!({ "error": error }).to_string(),
+        );
+        return Err(error);
+    }
+
+    let node = std::env::var_os("DAYBRIDGE_NODE").unwrap_or_else(|| "node".into());
+    let mut command = Command::new(&node);
+    command
+        .arg(&script)
+        .current_dir(&project_root)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW keeps the background bridge from flashing a console at login.
+        command.creation_flags(0x08000000);
+    }
+    let child = command.spawn().map_err(|error| {
+        let message = format!("로컬 브리지를 시작할 수 없습니다: {error}");
+        let _ = append_runtime_event(
+            app,
+            "bridge_autostart_error",
+            &json!({ "error": message }).to_string(),
+        );
+        message
+    })?;
+    let _ = append_runtime_event(
+        app,
+        "bridge_autostart_spawned",
+        &json!({ "port": LOCAL_BRIDGE_PORT, "pid": child.id() }).to_string(),
+    );
+
+    // Give Node a short head start so the first WebView request does not race
+    // the HTTP listener. A later poll still recovers if startup is slower.
+    for _ in 0..20 {
+        if bridge_is_reachable() {
+            let _ = append_runtime_event(
+                app,
+                "bridge_autostart_ready",
+                &json!({ "port": LOCAL_BRIDGE_PORT }).to_string(),
+            );
+            return Ok(());
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+
+    let error = format!("로컬 브리지가 {LOCAL_BRIDGE_PORT} 포트에서 준비되지 않았습니다.");
+    let _ = append_runtime_event(
+        app,
+        "bridge_autostart_timeout",
+        &json!({ "error": error, "port": LOCAL_BRIDGE_PORT }).to_string(),
+    );
+    Err(error)
 }
 
 #[cfg(not(windows))]
@@ -214,6 +315,17 @@ fn main() {
                         &json!({ "error": error.to_string() }).to_string(),
                     );
                 }
+            }
+            // The widget and its local HTTP bridge are separate processes. Start
+            // the bridge from the same checkout when the app launches so a
+            // Windows login cannot leave a visible but disconnected widget.
+            if let Err(error) = start_local_bridge(app.handle()) {
+                eprintln!("Daybridge 로컬 브리지 자동 시작 실패: {error}");
+                let _ = append_runtime_event(
+                    app.handle(),
+                    "bridge_autostart_failed",
+                    &json!({ "error": error }).to_string(),
+                );
             }
             if let Some(window) = app.get_webview_window("overlay") {
                 let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));

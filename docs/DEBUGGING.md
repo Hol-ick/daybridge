@@ -54,7 +54,7 @@ Invoke-RestMethod "http://127.0.0.1:39393/api/board?date=2026-08-11"
 
 ### 실행이 사라졌을 때 런타임 이벤트 확인
 
-패키지 위젯과 local bridge는 서로 다른 프로세스이므로 로그도 분리한다. 다음 두 파일은 민감한 원문 대신 이벤트명·날짜·상태·오류·블록 수 같은 진단 정보만 NDJSON으로 기록한다.
+패키지 위젯과 local bridge는 서로 다른 프로세스이므로 로그도 분리한다. 다음 두 파일은 민감한 원문 대신 이벤트명·날짜·상태·오류·블록 수 같은 진단 정보만 NDJSON으로 기록한다. 패키지 위젯은 시작할 때 `127.0.0.1:39393`을 확인하고, 연결되지 않았으면 현재 Daybridge 체크아웃의 `scripts/local-bridge.mjs`를 콘솔 없이 자동 실행한다. `bridge_autostart_spawned` 뒤 `bridge_autostart_ready`가 남으면 브리지 기동까지 확인된 상태다. `bridge_autostart_unavailable`, `bridge_autostart_error`, `bridge_autostart_timeout`이 남으면 실행 파일이 참조하는 체크아웃·Node 경로·의존성을 확인한다.
 
 ```powershell
 # 네이티브 위젯: 시작·자동 종료·창 종료·WebView 오류
