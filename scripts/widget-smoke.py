@@ -357,6 +357,7 @@ def check_overlay(browser) -> None:
     page.locator('[data-testid="manual-task-add-toggle"]').click()
     page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 288")
     page.locator('[data-testid="manual-task-title"]').fill("리눅스 학습")
+    page.wait_for_timeout(240)
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-manual-form.png", full_page=True)
     page.mouse.click(1, 1)
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")
