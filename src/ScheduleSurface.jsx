@@ -6,7 +6,6 @@ import Item from "./todometer/components/Item.jsx";
 import NowFocusOverlay from "./schedule/NowFocusOverlay.jsx";
 import ScheduleDashboard from "./schedule/ScheduleDashboard.jsx";
 import { resolveActivityDate } from "./schedule/activity-date.js";
-import { getWorkdayCountdown } from "./schedule/workday-clock.js";
 import { recordRuntimeEvent } from "./runtime-log.js";
 import styles from "./ScheduleSurface.module.css";
 
@@ -47,30 +46,6 @@ export default function ScheduleSurface() {
     document.body.dataset.surface = surface;
     recordRuntimeEvent("surface_mounted", { surface });
     return () => { delete document.body.dataset.surface; };
-  }, [surface]);
-
-  useEffect(() => {
-    if (surface !== "overlay" || !isTauri() || import.meta.env.DEV) return undefined;
-    let timeoutId;
-    let disposed = false;
-    const checkWorkdayEnd = () => {
-      if (disposed) return;
-      if (getWorkdayCountdown(new Date()).phase === "after_work") {
-        recordRuntimeEvent("workday_auto_exit_triggered", { reason: "after_workday", surface });
-        void invoke("exit_app", { reason: "after_workday" }).catch((error) => recordRuntimeEvent("workday_auto_exit_error", { error: error?.message || String(error) }));
-        return;
-      }
-      const now = new Date();
-      const workdayEnd = new Date(now);
-      workdayEnd.setHours(18, 0, 0, 0);
-      const delay = Math.max(1_000, Math.min(workdayEnd.getTime() - now.getTime(), 30_000));
-      timeoutId = window.setTimeout(checkWorkdayEnd, delay);
-    };
-    checkWorkdayEnd();
-    return () => {
-      disposed = true;
-      if (timeoutId) window.clearTimeout(timeoutId);
-    };
   }, [surface]);
 
   const loadSchedule = useCallback(async ({ rebuild = false, quiet = false } = {}) => {
