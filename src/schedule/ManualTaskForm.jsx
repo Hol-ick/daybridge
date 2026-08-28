@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styles from "./ManualTaskForm.module.css";
 
 const DURATIONS = [50, 100, 150];
@@ -7,7 +7,7 @@ function durationLabel(minutes) {
   return `${minutes}분`;
 }
 
-export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = false, onOpenChange }) {
+export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = false, onOpenChange, resetSignal = 0 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(50);
@@ -21,6 +21,11 @@ export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = f
     setDurationMinutes(50);
     setError("");
   };
+
+  useEffect(() => {
+    if (!resetSignal || !open) return;
+    close();
+  }, [resetSignal]);
 
   const submit = async (event) => {
     event.preventDefault();

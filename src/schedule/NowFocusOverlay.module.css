@@ -14,7 +14,7 @@
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-.overlay.modalOpen { width: 420px; }
+.overlay.settingsOpen { width: 420px; }
 
 .surface {
   position: relative;
@@ -38,7 +38,7 @@
 
 .surface:active { cursor: grabbing; }
 .surface.expanded { height: 520px; }
-.surface.modalOpen { width: 420px; }
+.surface.settingsOpen { width: 420px; }
 
 .surface::before {
   position: absolute;
@@ -198,12 +198,7 @@
 .manualTaskFooter [data-testid="manual-task-add-toggle"] > span { font-size: 12px; }
 .manualTaskFooter [data-testid="manual-task-add-toggle"].iconOnly { min-height: 32px; padding: 0; }
 .manualTaskFooter [data-testid="manual-task-add-toggle"].iconOnly > span { font-size: 24px; }
-.manualTaskFooter [data-testid="manual-task-form"] { position: absolute; right: 10px; bottom: 48px; left: 10px; z-index: 35; max-width: none; padding: 5px; gap: 4px; border-radius: 6px; }
-.surface.modalOpen .manualTaskFooter [data-testid="manual-task-form"] { top: 12px; right: 12px; bottom: auto; left: 12px; width: auto; max-width: 360px; margin: 0 auto; padding: 12px; gap: 10px; border-radius: 10px; box-shadow: 0 18px 32px rgb(0 0 0 / 42%), 0 0 0 1px rgb(255 255 255 / 5%) inset; }
-.surface.modalOpen .manualTaskFooter [data-testid="manual-task-form"] .titleInput { height: 36px; font-size: 14px; }
-.surface.modalOpen .manualTaskFooter [data-testid="manual-task-form"] .duration,
-.surface.modalOpen .manualTaskFooter [data-testid="manual-task-form"] .durationSelected,
-.surface.modalOpen .manualTaskFooter [data-testid="manual-task-form"] .submit { min-height: 32px; padding: 0 9px; font-size: 11px; }
+.manualTaskFooter [data-testid="manual-task-form"] { position: absolute; right: 10px; bottom: 48px; left: 10px; z-index: 35; width: auto; max-width: none; padding: 5px; gap: 4px; border-radius: 6px; }
 .manualTaskFooter [data-testid="manual-task-form"] .titleInput { height: 24px; font-size: 10px; }
 .manualTaskFooter [data-testid="manual-task-form"] .duration,
 .manualTaskFooter [data-testid="manual-task-form"] .durationSelected,

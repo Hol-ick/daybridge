@@ -227,6 +227,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const [trashActive, setTrashActive] = useState(false);
   const [swapState, setSwapState] = useState(null);
   const [taskOpen, setTaskOpen] = useState(false);
+  const [taskResetSignal, setTaskResetSignal] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   useEffect(() => () => {
@@ -434,20 +435,24 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       // Grow the native viewport first. The collapsed card is already aligned
       // to that viewport's bottom, so the CSS height animation can then pull
       // only its top edge upward without moving the summary row.
-      void resizeOverlay(OVERLAY_EXPANDED_HEIGHT, settingsOpen || taskOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH).catch(() => false).finally(() => setExpanded(true));
+      void resizeOverlay(OVERLAY_EXPANDED_HEIGHT, settingsOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH).catch(() => false).finally(() => setExpanded(true));
     } else {
+      if (taskOpen) {
+        setTaskOpen(false);
+        setTaskResetSignal((value) => value + 1);
+      }
       setExpanded(false);
       resizeTimerRef.current = window.setTimeout(() => {
-        void resizeOverlay(OVERLAY_COLLAPSED_HEIGHT, settingsOpen || taskOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH);
+        void resizeOverlay(OVERLAY_COLLAPSED_HEIGHT, settingsOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH);
       }, 280);
     }
   };
 
   useEffect(() => {
     if (!expanded) return undefined;
-    void resizeOverlay(OVERLAY_EXPANDED_HEIGHT, settingsOpen || taskOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH);
+    void resizeOverlay(OVERLAY_EXPANDED_HEIGHT, settingsOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH);
     return undefined;
-  }, [expanded, settingsOpen, taskOpen]);
+  }, [expanded, settingsOpen]);
 
   useEffect(() => {
     if (!expanded) return undefined;
@@ -463,7 +468,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       window.removeEventListener("blur", handleWindowBlur);
       document.removeEventListener("pointerdown", handleOutsidePointer, true);
     };
-  }, [expanded]);
+  }, [expanded, settingsOpen, taskOpen]);
 
   const handlePointerDown = (event) => {
     if (dragRef.current.point) return;
@@ -519,11 +524,10 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     setExpandedMode(!expanded);
   };
 
-  const modalOpen = settingsOpen || taskOpen;
-  const surfaceClassName = [styles.surface, expanded ? styles.expanded : "", modalOpen ? styles.modalOpen : ""].filter(Boolean).join(" ");
+  const surfaceClassName = [styles.surface, expanded ? styles.expanded : "", settingsOpen ? styles.settingsOpen : "", taskOpen ? styles.taskOpen : ""].filter(Boolean).join(" ");
 
   return (
-    <aside className={[styles.overlay, modalOpen ? styles.modalOpen : ""].filter(Boolean).join(" ")} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
+    <aside className={[styles.overlay, settingsOpen ? styles.settingsOpen : ""].filter(Boolean).join(" ")} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
       <div className={surfaceClassName} onPointerDown={handlePointerDown} onMouseDown={handlePointerDown} data-testid="now-focus-overlay-surface">
         <section className={styles.expandedPanel} aria-label={todoListMode ? "오늘 할 일 목록" : "오늘 시간표 관리"} aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
           {blocks.length ? (
@@ -576,7 +580,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
             </div>
           ) : null}
           <footer className={styles.expandedFooter} aria-label="시간표 도구">
-            <div className={styles.manualTaskFooter}><ManualTaskForm compact iconOnly onOpenChange={setTaskOpen} onSubmit={onAddManualTask} /></div>
+            <div className={styles.manualTaskFooter}><ManualTaskForm compact iconOnly resetSignal={taskResetSignal} onOpenChange={setTaskOpen} onSubmit={onAddManualTask} /></div>
             <button type="button" className={styles.iconAction} onClick={onOpenSettings} disabled={!onOpenSettings} data-tauri-drag-region="false" data-testid="now-focus-overlay-settings" aria-label="시간표 설정">
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9.8 3.7 10.4 2h3.2l.6 1.7 1.6.9 1.7-.5 2.2 2.2-.5 1.7.9 1.6 1.7.6v3.2l-1.7.6-.9 1.6.5 1.7-2.2 2.2-1.7-.5-1.6.9-.6 1.7h-3.2l-.6-1.7-1.6-.9-1.7.5-2.2-2.2.5-1.7-.9-1.6-1.7-.6v-3.2l1.7-.6.9-1.6-.5-1.7 2.2-2.2 1.7.5 1.6-.9Z" /><circle cx="12" cy="12" r="3.1" /></svg>
             </button>

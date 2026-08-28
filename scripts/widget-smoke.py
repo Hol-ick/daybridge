@@ -275,7 +275,7 @@ def check_dashboard_actions(browser) -> None:
     page.locator('[data-testid="manual-task-submit"]').click()
     page.wait_for_function("document.querySelector('[role=status]').textContent.includes('100분으로 배치했어요')")
     assert manual_calls and manual_calls[0]["title"] == "리눅스 학습" and manual_calls[0]["durationMinutes"] == 100
-    assert page.locator('[data-testid="manual-task-form"]').count() == 0
+    page.wait_for_function("document.querySelector('[data-testid=manual-task-form]') === null")
 
     assert_no_page_errors(errors)
     context.close()
@@ -355,9 +355,21 @@ def check_overlay(browser) -> None:
     assert transform_origin.split()[-1].startswith("456") or transform_origin.split()[-1].startswith("100%"), transform_origin
     assert page.get_by_text("여유 시간", exact=True).count() == 0
     page.locator('[data-testid="manual-task-add-toggle"]').click()
-    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 420")
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 288")
     page.locator('[data-testid="manual-task-title"]').fill("리눅스 학습")
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-manual-form.png", full_page=True)
+    page.mouse.click(1, 1)
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'true'")
+    page.wait_for_function("document.querySelector('[data-testid=manual-task-form]') === null")
+    assert round(surface.bounding_box()["width"]) == 288
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
+    assert page.locator('[data-testid="manual-task-form"]').count() == 0
+    page.locator('[data-testid="manual-task-add-toggle"]').click()
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 288")
+    form_box = page.locator('[data-testid="manual-task-form"]').bounding_box()
+    surface_box = surface.bounding_box()
+    assert form_box and surface_box and form_box["x"] >= surface_box["x"] and form_box["x"] + form_box["width"] <= surface_box["x"] + surface_box["width"] + 1, (form_box, surface_box)
     page.locator('[data-testid="manual-task-cancel"]').click()
     page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 288")
     compact_block = page.locator('[data-testid^="now-focus-overlay-block-"]').first
