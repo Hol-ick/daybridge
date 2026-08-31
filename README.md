@@ -57,6 +57,7 @@ Daybridge does not edit the original daily note. A direct session writes only a 
 - [Google Calendar connection](docs/GOOGLE_CALENDAR.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Debugging guide](docs/DEBUGGING.md)
+- [Activity log](docs/ACTIVITY_LOG.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Status

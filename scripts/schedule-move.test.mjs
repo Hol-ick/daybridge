@@ -77,6 +77,9 @@ test("schedule block move reorders open focus cards without entering lunch", asy
     assert.equal(movedResponse.headers.get("access-control-allow-origin"), "http://tauri.localhost");
     const saved = JSON.parse(await readFile(join(dataDir, "schedules", `${DATE}.json`), "utf8"));
     assert.equal(saved.blocks.filter((block) => block.type === "focus").find((block) => block.questId === "quest-1").startAt.slice(11, 16), "13:00");
+    const activity = await (await fetch(`${baseUrl}/api/activity?date=${DATE}`)).json();
+    assert.equal(activity.records.at(-1).action, "task_reordered");
+    assert.equal(activity.records.at(-1).subject.title, "배포 상태 확인");
   } finally {
     child.kill();
     await rm(dataDir, { recursive: true, force: true });
@@ -119,6 +122,9 @@ test("schedule block discard removes the card and keeps its quest unit out after
     assert.equal(discarded.schedule.blocks.some((block) => block.id === source.id), false);
     assert.deepEqual(discarded.schedule.discardedBlocks.map((item) => item.questId), [source.questId]);
     assert.equal(discardedResponse.headers.get("access-control-allow-origin"), "http://tauri.localhost");
+    const activity = await (await fetch(`${baseUrl}/api/activity?date=${DATE}`)).json();
+    assert.equal(activity.records.at(-1).action, "task_removed");
+    assert.equal(activity.records.at(-1).subject.title, "배포 상태 확인");
 
     const rebuiltAgain = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
     assert.equal(rebuiltAgain.status, 200);
@@ -163,6 +169,9 @@ test("schedule block completion persists to the quest and survives adding anothe
     assert.equal(completedResponse.status, 200);
     const completed = await completedResponse.json();
     assert.equal(completed.schedule.blocks.find((block) => block.id === source.id).status, "completed");
+    const activity = await (await fetch(`${baseUrl}/api/activity?date=${DATE}`)).json();
+    assert.equal(activity.records.at(-1).action, "status_changed");
+    assert.equal(activity.records.at(-1).details.status, "completed");
     const boardAfterReport = JSON.parse(await readFile(join(dataDir, "boards", `${DATE}.json`), "utf8"));
     assert.equal(boardAfterReport.quests.find((quest) => quest.id === source.questId).state, "completed");
 

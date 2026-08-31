@@ -44,6 +44,12 @@ test("manual task endpoint saves a task and splits it into 50-minute blocks", as
   const { child, baseUrl } = await startBridge(dataDir);
   try {
     await createBoard(dataDir);
+    const settingsResponse = await fetch(`${baseUrl}/api/schedule-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityDate: DATE, dayStart: "09:00", dayEnd: "18:00", timeConfigured: true, bufferMinutes: 10 }),
+    });
+    assert.equal(settingsResponse.status, 200);
     const response = await fetch(`${baseUrl}/api/quests/manual`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: "http://tauri.localhost" },
@@ -60,6 +66,14 @@ test("manual task endpoint saves a task and splits it into 50-minute blocks", as
     assert.deepEqual(focus.map((block) => [block.startAt.slice(11, 16), block.endAt.slice(11, 16)]), [["09:00", "09:50"], ["10:00", "10:50"]]);
     const saved = JSON.parse(await readFile(join(dataDir, "boards", `${DATE}.json`), "utf8"));
     assert.equal(saved.quests.length, 1);
+    const activityResponse = await fetch(`${baseUrl}/api/activity?date=${DATE}`);
+    assert.equal(activityResponse.status, 200);
+    const activity = await activityResponse.json();
+    assert.ok(activity.records.some((record) => record.action === "schedule_settings_changed"));
+    assert.equal(activity.records.at(-1).action, "task_added");
+    assert.equal(activity.records.at(-1).subject.title, "리눅스 학습");
+    const activityMarkdown = await readFile(join(dataDir, "activity", `${DATE}.md`), "utf8");
+    assert.match(activityMarkdown, /작업 추가/);
   } finally {
     child.kill();
     await rm(dataDir, { recursive: true, force: true });

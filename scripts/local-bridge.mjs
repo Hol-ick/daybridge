@@ -19,6 +19,7 @@ import {
 import { calendarEventsToBusyBlocks, inspectGoogleCalendarConnection, readGoogleCalendarBusyBlocks } from "./calendar/google-calendar-reader.mjs";
 import { createGoogleCalendarAdapter } from "./calendar/googleapis-adapter.mjs";
 import { beginGoogleCalendarAuthorization, finishGoogleCalendarAuthorization, unprotectTokenWithDpapi } from "./calendar/google-oauth.mjs";
+import { readActivityLog, recordActivity } from "./activity-log.mjs";
 
 const PORT = Number(process.env.DAYBRIDGE_BRIDGE_PORT || 39393);
 const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
@@ -185,6 +186,9 @@ async function writeEvent(config, event) {
   await atomicWrite(join(resolve(config.handoffSinkDir), event.activityDate, event.id + ".json"), event);
   return true;
 }
+function activitySubject({ type = "task", id, questId, title }) {
+  return { type, id: sanitizeText(id, 120), questId: sanitizeText(questId, 120), title: sanitizeText(title, 180) };
+}
 async function handleReport(body) {
   const activityDate = safeDate(body.activityDate); const questId = typeof body.questId === "string" ? body.questId : ""; const status = typeof body.status === "string" ? body.status : "";
   if (!activityDate || !questId || !VALID_STATUSES.has(status)) return { status: 400, body: { error: "activityDate, questId, and status are required." } };
@@ -198,6 +202,7 @@ async function handleReport(body) {
   const config = await loadConfig(); await atomicWrite(path, board); await atomicWrite(join(DATA_DIR, "boards", "latest.json"), board);
   const event = { schemaVersion: 1, id: report.id, eventType: "quest_status_report", activityDate, occurredAt: report.occurredAt, source: "daybridge", sensitivity: "sanitized", quest: { id: quest.id, missionId: quest.missionId || null, title: sanitizeText(quest.title, 180), project: sanitizeText(quest.project, 100), status: quest.status, state: quest.state, progress: quest.progress, carryoverCount: quest.carryoverCount || 0, firstStep: sanitizeText(quest.firstStep, 240), doneWhen: sanitizeText(quest.doneWhen, 240), sourceLabel: sanitizeText(quest.sourceLabel, 100), sourcePath: sanitizeText(quest.sourcePath, 220) }, report };
   const mirrored = await writeEvent(config, event);
+  await recordActivity(DATA_DIR, { activityDate, occurredAt: report.occurredAt, action: "status_changed", subject: activitySubject({ id: quest.id, questId: quest.id, title: quest.title }), details: { status: quest.status } });
   return { status: 200, body: responseBody(board, mirrored ? "connected" : "local", mirrored) };
 }
 const MANUAL_DURATIONS = new Set([50, 100, 150]);
@@ -264,6 +269,7 @@ async function handleManualQuest(body) {
     quest: { id: quest.id, title: quest.title, project: quest.project, status: quest.status, estimateMinutes: quest.estimateMinutes, sourceLabel: quest.sourceLabel, sourcePath: quest.sourcePath },
   };
   const mirrored = await writeEvent(config, event);
+  await recordActivity(DATA_DIR, { activityDate, occurredAt, action: "task_added", subject: activitySubject({ id: quest.id, questId: quest.id, title: quest.title }), details: { durationMinutes } });
   const schedule = await rebuildSchedule(activityDate);
   if (!schedule) return { status: 500, body: { error: "The task was saved but its schedule could not be rebuilt." } };
   return { status: 201, body: { ...responseBody(board, mirrored ? "connected" : "local", mirrored), quest, schedule, nowFocus: nowFocus(schedule) } };
@@ -488,10 +494,23 @@ async function handleScheduleInbox(url) {
   } };
 }
 async function handleScheduleRebuild(body) {
-  const activityDate = scheduleDate(body);
+  const activityDate = safeDate(body?.activityDate || body?.date) || koreaNow().slice(0, 10);
   const schedule = await rebuildSchedule(activityDate);
   if (!schedule) return { status: 404, body: { error: "No quest board exists for this date." } };
+  await recordActivity(DATA_DIR, { activityDate, action: "schedule_rebuilt", subject: activitySubject({ type: "schedule", id: activityDate, title: "오늘 일정" }), details: { mode: schedule.mode, timeConfigured: schedule.timeConfigured !== false } });
   return { status: 200, body: { schedule, nowFocus: nowFocus(schedule) } };
+}
+async function handleScheduleSettingsUpdate(body) {
+  const current = await loadScheduleSettings(DATA_DIR);
+  const settings = await saveScheduleSettings(DATA_DIR, { ...current, ...body });
+  const activityDate = safeDate(body?.activityDate || body?.date) || koreaNow().slice(0, 10);
+  await recordActivity(DATA_DIR, {
+    activityDate,
+    action: "schedule_settings_changed",
+    subject: activitySubject({ type: "schedule", id: "settings", title: "시간표 설정" }),
+    details: { timeConfigured: settings.timeConfigured, dayStart: settings.dayStart, dayEnd: settings.dayEnd, bufferMinutes: settings.bufferMinutes },
+  });
+  return { status: 200, body: { settings } };
 }
 async function handleScheduleBlockReport(body) {
   const activityDate = safeDate(body.activityDate || body.date);
@@ -504,6 +523,7 @@ async function handleScheduleBlockReport(body) {
   const config = await loadConfig();
   const event = { schemaVersion: 1, id: result.report.id, eventType: "schedule_block_report", activityDate, occurredAt: result.report.occurredAt, source: "daybridge", sensitivity: "sanitized", block: result.report.block, report: { id: result.report.id, occurredAt: result.report.occurredAt, status: result.report.status, note: result.report.note, source: "daybridge" } };
   const mirrored = await writeEvent(config, event);
+  await recordActivity(DATA_DIR, { activityDate, occurredAt: result.report.occurredAt, action: "status_changed", subject: activitySubject({ type: "schedule_block", id: result.report.block.id, questId: result.report.block.taskId, title: result.report.block.title }), details: { status: result.report.status } });
   return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
 }
 async function handleScheduleBlockMove(body) {
@@ -530,6 +550,8 @@ async function handleScheduleBlockMove(body) {
     },
   };
   const mirrored = await writeEvent(config, event);
+  const target = result.movement.targetBlockId ? result.schedule.blocks.find((block) => block?.id === result.movement.targetBlockId) : null;
+  await recordActivity(DATA_DIR, { activityDate, occurredAt: result.movement.occurredAt, action: "task_reordered", subject: activitySubject({ type: "schedule_block", id: result.movement.block.id, questId: result.movement.block.questId, title: result.movement.block.title }), details: { position: result.movement.position, targetBlockId: result.movement.targetBlockId, targetTitle: target?.title, startAt: result.movement.block.startAt, endAt: result.movement.block.endAt } });
   return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
 }
 async function handleScheduleBlockDiscard(body) {
@@ -551,6 +573,7 @@ async function handleScheduleBlockDiscard(body) {
     discard: { blockId: result.discard.blockId, questId: result.discard.questId, title: result.discard.title, units: result.discard.units },
   };
   const mirrored = await writeEvent(config, event);
+  await recordActivity(DATA_DIR, { activityDate, occurredAt: result.discard.occurredAt, action: "task_removed", subject: activitySubject({ type: "schedule_block", id: result.discard.blockId, questId: result.discard.questId, title: result.discard.title }), details: { reason: "today_schedule" } });
   return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
 }
 function calendarRedirectUri() { return `http://127.0.0.1:${PORT}/api/calendar/oauth/callback`; }
@@ -624,9 +647,10 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/quests/manual") { const result = await handleManualQuest(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule") { const result = await handleSchedule(url); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule/inbox") { const result = await handleScheduleInbox(url); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/activity") { const activityDate = safeDate(url.searchParams.get("date")) || koreaNow().slice(0, 10); const records = await readActivityLog(DATA_DIR, activityDate, { limit: Number(url.searchParams.get("limit")) || 200 }); send(response, 200, { activityDate, records }); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/rebuild") { const result = await handleScheduleRebuild(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule-settings") { send(response, 200, { settings: await loadScheduleSettings(DATA_DIR) }, origin); return; }
-    if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const incoming = await readRequestBody(request); const current = await loadScheduleSettings(DATA_DIR); send(response, 200, { settings: await saveScheduleSettings(DATA_DIR, { ...current, ...incoming }) }, origin); return; }
+    if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const result = await handleScheduleSettingsUpdate(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-report") { const result = await handleScheduleBlockReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-move") { const result = await handleScheduleBlockMove(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-discard") { const result = await handleScheduleBlockDiscard(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
