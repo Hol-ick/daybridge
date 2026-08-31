@@ -11,7 +11,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
+    Manager, PhysicalPosition, Position, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    WindowEvent,
 };
 
 const OVERLAY_POSITION_FILE: &str = "overlay-position.json";
@@ -70,7 +71,10 @@ fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
         .ok_or_else(|| "Daybridge 프로젝트 경로를 확인할 수 없습니다.".to_string())?;
     let script = project_root.join(LOCAL_BRIDGE_SCRIPT);
     if !script.is_file() {
-        let error = format!("로컬 브리지 스크립트를 찾을 수 없습니다: {}", script.display());
+        let error = format!(
+            "로컬 브리지 스크립트를 찾을 수 없습니다: {}",
+            script.display()
+        );
         let _ = append_runtime_event(
             app,
             "bridge_autostart_unavailable",
@@ -206,11 +210,101 @@ fn append_runtime_event(app: &tauri::AppHandle, event: &str, details: &str) -> R
     writeln!(file, "{record}").map_err(|error| error.to_string())
 }
 
-fn ensure_overlay_visible(app: &tauri::AppHandle) -> Result<bool, String> {
+fn position_is_outside_work_area(
+    position: (i32, i32),
+    size: (u32, u32),
+    work_area_position: (i32, i32),
+    work_area_size: (u32, u32),
+) -> bool {
+    let (left, top) = (
+        i64::from(work_area_position.0),
+        i64::from(work_area_position.1),
+    );
+    let right = left + i64::from(work_area_size.0);
+    let bottom = top + i64::from(work_area_size.1);
+    let (window_left, window_top) = (i64::from(position.0), i64::from(position.1));
+    let window_right = window_left + i64::from(size.0);
+    let window_bottom = window_top + i64::from(size.1);
+
+    window_right <= left || window_left >= right || window_bottom <= top || window_top >= bottom
+}
+
+/// Restore only a fully off-screen overlay. A deliberately central position is
+/// kept intact; this recovery is for display, DPI, and taskbar-layout changes
+/// that leave the persistent process running with no reachable widget.
+fn restore_overlay_if_off_screen(
+    app: &tauri::AppHandle,
+    window: &WebviewWindow,
+) -> Result<bool, String> {
+    let position = window.outer_position().map_err(|error| error.to_string())?;
+    let size = window.outer_size().map_err(|error| error.to_string())?;
+    let monitor = window
+        .current_monitor()
+        .map_err(|error| error.to_string())?
+        .or(app.primary_monitor().map_err(|error| error.to_string())?);
+    let Some(monitor) = monitor else {
+        return Ok(false);
+    };
+    let work_area = monitor.work_area();
+    if !position_is_outside_work_area(
+        (position.x, position.y),
+        (size.width, size.height),
+        (work_area.position.x, work_area.position.y),
+        (work_area.size.width, work_area.size.height),
+    ) {
+        return Ok(false);
+    }
+
+    let next_x = work_area.position.x
+        + i32::try_from(work_area.size.width.saturating_sub(size.width)).unwrap_or(i32::MAX);
+    let next_y = work_area.position.y
+        + i32::try_from(work_area.size.height.saturating_sub(size.height)).unwrap_or(i32::MAX);
+    window
+        .set_position(Position::Physical(PhysicalPosition::new(next_x, next_y)))
+        .map_err(|error| error.to_string())?;
+    let _ = persist_overlay_position(app, next_x, next_y);
+    Ok(true)
+}
+
+#[cfg(windows)]
+fn force_native_overlay_visible(window: &WebviewWindow) -> Result<(), String> {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        SWP_SHOWWINDOW, SW_SHOWNOACTIVATE,
+    };
+
+    let handle = window.hwnd().map_err(|error| error.to_string())?;
+    // Tauri's visibility state can stay true while a transparent WebView is
+    // hidden by Windows. Repeating the framework-level `show` alone then has
+    // no observable effect. Explicit Win32 calls restore both the visible bit
+    // and the topmost z-order without taking keyboard focus.
+    unsafe {
+        let _ = ShowWindow(handle, SW_SHOWNOACTIVATE);
+        SetWindowPos(
+            handle,
+            Some(HWND_TOPMOST),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn force_native_overlay_visible(_window: &WebviewWindow) -> Result<(), String> {
+    Ok(())
+}
+
+fn ensure_overlay_visible(app: &tauri::AppHandle, source: &str) -> Result<bool, String> {
     let window = app
         .get_webview_window("overlay")
         .ok_or_else(|| "오버레이 창을 찾을 수 없습니다.".to_string())?;
     let was_visible = window.is_visible().unwrap_or(false);
+    let was_minimized = window.is_minimized().unwrap_or(false);
     window.unminimize().map_err(|error| error.to_string())?;
     // A transparent window can remain visible but lose its place in the
     // topmost z-order after a display/full-screen transition. Re-assert the
@@ -220,14 +314,58 @@ fn ensure_overlay_visible(app: &tauri::AppHandle) -> Result<bool, String> {
         .set_always_on_top(true)
         .map_err(|error| error.to_string())?;
     window.show().map_err(|error| error.to_string())?;
-    if !was_visible {
+    force_native_overlay_visible(&window)?;
+    let repositioned = restore_overlay_if_off_screen(app, &window)?;
+    if !was_visible || was_minimized || repositioned {
         let _ = append_runtime_event(
             app,
             "overlay_visibility_recovered",
-            &json!({ "previouslyVisible": false }).to_string(),
+            &json!({
+                "source": source,
+                "previouslyVisible": was_visible,
+                "previouslyMinimized": was_minimized,
+                "repositionedFromOffScreen": repositioned,
+            })
+            .to_string(),
         );
     }
-    Ok(!was_visible)
+    Ok(!was_visible || was_minimized || repositioned)
+}
+
+/// Keep the recovery independent from the transparent WebView's JavaScript
+/// lifecycle. When Windows covers, hides, or relocates that WebView, browser
+/// timers may be suspended even though the native process is still alive.
+fn start_overlay_visibility_watchdog(app: tauri::AppHandle) {
+    let _ = append_runtime_event(
+        &app,
+        "overlay_watchdog_started",
+        &json!({ "intervalSeconds": 3 }).to_string(),
+    );
+    thread::spawn(move || {
+        let mut consecutive_failures = 0_u32;
+        loop {
+            thread::sleep(Duration::from_secs(3));
+            match ensure_overlay_visible(&app, "native_watchdog") {
+                Ok(_) => consecutive_failures = 0,
+                Err(error) => {
+                    consecutive_failures = consecutive_failures.saturating_add(1);
+                    // Preserve the first error and periodic repeats without
+                    // turning a long-running recovery into log noise.
+                    if consecutive_failures == 1 || consecutive_failures % 20 == 0 {
+                        let _ = append_runtime_event(
+                            &app,
+                            "overlay_watchdog_error",
+                            &json!({
+                                "consecutiveFailures": consecutive_failures,
+                                "error": error,
+                            })
+                            .to_string(),
+                        );
+                    }
+                }
+            }
+        }
+    });
 }
 
 fn dashboard_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
@@ -250,7 +388,7 @@ fn dashboard_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
 }
 
 fn show_dashboard(app: &tauri::AppHandle) -> tauri::Result<()> {
-    let _ = ensure_overlay_visible(app);
+    let _ = ensure_overlay_visible(app, "dashboard_open");
     let window = dashboard_window(app)?;
     window.unminimize()?;
     window.show()?;
@@ -260,7 +398,7 @@ fn show_dashboard(app: &tauri::AppHandle) -> tauri::Result<()> {
 
 #[tauri::command]
 fn show_overlay(app: tauri::AppHandle) -> Result<bool, String> {
-    ensure_overlay_visible(&app)
+    ensure_overlay_visible(&app, "command")
 }
 
 #[tauri::command]
@@ -330,7 +468,8 @@ fn main() {
             if let Some(window) = app.get_webview_window("overlay") {
                 let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
             }
-            let _ = ensure_overlay_visible(app.handle());
+            let _ = ensure_overlay_visible(app.handle(), "app_setup");
+            start_overlay_visibility_watchdog(app.handle().clone());
             let show = MenuItem::with_id(app, "show", "Daybridge 열기", true, None::<&str>)?;
             let show_overlay_item =
                 MenuItem::with_id(app, "show_overlay", "위젯 다시 표시", true, None::<&str>)?;
@@ -351,7 +490,7 @@ fn main() {
                         let _ = show_dashboard(app);
                     }
                     "show_overlay" => {
-                        let _ = ensure_overlay_visible(app);
+                        let _ = ensure_overlay_visible(app, "tray_menu");
                     }
                     "hide" => {
                         if let Some(window) = app.get_webview_window("dashboard") {
@@ -412,7 +551,7 @@ fn main() {
                         "overlay_close_ignored",
                         "{\"reason\":\"overlay_is_persistent\"}",
                     );
-                    let _ = ensure_overlay_visible(&window.app_handle());
+                    let _ = ensure_overlay_visible(&window.app_handle(), "close_requested");
                 } else {
                     let _ = window.hide();
                     api.prevent_close();
@@ -428,4 +567,29 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("failed to run Daybridge");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::position_is_outside_work_area;
+
+    #[test]
+    fn keeps_an_overlay_inside_the_current_work_area() {
+        assert!(!position_is_outside_work_area(
+            (1632, 976),
+            (288, 64),
+            (0, 0),
+            (1920, 1040),
+        ));
+    }
+
+    #[test]
+    fn detects_an_overlay_lost_after_a_monitor_layout_change() {
+        assert!(position_is_outside_work_area(
+            (2400, 976),
+            (288, 64),
+            (0, 0),
+            (1920, 1040),
+        ));
+    }
 }
