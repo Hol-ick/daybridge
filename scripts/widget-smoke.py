@@ -350,17 +350,23 @@ def check_overlay(browser) -> None:
     page.wait_for_timeout(100)
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-animation-mid.png", full_page=True)
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
-    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().height) === 520")
+    page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().height) === Number(surface.dataset.expandedHeight); })()")
     expanded_box = surface.bounding_box()
-    assert expanded_box and round(expanded_box["height"]) == 520
+    assert expanded_box and round(expanded_box["height"]) == int(surface.get_attribute("data-expanded-height")) and round(expanded_box["height"]) < 520
     summary_box = page.locator('[data-testid="now-focus-overlay-summary"]').bounding_box()
     assert summary_box and abs((summary_box["y"] + summary_box["height"]) - (expanded_box["y"] + expanded_box["height"])) <= 1
     assert page.locator('[data-testid="now-focus-overlay-expanded"]').is_visible()
+    page.wait_for_timeout(350)
+    add_box = page.locator('[data-testid="manual-task-add-toggle"]').bounding_box()
+    settings_box = page.locator('[data-testid="now-focus-overlay-settings"]').bounding_box()
+    assert add_box and settings_box and abs(add_box["width"] - settings_box["width"]) <= 1 and abs(add_box["height"] - settings_box["height"]) <= 1, (add_box, settings_box)
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-expanded.png", full_page=True)
     transition_duration = page.locator('[data-testid="now-focus-overlay-expanded"]').evaluate("element => parseFloat(getComputedStyle(element).transitionDuration)")
     assert transition_duration > 0
     transform_origin = page.locator('[data-testid="now-focus-overlay-expanded"]').evaluate("element => getComputedStyle(element).transformOrigin")
-    assert transform_origin.split()[-1].startswith("456") or transform_origin.split()[-1].startswith("100%"), transform_origin
+    expanded_panel_box = page.locator('[data-testid="now-focus-overlay-expanded"]').bounding_box()
+    origin_y = float(transform_origin.split()[-1].removesuffix("px"))
+    assert expanded_panel_box and abs(origin_y - expanded_panel_box["height"]) <= 1, (transform_origin, expanded_panel_box)
     assert page.get_by_text("여유 시간", exact=True).count() == 0
     page.locator('[data-testid="manual-task-add-toggle"]').click()
     page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 288")
@@ -458,7 +464,7 @@ def check_overlay_todo_items(browser) -> None:
     assert re.fullmatch(r"\d{2}:\d{2}", leave_timer.locator('[data-testid="now-focus-overlay-leave-time-value"]').inner_text())
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-block-todo-linux"]')
-    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().height) === 520")
+    page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().height) === Number(surface.dataset.expandedHeight) && Number(surface.dataset.expandedHeight) < 520; })()")
     assert page.locator('[data-testid^="now-focus-overlay-block-"]').count() == 2
     assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"]').get_attribute("data-drag-enabled") == "true"
     assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"] [class*=compactBlockTime]').count() == 0
@@ -495,6 +501,45 @@ def check_overlay_todo_items(browser) -> None:
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-linux]') === null")
     assert discard_calls and discard_calls[0]["blockId"] == "todo-linux"
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-todo-items.png", full_page=True)
+    assert_no_page_errors(errors)
+    context.close()
+
+
+def check_overlay_compact_expansion(browser) -> None:
+    """Prove short schedules stop at their content instead of a blank 520px panel."""
+    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DRAG_SCHEDULE),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/schedule-settings",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().height) === Number(surface.dataset.expandedHeight); })()")
+    page.wait_for_timeout(350)
+    surface = page.locator('[data-testid="now-focus-overlay-surface"]')
+    blocks = page.locator('[data-testid^="now-focus-overlay-block-"]')
+    assert blocks.count() == 3
+    surface_box = surface.bounding_box()
+    footer_box = page.locator('[aria-label="시간표 도구"]').bounding_box()
+    last_box = blocks.nth(2).bounding_box()
+    assert surface_box and footer_box and last_box
+    assert round(surface_box["height"]) == int(surface.get_attribute("data-expanded-height")) and round(surface_box["height"]) < 520
+    assert 0 <= footer_box["y"] - (last_box["y"] + last_box["height"]) <= 8, (last_box, footer_box)
+    add_box = page.locator('[data-testid="manual-task-add-toggle"]').bounding_box()
+    settings_box = page.locator('[data-testid="now-focus-overlay-settings"]').bounding_box()
+    assert add_box and settings_box and abs(add_box["width"] - settings_box["width"]) <= 1 and abs(add_box["height"] - settings_box["height"]) <= 1, (add_box, settings_box)
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-compact-list.png", full_page=True)
     assert_no_page_errors(errors)
     context.close()
 
@@ -572,7 +617,7 @@ def check_overlay_reorder(browser) -> None:
     page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
-    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().height) === 520")
+    page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().height) === Number(surface.dataset.expandedHeight) && Number(surface.dataset.expandedHeight) < 520; })()")
     first = page.locator('[data-testid="now-focus-overlay-block-drag-a"]')
     second = page.locator('[data-testid="now-focus-overlay-block-drag-b"]')
     assert first.get_attribute("data-drag-enabled") == "true"
@@ -652,6 +697,7 @@ def main() -> None:
         check_dashboard(browser)
         check_dashboard_actions(browser)
         check_overlay(browser)
+        check_overlay_compact_expansion(browser)
         check_overlay_todo_items(browser)
         check_overlay_long_title(browser)
         check_overlay_reorder(browser)

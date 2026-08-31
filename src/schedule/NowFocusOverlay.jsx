@@ -65,6 +65,26 @@ const BLOCK_STATUS_LABELS = {
   deferred: "보류",
 };
 
+// The cards deliberately keep a stable touch target. The native overlay can
+// therefore grow exactly around the visible list instead of reserving a large
+// empty panel for a schedule that may only contain one or two tasks.
+const OVERLAY_CARD_HEIGHT = 57;
+const OVERLAY_CARD_GAP = 6;
+const OVERLAY_PANEL_TOP_PADDING = 10;
+const OVERLAY_TOOLBAR_HEIGHT = 60;
+const OVERLAY_EMPTY_LIST_HEIGHT = 62;
+
+function expandedOverlayHeight(blockCount, settingsOpen) {
+  if (settingsOpen) return OVERLAY_EXPANDED_HEIGHT;
+  const listHeight = blockCount
+    ? blockCount * OVERLAY_CARD_HEIGHT + Math.max(0, blockCount - 1) * OVERLAY_CARD_GAP
+    : OVERLAY_EMPTY_LIST_HEIGHT;
+  return Math.min(
+    OVERLAY_EXPANDED_HEIGHT,
+    OVERLAY_COLLAPSED_HEIGHT + OVERLAY_PANEL_TOP_PADDING + listHeight + OVERLAY_TOOLBAR_HEIGHT,
+  );
+}
+
 function blockStatusLabel(status) {
   return BLOCK_STATUS_LABELS[status] || BLOCK_STATUS_LABELS.planned;
 }
@@ -257,6 +277,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const workdayCountdown = getWorkdayCountdown(currentTime);
   const todoSummaryBlock = blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)) ?? blocks[0];
   const summaryTitle = todoListMode ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "오늘 할 일") : idle ? workdayCountdown.label : title;
+  const targetExpandedHeight = expandedOverlayHeight(blocks.length, settingsOpen);
 
   useLayoutEffect(() => {
     const nextRects = new Map();
@@ -462,7 +483,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       // Grow the native viewport first. The collapsed card is already aligned
       // to that viewport's bottom, so the CSS height animation can then pull
       // only its top edge upward without moving the summary row.
-      void resizeOverlay(OVERLAY_EXPANDED_HEIGHT, settingsOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH).catch(() => false).finally(() => setExpanded(true));
+      void resizeOverlay(targetExpandedHeight, settingsOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH).catch(() => false).finally(() => setExpanded(true));
     } else {
       if (taskOpen) {
         setTaskOpen(false);
@@ -477,9 +498,9 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
 
   useEffect(() => {
     if (!expanded) return undefined;
-    void resizeOverlay(OVERLAY_EXPANDED_HEIGHT, settingsOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH);
+    void resizeOverlay(targetExpandedHeight, settingsOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH);
     return undefined;
-  }, [expanded, settingsOpen]);
+  }, [expanded, settingsOpen, targetExpandedHeight]);
 
   useEffect(() => {
     if (!expanded) return undefined;
@@ -555,7 +576,14 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
 
   return (
     <aside className={[styles.overlay, settingsOpen ? styles.settingsOpen : ""].filter(Boolean).join(" ")} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
-      <div className={surfaceClassName} onPointerDown={handlePointerDown} onMouseDown={handlePointerDown} data-testid="now-focus-overlay-surface">
+      <div
+        className={surfaceClassName}
+        style={{ "--overlay-expanded-height": `${targetExpandedHeight}px` }}
+        onPointerDown={handlePointerDown}
+        onMouseDown={handlePointerDown}
+        data-testid="now-focus-overlay-surface"
+        data-expanded-height={targetExpandedHeight}
+      >
         <section className={styles.expandedPanel} aria-label={todoListMode ? "오늘 할 일 목록" : "오늘 시간표 관리"} aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
           {blocks.length ? (
             <ol className={styles.compactList}>
