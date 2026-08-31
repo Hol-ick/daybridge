@@ -206,7 +206,35 @@ export async function moveScheduleBlock(dataDir, date, input = {}) {
   const occurredAt = now();
   const settings = await loadScheduleSettings(dataDir);
   if (!settings.timeConfigured || schedule.mode === "todo" || schedule.timeConfigured === false) {
-    throw new TypeError("Untimed todo lists do not support time-slot moves.");
+    const ordered = schedule.blocks
+      .filter((block) => block.type === "focus")
+      .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+    const orderedSourceIndex = ordered.findIndex((block) => block.id === blockId);
+    if (orderedSourceIndex < 0) throw new TypeError("The focus block cannot be moved.");
+    const [picked] = ordered.splice(orderedSourceIndex, 1);
+    if (!targetBlockId) ordered.push(picked);
+    else {
+      const targetIndex = ordered.findIndex((block) => block.id === targetBlockId);
+      if (targetIndex < 0) throw new TypeError("The drop target is not movable.");
+      ordered.splice(targetIndex + (position === "after" ? 1 : 0), 0, picked);
+    }
+    const orderById = new Map(ordered.map((block, index) => [block.id, index]));
+    const blocks = schedule.blocks.map((block) => orderById.has(block.id)
+      ? { ...block, order: orderById.get(block.id), locked: true, userPositioned: true, updatedAt: occurredAt }
+      : block);
+    const updated = await saveSchedule(dataDir, requestedDate, { ...schedule, blocks, updatedAt: occurredAt });
+    const moved = updated.blocks.find((block) => block.id === blockId);
+    return {
+      schedule: updated,
+      movement: {
+        id: randomUUID(),
+        occurredAt,
+        sourceBlockId: blockId,
+        targetBlockId: targetBlockId || null,
+        position: targetBlockId ? position : "end",
+        block: { id: moved.id, questId: sanitizeText(moved.questId, 120), title: sanitizeText(moved.title, 180) },
+      },
+    };
   }
   const movable = schedule.blocks.filter((block) => block.type === "focus" && !terminal.has(block.status))
     .sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));

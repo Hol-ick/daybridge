@@ -333,13 +333,27 @@ function koreaNow(date = new Date()) {
 function nowFocus(schedule) { return resolveNowFocus(schedule, koreaNow()); }
 const TERMINAL_BLOCK_STATUSES = new Set(["completed", "deferred", "skipped"]);
 
-function preserveTodoTerminalBlocks(existingSchedule, generatedSchedule, questIds) {
+function preserveTodoOrder(existingSchedule, generatedSchedule, questIds) {
   if (!existingSchedule || !Array.isArray(existingSchedule.blocks) || !generatedSchedule || !Array.isArray(generatedSchedule.blocks)) return generatedSchedule;
-  const generatedIds = new Set(generatedSchedule.blocks.map((block) => block?.id).filter(Boolean));
-  const terminal = existingSchedule.blocks.filter((block) => block?.type === "focus" && TERMINAL_BLOCK_STATUSES.has(block?.status) && questIds.has(block?.questId) && !generatedIds.has(block?.id));
-  if (!terminal.length) return generatedSchedule;
-  const blocks = [...generatedSchedule.blocks, ...terminal].map((block, index) => ({ ...block, order: index }));
-  return { ...generatedSchedule, blocks };
+  const generatedByQuest = new Map(generatedSchedule.blocks.filter((block) => block?.type === "focus" && questIds.has(block?.questId)).map((block) => [block.questId, block]));
+  const used = new Set();
+  const orderedExisting = [...existingSchedule.blocks]
+    .filter((block) => block?.type === "focus" && questIds.has(block?.questId))
+    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+  const blocks = [];
+  for (const existing of orderedExisting) {
+    const generated = generatedByQuest.get(existing.questId);
+    if (generated) {
+      blocks.push({ ...generated, userPositioned: Boolean(existing.userPositioned), locked: Boolean(existing.locked), updatedAt: existing.updatedAt || generated.updatedAt });
+      used.add(generated.id);
+    } else if (TERMINAL_BLOCK_STATUSES.has(existing.status)) {
+      blocks.push(existing);
+    }
+  }
+  for (const block of generatedSchedule.blocks) if (!used.has(block.id) && !blocks.some((item) => item.id === block.id)) blocks.push(block);
+  if (!blocks.length) return generatedSchedule;
+  const normalizedBlocks = blocks.map((block, index) => ({ ...block, order: index }));
+  return { ...generatedSchedule, blocks: normalizedBlocks };
 }
 
 function retainedScheduleBlocks(schedule, at) {
@@ -426,7 +440,7 @@ async function rebuildSchedule(activityDate) {
   const coverage = calendarResult.calendar.state === "connected" ? "connected" : "attention";
   const generated = buildDailySchedule({ date: activityDate, settings, taskCandidates: tasks, busyBlocks: calendarResult.busyBlocks, lockedBlocks: retainedScheduleBlocks(existingSchedule, generatedAt), completedQuestIds, startAt: generatedAt, generatedAt });
   const boardQuestIds = new Set(board.quests.map((quest) => quest?.id).filter((id) => typeof id === "string"));
-  const scheduleWithTerminals = settings.timeConfigured ? generated : preserveTodoTerminalBlocks(existingSchedule, generated, boardQuestIds);
+  const scheduleWithTerminals = settings.timeConfigured ? generated : preserveTodoOrder(existingSchedule, generated, boardQuestIds);
   return saveSchedule(DATA_DIR, activityDate, {
     ...scheduleWithTerminals,
     date: activityDate,

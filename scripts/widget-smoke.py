@@ -39,6 +39,10 @@ TODO_DISCARDED_SCHEDULE = json.dumps({
     "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": [TODO_BLOCKS[1]], "discardedBlocks": [{"blockId": "todo-linux", "questId": "quest-linux", "title": "리눅스 학습", "units": 1}], "unscheduled": [], "calendar": {"coverage": "attention"}},
     "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
 })
+TODO_REORDERED_SCHEDULE = json.dumps({
+    "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": [{**TODO_BLOCKS[1], "order": 0}, {**TODO_BLOCKS[0], "order": 1}], "unscheduled": [], "calendar": {"coverage": "attention"}},
+    "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
+})
 TODO_SCHEDULE = json.dumps({
     "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": TODO_BLOCKS, "unscheduled": [], "calendar": {"coverage": "attention"}},
     "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
@@ -430,6 +434,13 @@ def check_overlay_todo_items(browser) -> None:
         lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
     )
     discard_calls: list[dict] = []
+    move_calls: list[dict] = []
+    def handle_move(route) -> None:
+        move_calls.append(json.loads(route.request.post_data or "{}"))
+        route.fulfill(status=200, content_type="application/json", body=TODO_REORDERED_SCHEDULE)
+
+    context.route("http://127.0.0.1:39393/api/schedule/block-move", handle_move)
+
     def handle_discard(route) -> None:
         discard_calls.append(json.loads(route.request.post_data or "{}"))
         route.fulfill(status=200, content_type="application/json", body=TODO_DISCARDED_SCHEDULE)
@@ -447,10 +458,25 @@ def check_overlay_todo_items(browser) -> None:
     assert re.fullmatch(r"\d{2}:\d{2}", leave_timer.locator('[data-testid="now-focus-overlay-leave-time-value"]').inner_text())
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-block-todo-linux"]')
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().height) === 520")
     assert page.locator('[data-testid^="now-focus-overlay-block-"]').count() == 2
     assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"]').get_attribute("data-drag-enabled") == "true"
     assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"] [class*=compactBlockTime]').count() == 0
     assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"] [class*=compactBlockTitle]').inner_text() == "리눅스 학습"
+    first = page.locator('[data-testid="now-focus-overlay-block-todo-linux"]')
+    second = page.locator('[data-testid="now-focus-overlay-block-todo-docs"]')
+    first_box = first.bounding_box()
+    second_box = second.bounding_box()
+    assert first_box and second_box
+    first.dispatch_event("mousedown", {"button": 0, "clientX": first_box["x"] + first_box["width"] / 2, "clientY": first_box["y"] + first_box["height"] / 2})
+    first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": first_box["x"] + first_box["width"] / 2 + 8, "clientY": first_box["y"] + first_box["height"] / 2 + 8})
+    page.wait_for_selector('[data-testid="now-focus-overlay-drag-preview"]')
+    first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": second_box["x"] + second_box["width"] / 2, "clientY": second_box["y"] + 10})
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-docs]')?.getAttribute('data-drop-target') === 'true'")
+    page.wait_for_timeout(100)
+    first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": second_box["x"] + second_box["width"] / 2, "clientY": second_box["y"] + 10})
+    assert move_calls and move_calls[0]["blockId"] == "todo-linux" and move_calls[0]["targetBlockId"] == "todo-docs", move_calls
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-docs]')?.getBoundingClientRect().top < document.querySelector('[data-testid=now-focus-overlay-block-todo-linux]')?.getBoundingClientRect().top")
     first = page.locator('[data-testid="now-focus-overlay-block-todo-linux"]')
     first_box = first.bounding_box()
     assert first_box

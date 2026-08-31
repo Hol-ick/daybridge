@@ -118,8 +118,8 @@ function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, o
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
   const title = privateMode && kind === "focus" ? "집중 시간" : scheduleBlockTitle(block);
   const label = start;
-  // Untimed todo lists cannot be reordered into clock slots, but their open
-  // cards still need a drag affordance so the user can discard a unit.
+  // Untimed todo lists can reorder cards (without inventing times) and can
+  // also send an open card to the discard target.
   const draggable = actionable && (typeof onMove === "function" || canDiscard);
   const clickable = kind === "focus" && typeof onStatusChange === "function";
   const handleKeyDown = (event) => {
@@ -302,7 +302,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     flipRectsRef.current = nextRects;
   }, [blocks, expanded]);
 
-  const movableBlocks = useMemo(() => todoListMode ? [] : blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks, todoListMode]);
+  const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks]);
   const findDropTarget = (clientX, clientY) => {
     const element = document.elementFromPoint(clientX, clientY);
     const node = element instanceof Element ? element : null;
@@ -539,7 +539,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
                   key={item.id ?? `${item.startAt}-${scheduleBlockTitle(item)}`}
                   block={item}
                   privateMode={privateMode}
-                  onMove={todoListMode ? undefined : onMoveBlock}
+                  onMove={onMoveBlock}
                   canDiscard={typeof onDiscardBlock === "function"}
                   onStatusChange={onReportBlock}
                   onScheduleDragStart={handleScheduleDragStart}

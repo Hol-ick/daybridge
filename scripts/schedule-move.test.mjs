@@ -220,3 +220,40 @@ test("untimed todo completion remains completed after adding another task", asyn
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test("untimed todo move changes card order without assigning times", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-todo-move-"));
+  const { child, baseUrl } = await startBridge(dataDir);
+  try {
+    await createBoard(dataDir);
+    await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "", dayEnd: "", timeConfigured: false, bufferMinutes: 10 }));
+    const rebuilt = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
+    assert.equal(rebuilt.status, 200);
+    const initial = await rebuilt.json();
+    const focus = initial.schedule.blocks.filter((block) => block.type === "focus");
+    assert.equal(focus.length, 3);
+    const source = focus[0];
+    const target = focus[1];
+
+    const movedResponse = await fetch(`${baseUrl}/api/schedule/block-move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityDate: DATE, blockId: source.id, targetBlockId: target.id, position: "after" }),
+    });
+    assert.equal(movedResponse.status, 200);
+    const moved = await movedResponse.json();
+    const movedFocus = moved.schedule.blocks.filter((block) => block.type === "focus").sort((left, right) => left.order - right.order);
+    assert.deepEqual(movedFocus.map((block) => block.id), [target.id, source.id, focus[2].id]);
+    assert.ok(movedFocus.every((block) => block.timed === false && !block.startAt && !block.endAt));
+    assert.ok(movedFocus.every((block) => block.userPositioned === true));
+
+    const rebuiltAgain = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
+    assert.equal(rebuiltAgain.status, 200);
+    const afterRebuild = await rebuiltAgain.json();
+    const stableFocus = afterRebuild.schedule.blocks.filter((block) => block.type === "focus").sort((left, right) => left.order - right.order);
+    assert.deepEqual(stableFocus.map((block) => block.id), [target.id, source.id, focus[2].id]);
+  } finally {
+    child.kill();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
