@@ -181,3 +181,42 @@ test("schedule block completion persists to the quest and survives adding anothe
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test("untimed todo completion remains completed after adding another task", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-todo-status-"));
+  const { child, baseUrl } = await startBridge(dataDir);
+  try {
+    await createBoard(dataDir);
+    await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "", dayEnd: "", timeConfigured: false, bufferMinutes: 10 }));
+    const rebuilt = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
+    assert.equal(rebuilt.status, 200);
+    const initial = await rebuilt.json();
+    const source = initial.schedule.blocks.find((block) => block.type === "focus");
+    assert.ok(source);
+    assert.equal(initial.schedule.mode, "todo");
+
+    const completedResponse = await fetch(`${baseUrl}/api/schedule/block-report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityDate: DATE, blockId: source.id, status: "completed", note: "완료" }),
+    });
+    assert.equal(completedResponse.status, 200);
+    const completed = await completedResponse.json();
+    assert.equal(completed.schedule.blocks.find((block) => block.id === source.id).status, "completed");
+
+    const addedResponse = await fetch(`${baseUrl}/api/quests/manual`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityDate: DATE, title: "todo 새 작업", durationMinutes: 50 }),
+    });
+    assert.equal(addedResponse.status, 201);
+    const added = await addedResponse.json();
+    const preserved = added.schedule.blocks.find((block) => block.id === source.id);
+    assert.ok(preserved);
+    assert.equal(preserved.status, "completed");
+    assert.ok(added.schedule.blocks.some((block) => block.title === "todo 새 작업"));
+  } finally {
+    child.kill();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
