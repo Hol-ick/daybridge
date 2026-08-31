@@ -130,9 +130,17 @@ async function readScheduleInbox(activityDate) {
 function mergeInboxIntoBoard(board, inbox) {
   if (!inbox?.valid || !inbox.exists) return board;
   const quests = new Map((Array.isArray(board?.quests) ? board.quests : []).map((quest) => [quest.id, quest]));
+  const runtimeFields = ["state", "status", "reports", "steps", "progress", "currentAction", "carryoverCount", "remainingUnits", "remainingMinutes", "updatedAt"];
   for (const task of inbox.tasks) {
     const quest = inboxTaskToQuest(task);
-    if (quest) quests.set(quest.id, quest);
+    if (!quest) continue;
+    const existing = quests.get(quest.id);
+    // The Markdown inbox is an input stream, not the mutable state store.
+    // Keep Daybridge acknowledgements when the same task is read again.
+    quests.set(quest.id, existing ? {
+      ...quest,
+      ...Object.fromEntries(runtimeFields.filter((field) => Object.hasOwn(existing, field)).map((field) => [field, existing[field]])),
+    } : quest);
   }
   return { ...(board || emptyBoard(inbox.date)), quests: [...quests.values()] };
 }
@@ -323,11 +331,22 @@ function koreaNow(date = new Date()) {
   return `${field.year}-${field.month}-${field.day}T${field.hour}:${field.minute}:${field.second}+09:00`;
 }
 function nowFocus(schedule) { return resolveNowFocus(schedule, koreaNow()); }
+const TERMINAL_BLOCK_STATUSES = new Set(["completed", "deferred", "skipped"]);
+
+function preserveTodoTerminalBlocks(existingSchedule, generatedSchedule, questIds) {
+  if (!existingSchedule || !Array.isArray(existingSchedule.blocks) || !generatedSchedule || !Array.isArray(generatedSchedule.blocks)) return generatedSchedule;
+  const generatedIds = new Set(generatedSchedule.blocks.map((block) => block?.id).filter(Boolean));
+  const terminal = existingSchedule.blocks.filter((block) => block?.type === "focus" && TERMINAL_BLOCK_STATUSES.has(block?.status) && questIds.has(block?.questId) && !generatedIds.has(block?.id));
+  if (!terminal.length) return generatedSchedule;
+  const blocks = [...generatedSchedule.blocks, ...terminal].map((block, index) => ({ ...block, order: index }));
+  return { ...generatedSchedule, blocks };
+}
+
 function retainedScheduleBlocks(schedule, at) {
   if (!schedule || !Array.isArray(schedule.blocks)) return [];
   const nowAt = Date.parse(at);
   return schedule.blocks
-    .filter((block) => !block?.hidden && (block?.locked || (typeof block?.endAt === "string" && Date.parse(block.endAt) <= nowAt)))
+    .filter((block) => !block?.hidden && (TERMINAL_BLOCK_STATUSES.has(block?.status) || block?.locked || (typeof block?.endAt === "string" && Date.parse(block.endAt) <= nowAt)))
     .map((block) => block?.type === "focus" ? { ...block, title: toScheduleTitle(block.title || block.displayTitle || block.scheduleTitle) } : block);
 }
 function applyDiscardedUnits(tasks, schedule) {
@@ -340,6 +359,49 @@ function applyDiscardedUnits(tasks, schedule) {
     const units = discardedUnits.get(task.id) || 0;
     return units ? { ...task, remainingMinutes: Math.max(0, task.remainingMinutes - (units * 50)) } : task;
   }).filter((task) => task.remainingMinutes > 0);
+}
+async function syncQuestFromScheduleBlockReport(activityDate, schedule, reportResult) {
+  const questId = typeof reportResult?.block?.taskId === "string" ? reportResult.block.taskId : "";
+  if (!questId || !schedule || !Array.isArray(schedule.blocks)) return null;
+  const path = boardPath(activityDate);
+  const inbox = await readScheduleInbox(activityDate);
+  const board = mergeInboxIntoBoard(await readJson(path), inbox);
+  const quest = board?.quests?.find((item) => item?.id === questId);
+  if (!quest) return null;
+  const focusBlocks = schedule.blocks.filter((block) => block?.type === "focus" && (block.questId === questId || block.taskId === questId));
+  const openBlocks = focusBlocks.filter((block) => !TERMINAL_BLOCK_STATUSES.has(block?.status));
+  const completedBlocks = focusBlocks.filter((block) => block?.status === "completed");
+  const unscheduledMinutes = (schedule.unscheduled || [])
+    .filter((item) => item?.questId === questId)
+    .reduce((total, item) => total + (Number.isFinite(Number(item.remainingMinutes)) ? Number(item.remainingMinutes) : 0), 0);
+  const hasRemainingWork = openBlocks.length > 0 || unscheduledMinutes > 0;
+  const status = reportResult.status;
+  const nextState = status === "completed" && focusBlocks.length > 0 && !hasRemainingWork && focusBlocks.every((block) => ["completed", "skipped"].includes(block?.status))
+    ? "completed"
+    : status === "deferred" ? "deferred"
+      : status === "in_progress" || completedBlocks.length > 0 ? "in_progress"
+        : status === "planned" ? "ready" : (quest.state || quest.status || "ready");
+  const occurredAt = reportResult.occurredAt || now();
+  const remainingMinutes = nextState === "completed"
+    ? 0
+    : Math.max(5, openBlocks.length * 50 + unscheduledMinutes || Number(quest.remainingMinutes) || Number(quest.estimateMinutes) || 50);
+  quest.state = nextState;
+  quest.status = nextState;
+  quest.remainingMinutes = remainingMinutes;
+  quest.remainingUnits = nextState === "completed" ? 0 : Math.max(1, Math.ceil(remainingMinutes / 50));
+  quest.updatedAt = occurredAt;
+  quest.reports = [...(Array.isArray(quest.reports) ? quest.reports : []), {
+    id: reportResult.id,
+    occurredAt,
+    status,
+    note: reportResult.note || "",
+    source: "daybridge",
+  }].slice(-20);
+  board.generatedAt = occurredAt;
+  board.sourceCoverage = Array.isArray(board.sourceWarnings) && board.sourceWarnings.length ? "attention" : "connected";
+  await atomicWrite(path, board);
+  await atomicWrite(join(DATA_DIR, "boards", "latest.json"), board);
+  return board;
 }
 async function rebuildSchedule(activityDate) {
   const inbox = await readScheduleInbox(activityDate);
@@ -363,8 +425,10 @@ async function rebuildSchedule(activityDate) {
   const calendarResult = await readCalendarBusyBlocks(activityDate);
   const coverage = calendarResult.calendar.state === "connected" ? "connected" : "attention";
   const generated = buildDailySchedule({ date: activityDate, settings, taskCandidates: tasks, busyBlocks: calendarResult.busyBlocks, lockedBlocks: retainedScheduleBlocks(existingSchedule, generatedAt), completedQuestIds, startAt: generatedAt, generatedAt });
+  const boardQuestIds = new Set(board.quests.map((quest) => quest?.id).filter((id) => typeof id === "string"));
+  const scheduleWithTerminals = settings.timeConfigured ? generated : preserveTodoTerminalBlocks(existingSchedule, generated, boardQuestIds);
   return saveSchedule(DATA_DIR, activityDate, {
-    ...generated,
+    ...scheduleWithTerminals,
     date: activityDate,
     timezone: "Asia/Seoul",
     calendar: { coverage },
@@ -422,6 +486,7 @@ async function handleScheduleBlockReport(body) {
   try { result = await reportScheduleBlock(DATA_DIR, activityDate, body); } catch (error) { return { status: 400, body: { error: error instanceof Error ? sanitizeText(error.message, 160) : "Invalid block report." } }; }
   if (!result) return { status: 404, body: { error: "No schedule exists for this date." } };
   if (!result.schedule) return { status: 404, body: { error: "Schedule block was not found." } };
+  await syncQuestFromScheduleBlockReport(activityDate, result.schedule, result.report);
   const config = await loadConfig();
   const event = { schemaVersion: 1, id: result.report.id, eventType: "schedule_block_report", activityDate, occurredAt: result.report.occurredAt, source: "daybridge", sensitivity: "sanitized", block: result.report.block, report: { id: result.report.id, occurredAt: result.report.occurredAt, status: result.report.status, note: result.report.note, source: "daybridge" } };
   const mirrored = await writeEvent(config, event);

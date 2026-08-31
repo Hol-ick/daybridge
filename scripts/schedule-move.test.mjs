@@ -130,3 +130,54 @@ test("schedule block discard removes the card and keeps its quest unit out after
     await rm(dataDir, { recursive: true, force: true });
   }
 });
+
+test("schedule block completion persists to the quest and survives adding another task", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-schedule-status-"));
+  const { child, baseUrl } = await startBridge(dataDir);
+  try {
+    await createBoard(dataDir);
+    await mkdir(join(dataDir, "inbox"), { recursive: true });
+    await writeFile(join(dataDir, "inbox", `schedule-${DATE}.md`), [
+      "---",
+      "artifact_type: daybridge_schedule_inbox",
+      `activity_date: ${DATE}`,
+      "timezone: Asia/Seoul",
+      "---",
+      "",
+      "| id | title | focus_units | remaining_units | state | priority | execution | depends_on | first_action | done_when | source_refs |",
+      "| --- | --- | ---: | ---: | --- | --- | --- | --- | --- | --- | --- |",
+      "| quest-1 | 배포 상태 확인 | 1 | 1 | ready | must | independent |  | 시작 | 결과 기록 | record://test |",
+      "",
+    ].join("\n"), "utf8");
+    const rebuilt = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
+    assert.equal(rebuilt.status, 200);
+    const initial = await rebuilt.json();
+    const source = initial.schedule.blocks.find((block) => block.type === "focus" && block.questId === "quest-1");
+    assert.ok(source);
+
+    const completedResponse = await fetch(`${baseUrl}/api/schedule/block-report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityDate: DATE, blockId: source.id, status: "completed", note: "완료" }),
+    });
+    assert.equal(completedResponse.status, 200);
+    const completed = await completedResponse.json();
+    assert.equal(completed.schedule.blocks.find((block) => block.id === source.id).status, "completed");
+    const boardAfterReport = JSON.parse(await readFile(join(dataDir, "boards", `${DATE}.json`), "utf8"));
+    assert.equal(boardAfterReport.quests.find((quest) => quest.id === source.questId).state, "completed");
+
+    const addedResponse = await fetch(`${baseUrl}/api/quests/manual`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityDate: DATE, title: "새 작업", durationMinutes: 50 }),
+    });
+    assert.equal(addedResponse.status, 201);
+    const added = await addedResponse.json();
+    const preserved = added.schedule.blocks.filter((block) => block.type === "focus" && block.questId === source.questId);
+    assert.ok(preserved.length >= 1);
+    assert.ok(preserved.every((block) => block.status === "completed"), preserved);
+  } finally {
+    child.kill();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});

@@ -35,6 +35,10 @@ TODO_BLOCKS = [
     {"id": "todo-linux", "type": "focus", "questId": "quest-linux", "title": "리눅스 학습", "order": 0, "timed": False, "status": "planned"},
     {"id": "todo-docs", "type": "focus", "questId": "quest-docs", "title": "문서 검토", "order": 1, "timed": False, "status": "in_progress"},
 ]
+TODO_DISCARDED_SCHEDULE = json.dumps({
+    "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": [TODO_BLOCKS[1]], "discardedBlocks": [{"blockId": "todo-linux", "questId": "quest-linux", "title": "리눅스 학습", "units": 1}], "unscheduled": [], "calendar": {"coverage": "attention"}},
+    "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
+})
 TODO_SCHEDULE = json.dumps({
     "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": TODO_BLOCKS, "unscheduled": [], "calendar": {"coverage": "attention"}},
     "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
@@ -425,6 +429,12 @@ def check_overlay_todo_items(browser) -> None:
         "http://127.0.0.1:39393/api/calendar/status",
         lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
     )
+    discard_calls: list[dict] = []
+    def handle_discard(route) -> None:
+        discard_calls.append(json.loads(route.request.post_data or "{}"))
+        route.fulfill(status=200, content_type="application/json", body=TODO_DISCARDED_SCHEDULE)
+
+    context.route("http://127.0.0.1:39393/api/schedule/block-discard", handle_discard)
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -438,9 +448,23 @@ def check_overlay_todo_items(browser) -> None:
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-block-todo-linux"]')
     assert page.locator('[data-testid^="now-focus-overlay-block-"]').count() == 2
-    assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"]').get_attribute("data-drag-enabled") == "false"
+    assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"]').get_attribute("data-drag-enabled") == "true"
     assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"] [class*=compactBlockTime]').count() == 0
     assert page.locator('[data-testid="now-focus-overlay-block-todo-linux"] [class*=compactBlockTitle]').inner_text() == "리눅스 학습"
+    first = page.locator('[data-testid="now-focus-overlay-block-todo-linux"]')
+    first_box = first.bounding_box()
+    assert first_box
+    first.dispatch_event("mousedown", {"button": 0, "clientX": first_box["x"] + first_box["width"] / 2, "clientY": first_box["y"] + first_box["height"] / 2})
+    first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": first_box["x"] + first_box["width"] / 2 + 8, "clientY": first_box["y"] + first_box["height"] / 2 + 8})
+    page.wait_for_selector('[data-testid="now-focus-overlay-trash"]')
+    trash = page.locator('[data-testid="now-focus-overlay-trash"]')
+    trash_box = trash.bounding_box()
+    assert trash_box
+    first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": trash_box["x"] + trash_box["width"] / 2, "clientY": trash_box["y"] + trash_box["height"] / 2})
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-trash]')?.getAttribute('data-trash-active') === 'true'")
+    first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": trash_box["x"] + trash_box["width"] / 2, "clientY": trash_box["y"] + trash_box["height"] / 2})
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-linux]') === null")
+    assert discard_calls and discard_calls[0]["blockId"] == "todo-linux"
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-todo-items.png", full_page=True)
     assert_no_page_errors(errors)
     context.close()

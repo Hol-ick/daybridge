@@ -111,14 +111,16 @@ function OverlayTitle({ children, className = "", ...props }) {
   );
 }
 
-function OverlayScheduleItem({ block, privateMode, onMove, onStatusChange, onScheduleDragStart, onKeyboardMove, draggingBlockId, dropTargetId, dropPosition, swapRole, swapDirection, suppressClickRef }) {
+function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, onStatusChange, onScheduleDragStart, onKeyboardMove, draggingBlockId, dropTargetId, dropPosition, swapRole, swapDirection, suppressClickRef }) {
   const kind = scheduleBlockKind(block);
   const status = block?.status;
   const actionable = kind === "focus" && status !== "completed" && status !== "deferred";
   const start = formatTime(block?.startAt ?? block?.start ?? block?.startTime);
   const title = privateMode && kind === "focus" ? "집중 시간" : scheduleBlockTitle(block);
   const label = start;
-  const draggable = actionable && typeof onMove === "function";
+  // Untimed todo lists cannot be reordered into clock slots, but their open
+  // cards still need a drag affordance so the user can discard a unit.
+  const draggable = actionable && (typeof onMove === "function" || canDiscard);
   const clickable = kind === "focus" && typeof onStatusChange === "function";
   const handleKeyDown = (event) => {
     if (draggable && ["ArrowUp", "ArrowDown"].includes(event.key)) {
@@ -385,7 +387,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     window.setTimeout(() => { suppressCardClickRef.current = false; }, 0);
   };
   const handleScheduleDragStart = (event, item) => {
-    if (!onMoveBlock || event.button !== 0 || pointerDragRef.current.blockId) return;
+    if ((!onMoveBlock && !onDiscardBlock) || event.button !== 0 || pointerDragRef.current.blockId) return;
     const inputType = event.type.startsWith("pointer") ? "pointer" : "mouse";
     event.stopPropagation();
     event.preventDefault();
@@ -538,6 +540,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
                   block={item}
                   privateMode={privateMode}
                   onMove={todoListMode ? undefined : onMoveBlock}
+                  canDiscard={typeof onDiscardBlock === "function"}
                   onStatusChange={onReportBlock}
                   onScheduleDragStart={handleScheduleDragStart}
                   onKeyboardMove={handleKeyboardMove}
