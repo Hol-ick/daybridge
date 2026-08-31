@@ -20,6 +20,8 @@ const RUNTIME_LOG_FILE: &str = "runtime-events.ndjson";
 const WINDOWS_STARTUP_VALUE: &str = "Daybridge";
 const LOCAL_BRIDGE_PORT: u16 = 39393;
 const LOCAL_BRIDGE_SCRIPT: &str = "scripts/local-bridge.mjs";
+const KEEP_ALIVE_SCRIPT_FILE: &str = "daybridge-keep-alive.ps1";
+const EXPLICIT_EXIT_MARKER_FILE: &str = "explicit-exit.flag";
 
 #[cfg(windows)]
 fn configure_windows_startup() -> Result<(), String> {
@@ -35,6 +37,169 @@ fn configure_windows_startup() -> Result<(), String> {
     run_key
         .set_value(WINDOWS_STARTUP_VALUE, &quoted_executable)
         .map_err(|error| format!("Windows 시작 항목을 저장할 수 없습니다: {error}"))
+}
+
+fn app_data_file(app: &tauri::AppHandle, file_name: &str) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map_err(|error| format!("Daybridge 앱 데이터 경로를 확인할 수 없습니다: {error}"))
+        .map(|directory| directory.join(file_name))
+}
+
+fn keep_alive_script(
+    executable: &std::path::Path,
+    exit_marker: &std::path::Path,
+    event_log: &std::path::Path,
+) -> String {
+    let quote = |path: &std::path::Path| path.display().to_string().replace('\'', "''");
+    let executable = quote(executable);
+    let working_directory = quote(&executable_parent_or_empty(&executable));
+    let exit_marker = quote(exit_marker);
+    let event_log = quote(event_log);
+
+    format!(
+        r#"$ErrorActionPreference = 'SilentlyContinue'
+$ExecutablePath = '{executable}'
+$WorkingDirectory = '{working_directory}'
+$ExitMarkerPath = '{exit_marker}'
+$EventLogPath = '{event_log}'
+$createdNew = $false
+$mutex = New-Object System.Threading.Mutex($true, 'Local\DaybridgeWidgetKeepAlive', [ref]$createdNew)
+
+function Write-DaybridgeEvent([string]$Event, [hashtable]$Details = @{{}}) {{
+  try {{
+    $directory = Split-Path -Parent $EventLogPath
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    [ordered]@{{
+      occurredAt = (Get-Date).ToUniversalTime().ToString('o')
+      event = $Event
+      source = 'keep_alive'
+      details = $Details
+    }} | ConvertTo-Json -Compress | Add-Content -LiteralPath $EventLogPath -Encoding utf8
+  }} catch {{}}
+}}
+
+try {{
+  if (-not $createdNew) {{ exit 0 }}
+  Write-DaybridgeEvent 'process_watchdog_started' @{{ executable = $ExecutablePath; intervalSeconds = 3 }}
+  while ($true) {{
+    if (Test-Path -LiteralPath $ExitMarkerPath) {{
+      Write-DaybridgeEvent 'process_watchdog_stopped' @{{ reason = 'explicit_exit' }}
+      break
+    }}
+    try {{
+      $running = @(Get-CimInstance Win32_Process -Filter "Name='daybridge.exe'" |
+        Where-Object {{ $_.ExecutablePath -and [string]::Equals($_.ExecutablePath, $ExecutablePath, [System.StringComparison]::OrdinalIgnoreCase) }}).Count -gt 0
+    }} catch {{
+      Write-DaybridgeEvent 'process_watchdog_query_error' @{{ error = $_.Exception.Message }}
+      Start-Sleep -Seconds 3
+      continue
+    }}
+    if (-not $running) {{
+      Write-DaybridgeEvent 'process_relaunch_requested' @{{ reason = 'widget_process_missing' }}
+      try {{
+        Start-Process -FilePath $ExecutablePath -WorkingDirectory $WorkingDirectory -WindowStyle Hidden
+      }} catch {{
+        Write-DaybridgeEvent 'process_relaunch_error' @{{ error = $_.Exception.Message }}
+      }}
+    }}
+    Start-Sleep -Seconds 3
+  }}
+}} finally {{
+  if ($createdNew) {{ $mutex.ReleaseMutex() }}
+  $mutex.Dispose()
+}}
+"#
+    )
+}
+
+fn executable_parent_or_empty(executable: &str) -> PathBuf {
+    PathBuf::from(executable)
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_default()
+}
+
+#[cfg(windows)]
+fn start_process_keep_alive(app: &tauri::AppHandle) -> Result<(), String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("실행 파일 경로를 확인할 수 없습니다: {error}"))?;
+    let script_path = app_data_file(app, KEEP_ALIVE_SCRIPT_FILE)?;
+    let exit_marker = app_data_file(app, EXPLICIT_EXIT_MARKER_FILE)?;
+    let event_log = runtime_log_path(app)
+        .ok_or_else(|| "위젯 런타임 로그 경로를 확인할 수 없습니다.".to_string())?;
+
+    if let Some(parent) = script_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("프로세스 감시자 경로를 만들 수 없습니다: {error}"))?;
+    }
+    std::fs::write(&script_path, keep_alive_script(&executable, &exit_marker, &event_log))
+        .map_err(|error| format!("프로세스 감시자 스크립트를 저장할 수 없습니다: {error}"))?;
+
+    let mut command = Command::new("powershell.exe");
+    command
+        .arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-ExecutionPolicy")
+        .arg("Bypass")
+        .arg("-File")
+        .arg(&script_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    use std::os::windows::process::CommandExt;
+    command.creation_flags(0x08000000);
+    let child = command
+        .spawn()
+        .map_err(|error| format!("프로세스 감시자를 시작할 수 없습니다: {error}"))?;
+    append_runtime_event(
+        app,
+        "process_watchdog_spawned",
+        &json!({ "pid": child.id(), "intervalSeconds": 3 }).to_string(),
+    )
+}
+
+#[cfg(not(windows))]
+fn start_process_keep_alive(_app: &tauri::AppHandle) -> Result<(), String> {
+    Ok(())
+}
+
+fn clear_explicit_exit_marker(app: &tauri::AppHandle) {
+    if let Ok(marker) = app_data_file(app, EXPLICIT_EXIT_MARKER_FILE) {
+        if marker.exists() {
+            if let Err(error) = std::fs::remove_file(&marker) {
+                let _ = append_runtime_event(
+                    app,
+                    "explicit_exit_marker_clear_error",
+                    &json!({ "error": error.to_string() }).to_string(),
+                );
+            }
+        }
+    }
+}
+
+fn request_explicit_exit(app: &tauri::AppHandle, reason: &str) {
+    match app_data_file(app, EXPLICIT_EXIT_MARKER_FILE) {
+        Ok(marker) => {
+            if let Some(parent) = marker.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Err(error) = std::fs::write(&marker, reason) {
+                let _ = append_runtime_event(
+                    app,
+                    "explicit_exit_marker_write_error",
+                    &json!({ "error": error.to_string(), "reason": reason }).to_string(),
+                );
+            }
+        }
+        Err(error) => {
+            let _ = append_runtime_event(
+                app,
+                "explicit_exit_marker_path_error",
+                &json!({ "error": error, "reason": reason }).to_string(),
+            );
+        }
+    }
 }
 
 fn bridge_endpoint() -> SocketAddr {
@@ -428,6 +593,7 @@ fn record_runtime_event(
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle, reason: Option<String>) {
     let reason = reason.unwrap_or_else(|| "unspecified".to_string());
+    request_explicit_exit(&app, &reason);
     let details = json!({ "reason": reason }).to_string();
     let _ = append_runtime_event(&app, "app_exit_requested", &details);
     app.exit(0);
@@ -436,6 +602,7 @@ fn exit_app(app: tauri::AppHandle, reason: Option<String>) {
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
+            clear_explicit_exit_marker(app.handle());
             let _ = append_runtime_event(
                 app.handle(),
                 "app_started",
@@ -450,6 +617,14 @@ fn main() {
                     let _ = append_runtime_event(
                         app.handle(),
                         "startup_registration_error",
+                        &json!({ "error": error.to_string() }).to_string(),
+                    );
+                }
+                if let Err(error) = start_process_keep_alive(app.handle()) {
+                    eprintln!("Daybridge 프로세스 감시자 시작 실패: {error}");
+                    let _ = append_runtime_event(
+                        app.handle(),
+                        "process_watchdog_start_error",
                         &json!({ "error": error.to_string() }).to_string(),
                     );
                 }
@@ -498,6 +673,7 @@ fn main() {
                         }
                     }
                     "quit" => {
+                        request_explicit_exit(app, "tray_quit");
                         let _ = append_runtime_event(app, "tray_quit_requested", "{}");
                         app.exit(0);
                     }
@@ -571,7 +747,8 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::position_is_outside_work_area;
+    use super::{keep_alive_script, position_is_outside_work_area};
+    use std::path::Path;
 
     #[test]
     fn keeps_an_overlay_inside_the_current_work_area() {
@@ -591,5 +768,19 @@ mod tests {
             (0, 0),
             (1920, 1040),
         ));
+    }
+
+    #[test]
+    fn keep_alive_script_relaunches_only_the_packaged_widget_until_explicit_exit() {
+        let script = keep_alive_script(
+            Path::new(r"C:\\Daybridge\\daybridge.exe"),
+            Path::new(r"C:\\Daybridge\\explicit-exit.flag"),
+            Path::new(r"C:\\Daybridge\\logs\\keep-alive-events.ndjson"),
+        );
+
+        assert!(script.contains("explicit-exit.flag"));
+        assert!(script.contains("Start-Process -FilePath $ExecutablePath"));
+        assert!(script.contains("Get-CimInstance Win32_Process"));
+        assert!(script.contains("process_relaunch_requested"));
     }
 }

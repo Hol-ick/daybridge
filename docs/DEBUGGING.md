@@ -66,6 +66,8 @@ Get-Content "$env:LOCALAPPDATA\Daybridge\logs\bridge-events.ndjson" -Tail 100
 
 원인 판별 순서는 `workday_auto_exit_triggered` → `app_exit_requested`가 있는지 먼저 보고, 그 뒤 `tray_quit_requested`, `schedule_load_error`, `board_refresh_error`, `window_destroyed`, `window_error`를 시간순으로 대조한다. 전자의 두 이벤트가 같이 있으면 18:00 이후 자동 종료 경로이고, `tray_quit_requested`가 있으면 사용자가 트레이에서 종료한 경로다. WebView/창 오류만 있으면 충돌·렌더링 경로다. 로그 파일이 없으면 새 패키지 위젯 또는 새 bridge가 아직 실행되지 않은 상태다.
 
+패키지 위젯은 실행될 때 별도의 프로세스 감시자를 자동으로 시작한다. 위젯 프로세스가 예기치 않게 사라지면 감시자가 3초 주기로 확인해 다시 실행한다. `process_watchdog_started`, `process_relaunch_requested`, `process_relaunch_error`를 같은 네이티브 로그에서 확인한다. 트레이의 **종료**는 `explicit-exit.flag`를 남겨 감시자를 정상 중지하므로, 해당 종료는 자동 재실행되지 않는다. 다음 번 Daybridge 실행 또는 Windows 로그인 시에는 이 표식이 자동으로 해제된다.
+
 시간 설정을 비워 둔 경우에는 정상적으로 `schedule.mode=todo`, `timeConfigured=false`가 반환된다. 이 모드에서는 `startAt`·`endAt`가 없는 오늘 할 일 목록만 만들고, 시간 슬롯 이동·점심시간 배치는 사용하지 않는다. 위젯의 근무일 카운트다운과 18:00 자동 종료는 작업 카드 시각과 독립적으로 계속 동작한다. `schedule_read`에 `mode=todo`가 찍히면 오류가 아니라 의도된 가벼운 목록 모드다.
 
 ## 3. Check a status report
