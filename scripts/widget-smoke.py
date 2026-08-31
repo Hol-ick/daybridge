@@ -76,6 +76,21 @@ DRAG_SCHEDULE = json.dumps({
     "schedule": {"schemaVersion": 1, "date": "2026-08-24", "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": DRAG_BLOCKS, "unscheduled": [], "calendar": {"coverage": "fresh"}},
     "nowFocus": {"state": "focus", "block": DRAG_BLOCKS[0], "nextFocus": DRAG_BLOCKS[1]},
 })
+TALL_SCHEDULE = json.dumps({
+    "schedule": {
+        "schemaVersion": 1,
+        "date": "2026-08-24",
+        "timezone": "Asia/Seoul",
+        "generatedAt": "2026-08-24T00:00:00+09:00",
+        "blocks": [
+            {**DRAG_BLOCKS[index % len(DRAG_BLOCKS)], "id": f"tall-{index}", "startAt": f"2026-08-24T{9 + index:02d}:00:00+09:00", "endAt": f"2026-08-24T{9 + index:02d}:50:00+09:00"}
+            for index in range(8)
+        ],
+        "unscheduled": [],
+        "calendar": {"coverage": "fresh"},
+    },
+    "nowFocus": {"state": "focus", "block": DRAG_BLOCKS[0], "nextFocus": DRAG_BLOCKS[1]},
+})
 DRAG_MOVED_BLOCKS = [
     {**DRAG_BLOCKS[1], "startAt": "2026-08-24T09:00:00+09:00", "endAt": "2026-08-24T09:50:00+09:00", "locked": True, "userPositioned": True},
     {**DRAG_BLOCKS[2], "startAt": "2026-08-24T10:00:00+09:00", "endAt": "2026-08-24T10:50:00+09:00", "locked": True, "userPositioned": True},
@@ -536,10 +551,44 @@ def check_overlay_compact_expansion(browser) -> None:
     assert surface_box and footer_box and last_box
     assert round(surface_box["height"]) == int(surface.get_attribute("data-expanded-height")) and round(surface_box["height"]) < 520
     assert 0 <= footer_box["y"] - (last_box["y"] + last_box["height"]) <= 8, (last_box, footer_box)
+    list_metrics = page.locator('[aria-label="오늘 시간표 관리"] ol').evaluate("element => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, overflowY: getComputedStyle(element).overflowY })")
+    assert list_metrics["scrollHeight"] <= list_metrics["clientHeight"], list_metrics
+    assert list_metrics["overflowY"] == "hidden", list_metrics
     add_box = page.locator('[data-testid="manual-task-add-toggle"]').bounding_box()
     settings_box = page.locator('[data-testid="now-focus-overlay-settings"]').bounding_box()
     assert add_box and settings_box and abs(add_box["width"] - settings_box["width"]) <= 1 and abs(add_box["height"] - settings_box["height"]) <= 1, (add_box, settings_box)
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-compact-list.png", full_page=True)
+    assert_no_page_errors(errors)
+    context.close()
+
+
+def check_overlay_scrolls_only_at_maximum_height(browser) -> None:
+    """Prove a long schedule uses the capped viewport before showing its list scrollbar."""
+    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=TALL_SCHEDULE),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/schedule-settings",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().height) === Number(surface.dataset.expandedHeight); })()")
+    surface = page.locator('[data-testid="now-focus-overlay-surface"]')
+    list_metrics = page.locator('[aria-label="오늘 시간표 관리"] ol').evaluate("element => ({ clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, overflowY: getComputedStyle(element).overflowY })")
+    assert int(surface.get_attribute("data-expanded-height")) == 520
+    assert list_metrics["scrollHeight"] > list_metrics["clientHeight"], list_metrics
+    assert list_metrics["overflowY"] == "auto", list_metrics
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-scroll-limit.png", full_page=True)
     assert_no_page_errors(errors)
     context.close()
 
@@ -698,6 +747,7 @@ def main() -> None:
         check_dashboard_actions(browser)
         check_overlay(browser)
         check_overlay_compact_expansion(browser)
+        check_overlay_scrolls_only_at_maximum_height(browser)
         check_overlay_todo_items(browser)
         check_overlay_long_title(browser)
         check_overlay_reorder(browser)

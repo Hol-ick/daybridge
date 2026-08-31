@@ -72,6 +72,7 @@ const OVERLAY_CARD_HEIGHT = 57;
 const OVERLAY_CARD_GAP = 6;
 const OVERLAY_PANEL_TOP_PADDING = 10;
 const OVERLAY_TOOLBAR_HEIGHT = 60;
+const OVERLAY_TOOLBAR_GAP = 6;
 const OVERLAY_EMPTY_LIST_HEIGHT = 62;
 
 function expandedOverlayHeight(blockCount, settingsOpen) {
@@ -81,7 +82,7 @@ function expandedOverlayHeight(blockCount, settingsOpen) {
     : OVERLAY_EMPTY_LIST_HEIGHT;
   return Math.min(
     OVERLAY_EXPANDED_HEIGHT,
-    OVERLAY_COLLAPSED_HEIGHT + OVERLAY_PANEL_TOP_PADDING + listHeight + OVERLAY_TOOLBAR_HEIGHT,
+    OVERLAY_COLLAPSED_HEIGHT + OVERLAY_PANEL_TOP_PADDING + listHeight + OVERLAY_TOOLBAR_GAP + OVERLAY_TOOLBAR_HEIGHT,
   );
 }
 
@@ -278,6 +279,9 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const todoSummaryBlock = blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)) ?? blocks[0];
   const summaryTitle = todoListMode ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "오늘 할 일") : idle ? workdayCountdown.label : title;
   const targetExpandedHeight = expandedOverlayHeight(blocks.length, settingsOpen);
+  // The list only becomes scrollable after the native overlay has reached its
+  // maximum height. Short schedules grow around every visible card instead.
+  const listCanScroll = targetExpandedHeight >= OVERLAY_EXPANDED_HEIGHT;
 
   useLayoutEffect(() => {
     const nextRects = new Map();
@@ -586,7 +590,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       >
         <section className={styles.expandedPanel} aria-label={todoListMode ? "오늘 할 일 목록" : "오늘 시간표 관리"} aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
           {blocks.length ? (
-            <ol className={styles.compactList}>
+            <ol className={styles.compactList} data-scrollable={listCanScroll ? "true" : "false"}>
               {blocks.map((item) => (
                 <OverlayScheduleItem
                   key={item.id ?? `${item.startAt}-${scheduleBlockTitle(item)}`}

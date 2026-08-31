@@ -134,11 +134,12 @@
   gap: 6px;
   margin: 0;
   padding: 0 2px 0 0;
-  overflow-y: auto;
+  overflow-y: hidden;
   list-style: none;
   scrollbar-color: rgb(255 255 255 / 24%) transparent;
   scrollbar-width: thin;
 }
+.compactList[data-scrollable="true"] { overflow-y: auto; }
 
 .compactBlock {
   position: relative;
