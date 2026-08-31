@@ -509,7 +509,9 @@ def check_overlay_todo_items(browser) -> None:
     page.wait_for_selector('[data-testid="now-focus-overlay-trash"]')
     trash = page.locator('[data-testid="now-focus-overlay-trash"]')
     trash_box = trash.bounding_box()
-    assert trash_box
+    footer_box = page.locator('[aria-label="시간표 도구"]').bounding_box()
+    assert trash_box and footer_box
+    assert trash_box["y"] >= footer_box["y"] + footer_box["height"] + 4, (trash_box, footer_box)
     first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": trash_box["x"] + trash_box["width"] / 2, "clientY": trash_box["y"] + trash_box["height"] / 2})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-trash]')?.getAttribute('data-trash-active') === 'true'")
     first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": trash_box["x"] + trash_box["width"] / 2, "clientY": trash_box["y"] + trash_box["height"] / 2})

@@ -73,16 +73,19 @@ const OVERLAY_CARD_GAP = 6;
 const OVERLAY_PANEL_TOP_PADDING = 10;
 const OVERLAY_TOOLBAR_HEIGHT = 60;
 const OVERLAY_TOOLBAR_GAP = 6;
+const OVERLAY_TRASH_HEIGHT = 57;
+const OVERLAY_TRASH_GAP = 6;
 const OVERLAY_EMPTY_LIST_HEIGHT = 62;
 
-function expandedOverlayHeight(blockCount, settingsOpen) {
+function expandedOverlayHeight(blockCount, settingsOpen, trashVisible = false) {
   if (settingsOpen) return OVERLAY_EXPANDED_HEIGHT;
   const listHeight = blockCount
     ? blockCount * OVERLAY_CARD_HEIGHT + Math.max(0, blockCount - 1) * OVERLAY_CARD_GAP
     : OVERLAY_EMPTY_LIST_HEIGHT;
   return Math.min(
     OVERLAY_EXPANDED_HEIGHT,
-    OVERLAY_COLLAPSED_HEIGHT + OVERLAY_PANEL_TOP_PADDING + listHeight + OVERLAY_TOOLBAR_GAP + OVERLAY_TOOLBAR_HEIGHT,
+    OVERLAY_COLLAPSED_HEIGHT + OVERLAY_PANEL_TOP_PADDING + listHeight + OVERLAY_TOOLBAR_GAP + OVERLAY_TOOLBAR_HEIGHT
+      + (trashVisible ? OVERLAY_TRASH_GAP + OVERLAY_TRASH_HEIGHT : 0),
   );
 }
 
@@ -283,7 +286,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     ?? blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status))
     ?? blocks[0];
   const summaryTitle = todoListMode ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "오늘 할 일") : idle ? workdayCountdown.label : title;
-  const targetExpandedHeight = expandedOverlayHeight(blocks.length, settingsOpen);
+  const targetExpandedHeight = expandedOverlayHeight(blocks.length, settingsOpen, Boolean(draggingBlockId));
   // The list only becomes scrollable after the native overlay has reached its
   // maximum height. Short schedules grow around every visible card instead.
   const listCanScroll = targetExpandedHeight >= OVERLAY_EXPANDED_HEIGHT;
@@ -616,20 +619,6 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
               ))}
             </ol>
           ) : <p className={styles.compactEmpty}>{todoListMode ? "오늘 할 일이 없습니다." : "오늘 배치된 일정이 없습니다."}</p>}
-          {draggingBlockId ? (
-            <div
-              className={[styles.trashZone, trashActive ? styles.trashActive : ""].filter(Boolean).join(" ")}
-              data-testid="now-focus-overlay-trash"
-              data-trash-active={trashActive ? "true" : "false"}
-              aria-label={trashActive ? "놓으면 작업 폐기" : "작업을 폐기하려면 여기로 끌기"}
-              style={dragPreview ? { height: `${dragPreview.height}px` } : undefined}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M5 7h14M9 7V5h6v2m-8 3v7m4-7v7m4-7v7M7 7l1 13h8l1-13" />
-              </svg>
-              <span>{trashActive ? "놓으면 폐기" : "여기로 폐기"}</span>
-            </div>
-          ) : null}
           {dragPreview ? (
             <div
               className={[styles.compactBlock, styles.focus, styles.dragPreview].join(" ")}
@@ -650,6 +639,20 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9.8 3.7 10.4 2h3.2l.6 1.7 1.6.9 1.7-.5 2.2 2.2-.5 1.7.9 1.6 1.7.6v3.2l-1.7.6-.9 1.6.5 1.7-2.2 2.2-1.7-.5-1.6.9-.6 1.7h-3.2l-.6-1.7-1.6-.9-1.7.5-2.2-2.2.5-1.7-.9-1.6-1.7-.6v-3.2l1.7-.6.9-1.6-.5-1.7 2.2-2.2 1.7.5 1.6-.9Z" /><circle cx="12" cy="12" r="3.1" /></svg>
             </button>
           </footer>
+          {draggingBlockId ? (
+            <div
+              className={[styles.trashZone, trashActive ? styles.trashActive : ""].filter(Boolean).join(" ")}
+              data-testid="now-focus-overlay-trash"
+              data-trash-active={trashActive ? "true" : "false"}
+              aria-label={trashActive ? "놓으면 작업 폐기" : "작업을 폐기하려면 여기로 끌기"}
+              style={dragPreview ? { height: `${dragPreview.height}px` } : undefined}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M5 7h14M9 7V5h6v2m-8 3v7m4-7v7m4-7v7M7 7l1 13h8l1-13" />
+              </svg>
+              <span>{trashActive ? "놓으면 폐기" : "여기로 폐기"}</span>
+            </div>
+          ) : null}
         </section>
         <div className={styles.summary} data-testid="now-focus-overlay-summary">
         <button
