@@ -471,10 +471,13 @@ def check_overlay_todo_items(browser) -> None:
     first.dispatch_event("mousedown", {"button": 0, "clientX": first_box["x"] + first_box["width"] / 2, "clientY": first_box["y"] + first_box["height"] / 2})
     first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": first_box["x"] + first_box["width"] / 2 + 8, "clientY": first_box["y"] + first_box["height"] / 2 + 8})
     page.wait_for_selector('[data-testid="now-focus-overlay-drag-preview"]')
-    first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": second_box["x"] + second_box["width"] / 2, "clientY": second_box["y"] + 10})
+    # Users naturally release near a card boundary or in the small gap between
+    # cards. That must still select the adjacent card as the drop target.
+    gap_drop_y = second_box["y"] - 2
+    first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": second_box["x"] + second_box["width"] / 2, "clientY": gap_drop_y})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-docs]')?.getAttribute('data-drop-target') === 'true'")
     page.wait_for_timeout(100)
-    first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": second_box["x"] + second_box["width"] / 2, "clientY": second_box["y"] + 10})
+    first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": second_box["x"] + second_box["width"] / 2, "clientY": gap_drop_y})
     assert move_calls and move_calls[0]["blockId"] == "todo-linux" and move_calls[0]["targetBlockId"] == "todo-docs", move_calls
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-docs]')?.getBoundingClientRect().top < document.querySelector('[data-testid=now-focus-overlay-block-todo-linux]')?.getBoundingClientRect().top")
     first = page.locator('[data-testid="now-focus-overlay-block-todo-linux"]')

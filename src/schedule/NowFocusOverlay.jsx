@@ -303,14 +303,39 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   }, [blocks, expanded]);
 
   const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks]);
-  const findDropTarget = (clientX, clientY) => {
+  const findDropTarget = (clientX, clientY, sourceId = "") => {
     const element = document.elementFromPoint(clientX, clientY);
     const node = element instanceof Element ? element : null;
     const trash = node?.closest('[data-testid="now-focus-overlay-trash"]');
     if (trash) return { card: null, trash, targetId: "" };
-    const card = node?.closest("[data-block-id]");
-    const targetId = card?.getAttribute("data-block-id") || "";
-    return movableBlocks.some((item) => item.id === targetId) ? { card, trash: null, targetId } : { card: null, trash: null, targetId: "" };
+
+    // A narrow exact-card hit area made a perfectly reasonable release in the
+    // 6px gap between cards cancel the move. Resolve the entire vertical lane
+    // to the nearest *other* open card instead, with a small gutter on every
+    // card. The visible before/after rail still describes the exact placement.
+    const cards = movableBlocks
+      .filter((item) => item.id !== sourceId)
+      .map((item) => {
+        const card = document.querySelector(`[data-block-id="${CSS.escape(item.id)}"]`);
+        return card instanceof HTMLElement ? { card, id: item.id, rect: card.getBoundingClientRect() } : null;
+      })
+      .filter(Boolean);
+    const directCard = node?.closest("[data-block-id]");
+    const directId = directCard?.getAttribute("data-block-id") || "";
+    if (directCard instanceof HTMLElement && directId !== sourceId && cards.some((item) => item.id === directId)) {
+      return { card: directCard, trash: null, targetId: directId };
+    }
+    const horizontalMatch = cards.some(({ rect }) => clientX >= rect.left - 12 && clientX <= rect.right + 12);
+    const candidates = horizontalMatch
+      ? cards.filter(({ rect }) => clientY >= rect.top - 12 && clientY <= rect.bottom + 12)
+      : [];
+    if (!candidates.length) return { card: null, trash: null, targetId: "" };
+    const nearest = candidates.reduce((best, item) => {
+      const bestDistance = Math.abs(clientY - (best.rect.top + best.rect.height / 2));
+      const itemDistance = Math.abs(clientY - (item.rect.top + item.rect.height / 2));
+      return itemDistance < bestDistance ? item : best;
+    });
+    return { card: nearest.card, trash: null, targetId: nearest.id };
   };
   const clearPointerDrag = () => {
     pointerDragRef.current.cleanup?.();
@@ -348,7 +373,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     event.preventDefault();
     event.stopPropagation();
     updateDragPreview(event, state);
-    const target = findDropTarget(event.clientX, event.clientY);
+    const target = findDropTarget(event.clientX, event.clientY, state.blockId);
     if (target.trash) {
       setTrashActive(true);
       setDropTargetId("");
@@ -369,7 +394,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     if (!state.blockId || state.inputType !== inputType || (inputType === "pointer" && state.pointerId !== event.pointerId)) return;
     event.stopPropagation();
     const sourceId = state.blockId;
-    const target = findDropTarget(event.clientX, event.clientY);
+    const target = findDropTarget(event.clientX, event.clientY, sourceId);
     const targetItem = movableBlocks.find((item) => item.id === target.targetId && item.id !== sourceId);
     const rect = target.card?.getBoundingClientRect();
     const position = rect && event.clientY < rect.top + (rect.height / 2) ? "before" : "after";
