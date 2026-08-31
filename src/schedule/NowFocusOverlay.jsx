@@ -276,7 +276,12 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const end = formatTime(block?.endAt ?? block?.end ?? block?.endTime);
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "";
   const workdayCountdown = getWorkdayCountdown(currentTime);
-  const todoSummaryBlock = blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)) ?? blocks[0];
+  // In untimed todo mode the user's active work takes precedence over list
+  // order. If nothing is active yet, keep the first actionable item as the
+  // gentle next-step prompt.
+  const todoSummaryBlock = blocks.find((item) => scheduleBlockKind(item) === "focus" && item?.status === "in_progress")
+    ?? blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status))
+    ?? blocks[0];
   const summaryTitle = todoListMode ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "오늘 할 일") : idle ? workdayCountdown.label : title;
   const targetExpandedHeight = expandedOverlayHeight(blocks.length, settingsOpen);
   // The list only becomes scrollable after the native overlay has reached its

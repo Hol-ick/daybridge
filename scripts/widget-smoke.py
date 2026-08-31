@@ -473,7 +473,7 @@ def check_overlay_todo_items(browser) -> None:
     page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
     page.wait_for_function("(() => { const value = document.querySelector('[data-testid=now-focus-overlay-title]')?.textContent?.trim() || ''; return value && value !== '오늘 할 일'; })()")
     title = page.locator('[data-testid="now-focus-overlay-title"]')
-    assert (title.text_content() or "").strip() in {"리눅스 학습", "문서 검토"}
+    assert (title.text_content() or "").strip() == "문서 검토"
     leave_timer = page.locator('[data-testid="now-focus-overlay-leave-time"]')
     assert leave_timer.count() == 1
     assert re.fullmatch(r"\d{2}:\d{2}", leave_timer.locator('[data-testid="now-focus-overlay-leave-time-value"]').inner_text())
