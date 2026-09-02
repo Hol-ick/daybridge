@@ -76,8 +76,11 @@ const OVERLAY_TOOLBAR_GAP = 6;
 const OVERLAY_TRASH_HEIGHT = 57;
 const OVERLAY_TRASH_GAP = 6;
 const OVERLAY_EMPTY_LIST_HEIGHT = 62;
+// The manual form lives in the footer flow (rather than covering the list),
+// so reserve only the additional height it needs beyond the normal toolbar.
+const OVERLAY_MANUAL_FORM_EXTRA_HEIGHT = 50;
 
-function expandedOverlayHeight(blockCount, settingsOpen, trashVisible = false) {
+function expandedOverlayHeight(blockCount, settingsOpen, trashVisible = false, taskOpen = false) {
   if (settingsOpen) return OVERLAY_EXPANDED_HEIGHT;
   const listHeight = blockCount
     ? blockCount * OVERLAY_CARD_HEIGHT + Math.max(0, blockCount - 1) * OVERLAY_CARD_GAP
@@ -85,7 +88,8 @@ function expandedOverlayHeight(blockCount, settingsOpen, trashVisible = false) {
   return Math.min(
     OVERLAY_EXPANDED_HEIGHT,
     OVERLAY_COLLAPSED_HEIGHT + OVERLAY_PANEL_TOP_PADDING + listHeight + OVERLAY_TOOLBAR_GAP + OVERLAY_TOOLBAR_HEIGHT
-      + (trashVisible ? OVERLAY_TRASH_GAP + OVERLAY_TRASH_HEIGHT : 0),
+      + (trashVisible ? OVERLAY_TRASH_GAP + OVERLAY_TRASH_HEIGHT : 0)
+      + (taskOpen ? OVERLAY_MANUAL_FORM_EXTRA_HEIGHT : 0),
   );
 }
 
@@ -286,7 +290,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     ?? blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status))
     ?? blocks[0];
   const summaryTitle = todoListMode ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "오늘 할 일") : idle ? workdayCountdown.label : title;
-  const targetExpandedHeight = expandedOverlayHeight(blocks.length, settingsOpen, Boolean(draggingBlockId));
+  const targetExpandedHeight = expandedOverlayHeight(blocks.length, settingsOpen, Boolean(draggingBlockId), taskOpen);
   // The list only becomes scrollable after the native overlay has reached its
   // maximum height. Short schedules grow around every visible card instead.
   const listCanScroll = targetExpandedHeight >= OVERLAY_EXPANDED_HEIGHT;

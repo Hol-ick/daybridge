@@ -172,6 +172,21 @@ def assert_no_page_errors(errors: list[str]) -> None:
     assert not errors, errors
 
 
+def freeze_page_date(context, iso_timestamp: str) -> None:
+    """Keep fixture dates and the UI's local activity date in the same day."""
+    context.add_init_script(f"""
+        (() => {{
+            const RealDate = Date;
+            const fixed = RealDate.parse({json.dumps(iso_timestamp)});
+            class FixedDate extends RealDate {{
+                constructor(...args) {{ super(...(args.length ? args : [fixed])); }}
+                static now() {{ return fixed; }}
+            }}
+            window.Date = FixedDate;
+        }})();
+    """)
+
+
 def check_dashboard(browser) -> None:
     context = browser.new_context(viewport={"width": 960, "height": 760}, device_scale_factor=1)
     context.route(
@@ -231,6 +246,7 @@ def check_dashboard(browser) -> None:
 def check_dashboard_actions(browser) -> None:
     """Prove the management surface is wired to command endpoints, not a static mock."""
     context = browser.new_context(viewport={"width": 960, "height": 760}, device_scale_factor=1)
+    freeze_page_date(context, "2026-08-24T01:00:00+09:00")
     report_calls: list[dict] = []
     settings_calls: list[dict] = []
     manual_calls: list[dict] = []
@@ -635,6 +651,7 @@ def check_overlay_long_title(browser) -> None:
 def check_overlay_reorder(browser) -> None:
     """Prove card drag, FLIP swap motion, trash discard, status clicks, and toolbar controls work."""
     context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    freeze_page_date(context, "2026-08-24T01:00:00+09:00")
     move_calls: list[dict] = []
     report_calls: list[dict] = []
     discard_calls: list[dict] = []
@@ -738,6 +755,52 @@ def check_overlay_reorder(browser) -> None:
     context.close()
 
 
+def check_overlay_stale_card_is_not_reported_to_today(browser) -> None:
+    """A stale card must clear rather than write its status into the new date."""
+    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    freeze_page_date(context, "2026-09-02T09:00:00+09:00")
+    schedule_requests = 0
+    missing_today_board = False
+    report_calls: list[dict] = []
+
+    def handle_schedule(route) -> None:
+        nonlocal schedule_requests
+        schedule_requests += 1
+        if missing_today_board:
+            route.fulfill(status=404, content_type="application/json", body=json.dumps({"error": "No quest board exists for this date."}))
+        else:
+            route.fulfill(status=200, content_type="application/json", body=DRAG_SCHEDULE)
+
+    context.route(re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"), handle_schedule)
+    context.route(
+        "http://127.0.0.1:39393/api/schedule/block-report",
+        lambda route: (report_calls.append(json.loads(route.request.post_data or "{}")), route.fulfill(status=500, content_type="application/json", body="{}")),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/schedule-settings",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.wait_for_selector('[data-testid="now-focus-overlay-block-drag-a"]')
+    missing_today_board = True
+    page.locator('[data-testid="now-focus-overlay-block-drag-a"]').click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-a]') === null")
+    assert page.locator('[data-testid="now-focus-overlay-title"]').text_content() == "오늘 할 일"
+    assert page.locator('[data-testid="now-focus-overlay-expanded"]').get_by_text("오늘 할 일이 없습니다.").count() == 1
+    assert schedule_requests >= 2
+    assert not report_calls
+    assert_no_page_errors(errors)
+    context.close()
+
+
 def main() -> None:
     with sync_playwright() as playwright:
         launch_options = {"headless": True}
@@ -753,6 +816,7 @@ def main() -> None:
         check_overlay_todo_items(browser)
         check_overlay_long_title(browser)
         check_overlay_reorder(browser)
+        check_overlay_stale_card_is_not_reported_to_today(browser)
         browser.close()
 
 

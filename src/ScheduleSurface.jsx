@@ -21,8 +21,26 @@ function initialPrivateMode() {
 }
 
 async function readJson(response) {
-  if (!response.ok) throw new Error(`bridge request failed (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(`bridge request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return response.json();
+}
+
+function emptyTodoSchedule(date) {
+  return {
+    schemaVersion: 1,
+    date,
+    mode: "todo",
+    timeConfigured: false,
+    timezone: "Asia/Seoul",
+    generatedAt: new Date().toISOString(),
+    blocks: [],
+    unscheduled: [],
+    calendar: { coverage: "attention" },
+  };
 }
 
 export default function ScheduleSurface() {
@@ -65,6 +83,17 @@ export default function ScheduleSurface() {
       return result;
     } catch (error) {
       recordRuntimeEvent("schedule_load_error", { date: requestDate, rebuild, error: error?.message || String(error) });
+      // A date with no board is a normal empty-todo state, not a reason to
+      // retain yesterday's cards. Retaining them made their status requests
+      // target today's missing board and appear to ignore card clicks.
+      if (error?.status === 404) {
+        setSchedule(emptyTodoSchedule(requestDate));
+        setNowFocus({ state: "todo_list", block: null, nextFocus: null });
+        setCalendarCoverage("attention");
+        recordRuntimeEvent("schedule_cleared_for_missing_date", { date: requestDate, rebuild });
+        if (!quiet) setNotice("오늘 일정이 없습니다. + 버튼으로 추가할 수 있어요");
+        return { schedule: emptyTodoSchedule(requestDate), nowFocus: { state: "todo_list", block: null, nextFocus: null } };
+      }
       if (!quiet) setNotice("시간표를 불러오지 못했어요");
       return null;
     }
@@ -171,6 +200,17 @@ export default function ScheduleSurface() {
   }, [surface]);
 
   const reportBlock = useCallback(async (blockId, status) => {
+    const displayedDate = typeof schedule?.date === "string" ? schedule.date : "";
+    // The midnight refresh and the user's click can overlap. Never send an
+    // action for a card rendered from a different day's schedule.
+    if (displayedDate && displayedDate !== activityDate) {
+      recordRuntimeEvent("schedule_block_report_stale_date", { displayedDate, requestedDate: activityDate, blockId, status });
+      setSchedule(emptyTodoSchedule(activityDate));
+      setNowFocus({ state: "todo_list", block: null, nextFocus: null });
+      setNotice("날짜가 바뀌어 오늘 일정을 불러오는 중이에요");
+      void loadSchedule({ quiet: true });
+      return false;
+    }
     try {
       const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule/block-report`, {
         method: "POST",
@@ -188,7 +228,7 @@ export default function ScheduleSurface() {
       setNotice("진행 상태를 저장하지 못했어요");
       return false;
     }
-  }, [activityDate, refresh]);
+  }, [activityDate, loadSchedule, refresh, schedule]);
 
   const moveBlock = useCallback(async (blockId, targetBlockId, position) => {
     try {
