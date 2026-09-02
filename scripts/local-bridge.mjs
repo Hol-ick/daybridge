@@ -213,9 +213,9 @@ function manualDuration(value) {
 async function handleManualQuest(body) {
   const activityDate = safeDate(body.activityDate || body.date);
   const title = sanitizeText(body.title, 180);
-  const durationMinutes = manualDuration(body.durationMinutes);
-  if (!activityDate || !title || !durationMinutes) {
-    return { status: 400, body: { error: "activityDate, title, and a 50/100/150-minute duration are required." } };
+  const durationMinutes = manualDuration(body.durationMinutes) || 50;
+  if (!activityDate || !title) {
+    return { status: 400, body: { error: "activityDate and title are required." } };
   }
   const path = boardPath(activityDate);
   const inbox = await readScheduleInbox(activityDate);

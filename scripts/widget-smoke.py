@@ -224,11 +224,9 @@ def check_dashboard(browser) -> None:
     page.screenshot(path=str(dashboard_artifact), full_page=True)
 
     page.locator('[data-testid="schedule-settings"]').click()
-    page.wait_for_selector('form[aria-label="시간표 설정"]')
-    assert page.get_by_label("시작 시간").input_value() == ""
-    assert page.get_by_label("마감 시간").input_value() == ""
+    page.wait_for_selector('form[aria-label="위젯 설정"]')
     assert page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
-    settings_box = page.locator('form[aria-label="시간표 설정"]').bounding_box()
+    settings_box = page.locator('form[aria-label="위젯 설정"]').bounding_box()
     assert settings_box and round(settings_box["width"]) == 288
 
     artifact = Path("test-artifacts/daybridge-schedule-dashboard.png")
@@ -248,7 +246,6 @@ def check_dashboard_actions(browser) -> None:
     context = browser.new_context(viewport={"width": 960, "height": 760}, device_scale_factor=1)
     freeze_page_date(context, "2026-08-24T01:00:00+09:00")
     report_calls: list[dict] = []
-    settings_calls: list[dict] = []
     manual_calls: list[dict] = []
 
     context.route(
@@ -272,18 +269,6 @@ def check_dashboard_actions(browser) -> None:
 
     context.route("http://127.0.0.1:39393/api/quests/manual", handle_manual)
 
-    def handle_settings(route) -> None:
-        if route.request.method == "PUT":
-            settings_calls.append(json.loads(route.request.post_data or "{}"))
-            route.fulfill(status=200, content_type="application/json", body=json.dumps({"settings": {"dayStart": "09:00", "dayEnd": "18:00", "defaultFocusMinutes": 50, "bufferMinutes": 5}}))
-        else:
-            route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS)
-
-    context.route("http://127.0.0.1:39393/api/schedule-settings", handle_settings)
-    context.route(
-        "http://127.0.0.1:39393/api/schedule/rebuild",
-        lambda route: route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_COMPLETED),
-    )
     context.route(
         "http://127.0.0.1:39393/api/calendar/status",
         lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
@@ -300,20 +285,13 @@ def check_dashboard_actions(browser) -> None:
     page.wait_for_function("document.querySelector('[role=status]').textContent.includes('집중 시간을 완료했어요')")
     assert report_calls and report_calls[0]["blockId"] == "focus-1" and report_calls[0]["status"] == "completed"
 
-    page.locator('[data-testid="schedule-settings"]').click()
-    page.wait_for_selector('form[aria-label="시간표 설정"]')
-    page.locator('select[name="bufferMinutes"]').select_option("5")
-    page.get_by_role("button", name="저장하고 재배치").click()
-    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('시간표 설정을 저장했어요')")
-    assert settings_calls and settings_calls[0]["bufferMinutes"] == 5
-
     page.locator('[data-testid="manual-task-add-toggle"]').click()
     page.locator('[data-testid="manual-task-title"]').fill("리눅스 학습")
-    page.locator('[data-testid="manual-task-duration-100"]').click()
+    assert page.locator('[data-testid^="manual-task-duration-"]').count() == 0
     page.screenshot(path="test-artifacts/daybridge-schedule-dashboard-manual-form.png", full_page=True)
     page.locator('[data-testid="manual-task-submit"]').click()
-    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('100분으로 배치했어요')")
-    assert manual_calls and manual_calls[0]["title"] == "리눅스 학습" and manual_calls[0]["durationMinutes"] == 100
+    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('오늘 할 일에 추가했어요')")
+    assert manual_calls and manual_calls[0]["title"] == "리눅스 학습" and "durationMinutes" not in manual_calls[0]
     page.wait_for_function("document.querySelector('[data-testid=manual-task-form]') === null")
 
     assert_no_page_errors(errors)
@@ -442,7 +420,7 @@ def check_overlay(browser) -> None:
     page.locator('[data-testid="now-focus-overlay-settings"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-settings-modal"]')
     page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 420")
-    assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="dayStart"]').input_value() == ""
+    assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="privateOverlay"]').is_visible()
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
     overlay_refresh = page.locator('[data-testid="now-focus-overlay-refresh"]')
     assert overlay_refresh.is_visible()

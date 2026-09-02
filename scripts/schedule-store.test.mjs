@@ -26,14 +26,16 @@ test("new stores return the scheduling defaults", async () => {
   } finally { remove(dataDir); }
 });
 
-test("settings persist atomically in the injected data directory", async () => {
+test("legacy time inputs are stored as title-only defaults", async () => {
   const dataDir = temporaryStore();
   try {
     const settings = await saveScheduleSettings(dataDir, { dayStart: "08:30", dayEnd: "21:30", focusDurations: [25, 50], defaultFocusMinutes: 25, bufferMinutes: 5 });
     assert.deepEqual(await loadScheduleSettings(dataDir), settings);
     assert.equal(settings.defaultFocusMinutes, 50);
     assert.deepEqual(settings.focusDurations, [50]);
-    await assert.rejects(saveScheduleSettings(dataDir, { dayStart: "22:00", dayEnd: "09:00" }), /dayStart/);
+    const invalidLegacyHours = await saveScheduleSettings(dataDir, { dayStart: "22:00", dayEnd: "09:00" });
+    assert.equal(invalidLegacyHours.timeConfigured, false);
+    assert.equal(invalidLegacyHours.dayStart, "");
   } finally { remove(dataDir); }
 });
 
@@ -48,13 +50,15 @@ test("empty time settings keep the store in lightweight todo-list mode", async (
   } finally { remove(dataDir); }
 });
 
-test("legacy implicit 09:00–18:00 defaults migrate to empty time settings", async () => {
+test("legacy and explicit time settings are ignored in title-only mode", async () => {
   const dataDir = temporaryStore();
   try {
     const migrated = await saveScheduleSettings(dataDir, { dayStart: "09:00", dayEnd: "18:00" });
     assert.equal(migrated.timeConfigured, false);
     const explicit = await saveScheduleSettings(dataDir, { dayStart: "09:00", dayEnd: "18:00", timeConfigured: true });
-    assert.equal(explicit.timeConfigured, true);
+    assert.equal(explicit.timeConfigured, false);
+    assert.equal(explicit.dayStart, "");
+    assert.equal(explicit.dayEnd, "");
   } finally { remove(dataDir); }
 });
 

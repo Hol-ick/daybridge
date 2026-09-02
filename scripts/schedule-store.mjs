@@ -140,11 +140,14 @@ export function settingsPath(dataDir) { return join(resolve(dataDir), "schedule-
 
 export async function loadScheduleSettings(dataDir) {
   const stored = await readJson(settingsPath(dataDir));
-  try { return normalizeSettings(stored || DEFAULT_SCHEDULE_SETTINGS); } catch { return { ...DEFAULT_SCHEDULE_SETTINGS, focusDurations: [...DEFAULT_SCHEDULE_SETTINGS.focusDurations] }; }
+  try {
+    const normalized = normalizeSettings(stored || DEFAULT_SCHEDULE_SETTINGS);
+    return { ...normalized, dayStart: "", dayEnd: "", timeConfigured: false };
+  } catch { return { ...DEFAULT_SCHEDULE_SETTINGS, focusDurations: [...DEFAULT_SCHEDULE_SETTINGS.focusDurations] }; }
 }
 
 export async function saveScheduleSettings(dataDir, settings) {
-  const normalized = normalizeSettings(settings);
+  const normalized = normalizeSettings({ ...(settings || {}), dayStart: "", dayEnd: "", timeConfigured: false });
   await atomicWrite(settingsPath(dataDir), normalized);
   return normalized;
 }

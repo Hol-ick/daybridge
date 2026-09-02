@@ -1,16 +1,9 @@
 import { useEffect, useState } from "react";
 import styles from "./ManualTaskForm.module.css";
 
-const DURATIONS = [50, 100, 150];
-
-function durationLabel(minutes) {
-  return `${minutes}분`;
-}
-
 export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = false, onOpenChange, resetSignal = 0 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState(50);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -18,7 +11,6 @@ export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = f
     setOpen(false);
     onOpenChange?.(false);
     setTitle("");
-    setDurationMinutes(50);
     setError("");
   };
 
@@ -34,7 +26,7 @@ export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = f
     setError("");
     setSubmitting(true);
     try {
-      const result = await onSubmit({ title: clean, durationMinutes });
+      const result = await onSubmit({ title: clean });
       if (result !== false) close();
       else setError("추가하지 못했어요");
     } catch {
@@ -77,26 +69,8 @@ export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = f
           aria-label="할 일 제목"
         />
         <button type="button" className={styles.cancel} onClick={close} disabled={submitting} data-tauri-drag-region="false" data-testid="manual-task-cancel">×</button>
-      </div>
-      <div className={styles.formBottom}>
-        <div className={styles.durationGroup} role="group" aria-label="작업 시간">
-          {DURATIONS.map((minutes) => (
-            <button
-              key={minutes}
-              type="button"
-              className={durationMinutes === minutes ? styles.durationSelected : styles.duration}
-              onClick={() => { setDurationMinutes(minutes); setError(""); }}
-              disabled={submitting}
-              data-tauri-drag-region="false"
-              data-testid={`manual-task-duration-${minutes}`}
-              aria-pressed={durationMinutes === minutes}
-            >
-              {durationLabel(minutes)}
-            </button>
-          ))}
-        </div>
         <button type="submit" className={styles.submit} disabled={!title.trim() || submitting} data-tauri-drag-region="false" data-testid="manual-task-submit">
-          {submitting ? "저장…" : "배치"}
+          {submitting ? "…" : "추가"}
         </button>
       </div>
       {error ? <p className={styles.error} role="status" aria-live="polite">{error}</p> : null}

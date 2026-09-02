@@ -51,7 +51,6 @@ export default function ScheduleSurface() {
   const [nowFocus, setNowFocus] = useState(null);
   const [calendarCoverage, setCalendarCoverage] = useState("attention");
   const [calendarConnection, setCalendarConnection] = useState({ state: "attention", reason: "status_pending" });
-  const [settings, setSettings] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [privateMode, setPrivateMode] = useState(initialPrivateMode);
   const [notice, setNotice] = useState("");
@@ -99,36 +98,22 @@ export default function ScheduleSurface() {
     }
   }, [activityDate]);
 
-  const loadSettings = useCallback(async () => {
-    try {
-      const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule-settings`));
-      if (!result?.settings) throw new Error("settings payload missing");
-      setSettings(result.settings);
-      recordRuntimeEvent("settings_load_success", { dayStart: result.settings?.dayStart, dayEnd: result.settings?.dayEnd, timeConfigured: result.settings?.timeConfigured });
-      return result;
-    } catch (error) {
-      recordRuntimeEvent("settings_load_error", { error: error?.message || String(error) });
-      setNotice("시간표 설정을 불러오지 못했어요");
-      return null;
-    }
-  }, []);
-
-  const addManualTask = useCallback(async ({ title, durationMinutes }) => {
+  const addManualTask = useCallback(async ({ title }) => {
     try {
       const result = await readJson(await fetch(`${BRIDGE_URL}/api/quests/manual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activityDate, title, durationMinutes }),
+        body: JSON.stringify({ activityDate, title }),
       }));
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       await refresh();
-      recordRuntimeEvent("manual_task_added", { date: activityDate, title, durationMinutes });
-      setNotice(result.schedule?.mode === "todo" ? `${title}을 오늘 할 일에 추가했어요` : `${title} · ${durationMinutes}분으로 배치했어요`);
+      recordRuntimeEvent("manual_task_added", { date: activityDate, title });
+      setNotice(`${title}을 오늘 할 일에 추가했어요`);
       return true;
     } catch (error) {
-      recordRuntimeEvent("manual_task_add_error", { date: activityDate, title, durationMinutes, error: error?.message || String(error) });
-      setNotice("작업을 추가하지 못했어요. 제목과 시간을 확인해 주세요");
+      recordRuntimeEvent("manual_task_add_error", { date: activityDate, title, error: error?.message || String(error) });
+      setNotice("작업을 추가하지 못했어요. 제목을 확인해 주세요");
       return false;
     }
   }, [activityDate, refresh]);
@@ -245,7 +230,7 @@ export default function ScheduleSurface() {
       return true;
     } catch (error) {
       recordRuntimeEvent("schedule_block_move_error", { date: activityDate, blockId, targetBlockId, position, error: error?.message || String(error) });
-      setNotice("근무시간 안에서만 순서를 바꿀 수 있어요");
+      setNotice("목록 안에서만 순서를 바꿀 수 있어요");
       return false;
     }
   }, [activityDate, refresh]);
@@ -272,8 +257,7 @@ export default function ScheduleSurface() {
 
   const openSettings = useCallback(() => {
     setSettingsOpen(true);
-    void loadSettings();
-  }, [loadSettings]);
+  }, []);
 
   const refreshWidget = useCallback(async () => {
     if (refreshingWidget) return;
@@ -285,10 +269,6 @@ export default function ScheduleSurface() {
         loadCalendarStatus({ quiet: true }),
       ]);
       if (!scheduleResult || !calendarResult) throw new Error("refresh data unavailable");
-      if (settingsOpen) {
-        const settingsResult = await loadSettings();
-        if (!settingsResult) throw new Error("settings refresh unavailable");
-      }
       recordRuntimeEvent("overlay_manual_refresh", { source: "settings", surface });
       setNotice("위젯을 새로고침했어요");
     } catch (error) {
@@ -297,7 +277,7 @@ export default function ScheduleSurface() {
     } finally {
       setRefreshingWidget(false);
     }
-  }, [loadCalendarStatus, loadSchedule, loadSettings, refreshingWidget, settingsOpen, surface]);
+  }, [loadCalendarStatus, loadSchedule, refreshingWidget, surface]);
 
   const connectCalendar = useCallback(async () => {
     try {
@@ -319,27 +299,13 @@ export default function ScheduleSurface() {
 
   const saveSettings = useCallback(async (event) => {
     event.preventDefault();
-    if (!settings) return;
     const form = new FormData(event.currentTarget);
     const nextPrivateMode = form.get("privateOverlay") === "on";
-    const nextSettings = {
-      dayStart: form.get("dayStart"),
-      dayEnd: form.get("dayEnd"),
-      timeConfigured: Boolean(form.get("dayStart") && form.get("dayEnd")),
-      focusDurations: [50],
-      defaultFocusMinutes: 50,
-      bufferMinutes: Number(form.get("bufferMinutes")),
-    };
-    try {
-      const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule-settings`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nextSettings) }));
-      setSettings(result.settings);
-      setPrivateMode(nextPrivateMode);
-      try { localStorage.setItem(OVERLAY_PRIVACY_KEY, String(nextPrivateMode)); } catch { /* local privacy preference is optional */ }
-      setSettingsOpen(false);
-      await loadSchedule({ rebuild: true, quiet: true });
-      setNotice("시간표 설정을 저장했어요");
-    } catch { setNotice("설정 값을 확인해 주세요"); }
-  }, [loadSchedule, settings]);
+    setPrivateMode(nextPrivateMode);
+    try { localStorage.setItem(OVERLAY_PRIVACY_KEY, String(nextPrivateMode)); } catch { /* local privacy preference is optional */ }
+    setSettingsOpen(false);
+    setNotice("위젯 표시 설정을 저장했어요");
+  }, []);
 
   const selectedQuest = useMemo(() => board?.quests?.find((quest) => quest.id === expandedQuestId) || null, [board?.quests, expandedQuestId]);
   if (surface === "overlay") {
@@ -351,7 +317,6 @@ export default function ScheduleSurface() {
       onAddManualTask={addManualTask}
       onMoveBlock={moveBlock}
       onDiscardBlock={discardBlock}
-      settings={settings}
       settingsOpen={settingsOpen}
       onOpenSettings={openSettings}
       onCloseSettings={() => setSettingsOpen(false)}
@@ -370,27 +335,18 @@ export default function ScheduleSurface() {
       onOpenQuest={toggleQuest}
       onCompleteBlock={(blockId) => { void reportBlock(blockId, "completed"); }}
       onDeferBlock={(blockId) => { void reportBlock(blockId, "deferred"); }}
-      onRebuild={() => { void loadSchedule({ rebuild: true }); }}
       onOpenSettings={openSettings}
       onConnectCalendar={connectCalendar}
       onAddManualTask={addManualTask}
     />
     <p className={styles.notice} role="status" data-visible={notice ? "true" : "false"}>{notice}</p>
     {selectedQuest ? <section className={styles.questDetail} aria-label="선택한 작업 상세"><Item quest={selectedQuest} /></section> : null}
-    {settingsOpen && settings ? <div className={styles.settingsBackdrop} role="presentation">
-      <form className={styles.settingsSheet} onSubmit={saveSettings} aria-label="시간표 설정">
-        <header><div><p>시간표 설정</p><strong>오늘의 리듬</strong></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="설정 닫기">×</button></header>
-        <div className={styles.settingsRow}>
-          <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} /></label>
-          <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} /></label>
-        </div>
-        <div className={styles.settingsRow}>
-          <div className={styles.fixedSetting}><span>집중 단위</span><strong>00–50분</strong></div>
-          <label>완충 시간<select name="bufferMinutes" defaultValue={String(settings.bufferMinutes)}><option value="0">없음</option><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option></select></label>
-        </div>
+    {settingsOpen ? <div className={styles.settingsBackdrop} role="presentation">
+      <form className={styles.settingsSheet} onSubmit={saveSettings} aria-label="위젯 설정">
+        <header><div><p>WIDGET</p><strong>표시 옵션</strong></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="설정 닫기">×</button></header>
         <label className={styles.checkbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
         <button className={styles.utility} type="button" onClick={refreshWidget} disabled={refreshingWidget} data-testid="schedule-widget-refresh">{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</button>
-        <button className={styles.save} type="submit">저장하고 재배치</button>
+        <button className={styles.save} type="submit">저장</button>
       </form>
     </div> : null}
   </div>;

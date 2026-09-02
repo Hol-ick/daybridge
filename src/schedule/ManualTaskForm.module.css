@@ -54,7 +54,7 @@
   box-shadow: 0 13px 28px rgb(0 0 0 / 38%), 0 0 0 1px rgb(255 255 255 / 5%) inset;
   animation: manual-form-in .2s cubic-bezier(.22, 1, .36, 1);
 }
-.formTop, .formBottom { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.formTop { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .titleInput { min-width: 0; flex: 1; height: 32px; padding: 0 9px; border: 1px solid rgb(255 255 255 / 22%); border-radius: 6px; outline: none; background: rgb(5 7 10 / 42%); color: #f5fff9; font-size: 13px; font-weight: 750; letter-spacing: -.04em; }
 .compact .formTop { gap: 7px; }
 .compact .titleInput { height: 33px; padding: 0 11px; border-color: rgb(255 255 255 / 21%); border-radius: 8px; background: rgb(6 10 14 / 84%); color: #f5fff9; font-size: 13px; font-weight: 800; }
@@ -63,24 +63,11 @@
 .titleInput:focus { border-color: rgb(98 220 165 / 70%); box-shadow: 0 0 0 2px rgb(98 220 165 / 12%); }
 .compact .cancel { display: grid; flex: 0 0 29px; width: 29px; height: 29px; place-items: center; padding: 0; border: 1px solid rgb(255 255 255 / 17%); border-radius: 50%; background: rgb(255 255 255 / 6%); color: #bac6c1; font-size: 18px; line-height: 1; transition: border-color .15s ease, background-color .15s ease, color .15s ease, transform .15s ease; }
 .cancel:hover { border-color: rgb(255 141 141 / 55%); background: rgb(255 141 141 / 12%); color: #ffe4e4; transform: rotate(90deg); }
-.formBottom { justify-content: space-between; }
-.compact .formBottom { gap: 8px; align-items: stretch; }
 .error { margin: 0; color: #ff9d9d; font-size: 10px; font-weight: 750; letter-spacing: -.02em; line-height: 1; }
-.durationGroup { display: flex; gap: 3px; }
-.compact .durationGroup { flex: 1 1 auto; min-width: 0; gap: 3px; padding: 2px; border: 1px solid rgb(255 255 255 / 11%); border-radius: 8px; background: rgb(4 8 12 / 72%); }
-.duration, .durationSelected, .submit { min-height: 27px; padding: 0 8px; border-radius: 5px; cursor: pointer; font-size: 10px; font-weight: 850; transition: border-color .15s ease, background-color .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease; }
-.duration, .durationSelected { border: 1px solid rgb(255 255 255 / 16%); background: rgb(255 255 255 / 7%); color: #b9beca; }
-.duration:hover { border-color: rgb(98 220 165 / 48%); background: rgb(98 220 165 / 12%); color: #e9fff2; }
-.durationSelected { border-color: rgb(98 220 165 / 75%); background: rgb(98 220 165 / 22%); color: #d2ffe5; box-shadow: 0 0 0 1px rgb(98 220 165 / 12%) inset; }
-.compact .duration,
-.compact .durationSelected { flex: 1 1 0; min-width: 0; min-height: 29px; padding: 0 4px; border: 0; border-radius: 6px; font-size: 10px; white-space: nowrap; }
-.compact .duration { border-color: transparent; background: rgb(255 255 255 / 5%); color: #b6c4be; }
-.compact .durationSelected { background: #78e8b5; color: #0b2118; box-shadow: 0 2px 9px rgb(98 220 165 / 22%); }
-.compact .duration:hover { border-color: transparent; background: rgb(98 220 165 / 18%); color: #e9fff2; transform: translateY(-1px); }
-.submit { min-width: 46px; border: 1px solid #74e7b1; background: #74e7b1; color: #0d2118; }
-.compact .submit { flex: 0 0 49px; min-width: 49px; min-height: 33px; padding: 0 5px; border-radius: 8px; font-size: 11px; box-shadow: 0 5px 12px rgb(98 220 165 / 16%); white-space: nowrap; }
+.submit { flex: 0 0 48px; min-height: 31px; padding: 0 7px; border: 1px solid #74e7b1; border-radius: 7px; background: #74e7b1; color: #0d2118; cursor: pointer; font-size: 11px; font-weight: 850; transition: background-color .15s ease, transform .15s ease; }
+.compact .submit { flex-basis: 48px; min-height: 29px; border-radius: 8px; box-shadow: 0 5px 12px rgb(98 220 165 / 16%); white-space: nowrap; }
 .submit:hover:not(:disabled) { background: #a0f4c8; transform: translateY(-1px); }
-.submit:disabled, .duration:disabled, .durationSelected:disabled, .cancel:disabled { cursor: wait; opacity: .5; }
+.submit:disabled, .cancel:disabled { cursor: wait; opacity: .5; }
 .compact .submit:disabled { border-color: rgb(126 235 187 / 28%); background: rgb(126 235 187 / 11%); color: #88a495; opacity: 1; box-shadow: none; }
 
 @keyframes manual-form-in {

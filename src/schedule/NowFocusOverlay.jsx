@@ -78,7 +78,7 @@ const OVERLAY_TRASH_GAP = 6;
 const OVERLAY_EMPTY_LIST_HEIGHT = 62;
 // The manual form lives in the footer flow (rather than covering the list),
 // so reserve only the additional height it needs beyond the normal toolbar.
-const OVERLAY_MANUAL_FORM_EXTRA_HEIGHT = 50;
+const OVERLAY_MANUAL_FORM_EXTRA_HEIGHT = 8;
 
 function expandedOverlayHeight(blockCount, settingsOpen, trashVisible = false, taskOpen = false) {
   if (settingsOpen) return OVERLAY_EXPANDED_HEIGHT;
@@ -200,26 +200,14 @@ function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, o
   );
 }
 
-function OverlaySettingsModal({ settings, privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget }) {
-  if (!settings) {
-    return <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="시간표 설정"><div className={styles.settingsLoading}>설정을 불러오는 중…</div></div>;
-  }
-
+function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget }) {
   return (
-    <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="시간표 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
+    <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
       <form className={styles.settingsForm} onSubmit={onSubmit}>
         <header className={styles.settingsHeader}>
-          <div><span>시간표 설정</span><strong>오늘의 리듬</strong></div>
+          <div><span>WIDGET</span><strong>표시 옵션</strong></div>
           <button type="button" className={styles.settingsClose} onClick={onClose} aria-label="설정 닫기" data-tauri-drag-region="false">×</button>
         </header>
-        <div className={styles.settingsRow}>
-          <label>시작 시간<input name="dayStart" type="time" defaultValue={settings.dayStart} /></label>
-          <label>마감 시간<input name="dayEnd" type="time" defaultValue={settings.dayEnd} /></label>
-        </div>
-        <div className={styles.settingsRow}>
-          <div className={styles.fixedSetting}><span>집중 단위</span><strong>00–50분</strong></div>
-          <label>완충 시간<select name="bufferMinutes" defaultValue={String(settings.bufferMinutes)}><option value="0">없음</option><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option></select></label>
-        </div>
         <label className={styles.settingsCheckbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
         <button
           className={styles.settingsUtility}
@@ -231,7 +219,7 @@ function OverlaySettingsModal({ settings, privateMode, onClose, onSubmit, onRefr
         >
           {refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}
         </button>
-        <button className={styles.settingsSave} type="submit">저장하고 재배치</button>
+        <button className={styles.settingsSave} type="submit">저장</button>
       </form>
     </div>
   );
@@ -241,7 +229,7 @@ function OverlaySettingsModal({ settings, privateMode, onClose, onSubmit, onRefr
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settings, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false }) {
   const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
   const pointerDragRef = useRef({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null });
   const suppressCardClickRef = useRef(false);
@@ -691,7 +679,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
           <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
         </time>
         </div>
-        {settingsOpen ? <OverlaySettingsModal settings={settings} privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} /> : null}
+        {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} /> : null}
       </div>
     </aside>
   );

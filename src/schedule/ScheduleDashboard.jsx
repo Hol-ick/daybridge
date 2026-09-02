@@ -129,7 +129,6 @@ export default function ScheduleDashboard({
   onOpenQuest,
   onCompleteBlock,
   onDeferBlock,
-  onRebuild,
   onOpenSettings,
   calendarCoverage,
   calendarConnection,
@@ -165,7 +164,6 @@ export default function ScheduleDashboard({
         <div className={styles.headerActions}>
           <span className={styles.coverage} data-testid="calendar-coverage" aria-label={coverageLabel} title={coverageLabel} data-state={coverageState} />
           <button type="button" onClick={onConnectCalendar} data-testid="calendar-connect">캘린더</button>
-          <button type="button" onClick={onRebuild} data-testid="schedule-rebuild">재배치</button>
           <button type="button" onClick={onOpenSettings} data-testid="schedule-settings" aria-label="시간표 설정">설정</button>
         </div>
       </header>
