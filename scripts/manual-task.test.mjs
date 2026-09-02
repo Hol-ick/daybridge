@@ -35,25 +35,19 @@ async function createBoard(dataDir) {
   const boards = join(dataDir, "boards");
   await mkdir(boards, { recursive: true });
   await writeFile(join(dataDir, "config.json"), JSON.stringify({ handoffSinkDir: null }));
-  await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "09:00", dayEnd: "18:00", timeConfigured: true, bufferMinutes: 10 }));
+  await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ timeConfigured: false }));
   await writeFile(join(boards, `${DATE}.json`), JSON.stringify({ schemaVersion: 2, activityDate: DATE, quests: [], sourceWarnings: [] }));
 }
 
-test("manual task endpoint saves a task and splits it into 50-minute blocks", async () => {
+test("manual task endpoint saves a title-only task as an untimed todo card", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "daybridge-manual-task-"));
   const { child, baseUrl } = await startBridge(dataDir);
   try {
     await createBoard(dataDir);
-    const settingsResponse = await fetch(`${baseUrl}/api/schedule-settings`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activityDate: DATE, dayStart: "09:00", dayEnd: "18:00", timeConfigured: true, bufferMinutes: 10 }),
-    });
-    assert.equal(settingsResponse.status, 200);
     const response = await fetch(`${baseUrl}/api/quests/manual`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: "http://tauri.localhost" },
-      body: JSON.stringify({ activityDate: DATE, title: "리눅스 학습", durationMinutes: 100 }),
+      body: JSON.stringify({ activityDate: DATE, title: "리눅스 학습" }),
     });
     assert.equal(response.status, 201);
     assert.equal(response.headers.get("access-control-allow-origin"), "http://tauri.localhost");
@@ -61,15 +55,16 @@ test("manual task endpoint saves a task and splits it into 50-minute blocks", as
     assert.equal(result.quest.title, "리눅스 학습");
     assert.equal(result.quest.sourceLabel, "수동 추가");
     assert.equal(result.quest.sourcePath, "manual://widget");
-    assert.equal(result.quest.estimateMinutes, 100);
+    assert.equal(result.quest.estimateMinutes, 50);
     const focus = result.schedule.blocks.filter((block) => block.type === "focus" && block.questId === result.quest.id);
-    assert.deepEqual(focus.map((block) => [block.startAt.slice(11, 16), block.endAt.slice(11, 16)]), [["09:00", "09:50"], ["10:00", "10:50"]]);
+    assert.equal(focus.length, 1);
+    assert.equal(focus[0].startAt, undefined);
+    assert.equal(focus[0].endAt, undefined);
     const saved = JSON.parse(await readFile(join(dataDir, "boards", `${DATE}.json`), "utf8"));
     assert.equal(saved.quests.length, 1);
     const activityResponse = await fetch(`${baseUrl}/api/activity?date=${DATE}`);
     assert.equal(activityResponse.status, 200);
     const activity = await activityResponse.json();
-    assert.ok(activity.records.some((record) => record.action === "schedule_settings_changed"));
     assert.equal(activity.records.at(-1).action, "task_added");
     assert.equal(activity.records.at(-1).subject.title, "리눅스 학습");
     const activityMarkdown = await readFile(join(dataDir, "activity", `${DATE}.md`), "utf8");
@@ -80,18 +75,15 @@ test("manual task endpoint saves a task and splits it into 50-minute blocks", as
   }
 });
 
-test("manual task endpoint rejects non-unit durations and blank titles", async () => {
+test("manual task endpoint requires only a nonblank title and ignores legacy duration input", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "daybridge-manual-task-invalid-"));
   const { child, baseUrl } = await startBridge(dataDir);
   try {
     await createBoard(dataDir);
-    for (const body of [
-      { activityDate: DATE, title: "", durationMinutes: 50 },
-      { activityDate: DATE, title: "리눅스 학습", durationMinutes: 75 },
-    ]) {
-      const response = await fetch(`${baseUrl}/api/quests/manual`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      assert.equal(response.status, 400);
-    }
+    const blank = await fetch(`${baseUrl}/api/quests/manual`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE, title: "" }) });
+    assert.equal(blank.status, 400);
+    const legacyDuration = await fetch(`${baseUrl}/api/quests/manual`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE, title: "리눅스 학습", durationMinutes: 75 }) });
+    assert.equal(legacyDuration.status, 201);
   } finally {
     child.kill();
     await rm(dataDir, { recursive: true, force: true });

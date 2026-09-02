@@ -133,8 +133,11 @@ fn start_process_keep_alive(app: &tauri::AppHandle) -> Result<(), String> {
         std::fs::create_dir_all(parent)
             .map_err(|error| format!("프로세스 감시자 경로를 만들 수 없습니다: {error}"))?;
     }
-    std::fs::write(&script_path, keep_alive_script(&executable, &exit_marker, &event_log))
-        .map_err(|error| format!("프로세스 감시자 스크립트를 저장할 수 없습니다: {error}"))?;
+    std::fs::write(
+        &script_path,
+        keep_alive_script(&executable, &exit_marker, &event_log),
+    )
+    .map_err(|error| format!("프로세스 감시자 스크립트를 저장할 수 없습니다: {error}"))?;
 
     let mut command = Command::new("powershell.exe");
     command
@@ -298,6 +301,41 @@ fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
         &json!({ "error": error, "port": LOCAL_BRIDGE_PORT }).to_string(),
     );
     Err(error)
+}
+
+#[tauri::command]
+fn ensure_local_bridge(app: tauri::AppHandle) -> Result<bool, String> {
+    if bridge_is_reachable() {
+        return Ok(false);
+    }
+    let _ = append_runtime_event(
+        &app,
+        "bridge_recovery_requested",
+        &json!({ "source": "webview_request", "port": LOCAL_BRIDGE_PORT }).to_string(),
+    );
+    start_local_bridge(&app)?;
+    Ok(true)
+}
+
+fn start_local_bridge_watchdog(app: tauri::AppHandle) {
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_secs(5));
+        if bridge_is_reachable() {
+            continue;
+        }
+        let _ = append_runtime_event(
+            &app,
+            "bridge_watchdog_recovery_requested",
+            &json!({ "port": LOCAL_BRIDGE_PORT }).to_string(),
+        );
+        if let Err(error) = start_local_bridge(&app) {
+            let _ = append_runtime_event(
+                &app,
+                "bridge_watchdog_recovery_error",
+                &json!({ "error": error, "port": LOCAL_BRIDGE_PORT }).to_string(),
+            );
+        }
+    });
 }
 
 #[cfg(not(windows))]
@@ -640,6 +678,7 @@ fn main() {
                     &json!({ "error": error }).to_string(),
                 );
             }
+            start_local_bridge_watchdog(app.handle().clone());
             if let Some(window) = app.get_webview_window("overlay") {
                 let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
             }
@@ -699,6 +738,7 @@ fn main() {
             get_overlay_position,
             save_overlay_position,
             record_runtime_event,
+            ensure_local_bridge,
             exit_app
         ])
         .on_window_event(|window, event| {

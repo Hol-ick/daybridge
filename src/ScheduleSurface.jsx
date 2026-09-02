@@ -29,6 +29,26 @@ async function readJson(response) {
   return response.json();
 }
 
+async function fetchBridge(resource, options) {
+  try {
+    return await fetch(resource, options);
+  } catch (initialError) {
+    // The Tauri shell and the local data bridge are intentionally separate
+    // processes. If the bridge was terminated after the widget had started,
+    // revive it and replay this one user action instead of making the card
+    // appear unresponsive until the next full app restart.
+    if (!isTauri()) throw initialError;
+    try {
+      await invoke("ensure_local_bridge");
+      return await fetch(resource, options);
+    } catch (recoveryError) {
+      const error = new Error(`bridge recovery failed: ${recoveryError?.message || String(recoveryError)}`);
+      error.cause = initialError;
+      throw error;
+    }
+  }
+}
+
 function emptyTodoSchedule(date) {
   return {
     schemaVersion: 1,
@@ -70,8 +90,8 @@ export default function ScheduleSurface() {
     recordRuntimeEvent("schedule_load_start", { date: requestDate, rebuild, quiet });
     try {
       const request = rebuild
-        ? fetch(`${BRIDGE_URL}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: requestDate }) })
-        : fetch(`${BRIDGE_URL}/api/schedule?date=${requestDate}`);
+        ? fetchBridge(`${BRIDGE_URL}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: requestDate }) })
+        : fetchBridge(`${BRIDGE_URL}/api/schedule?date=${requestDate}`);
       const result = await readJson(await request);
       if (!result?.schedule) throw new Error("schedule payload missing");
       setSchedule(result.schedule);
@@ -100,7 +120,7 @@ export default function ScheduleSurface() {
 
   const addManualTask = useCallback(async ({ title }) => {
     try {
-      const result = await readJson(await fetch(`${BRIDGE_URL}/api/quests/manual`, {
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/quests/manual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ activityDate, title }),
@@ -120,7 +140,7 @@ export default function ScheduleSurface() {
 
   const loadCalendarStatus = useCallback(async ({ quiet = false } = {}) => {
     try {
-      const result = await readJson(await fetch(`${BRIDGE_URL}/api/calendar/status`));
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/calendar/status`));
       if (!result?.calendar) throw new Error("calendar payload missing");
       setCalendarConnection(result.calendar || { state: "attention", reason: "status_unavailable" });
       recordRuntimeEvent("calendar_status", { state: result.calendar?.state, reason: result.calendar?.reason });
@@ -197,7 +217,7 @@ export default function ScheduleSurface() {
       return false;
     }
     try {
-      const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule/block-report`, {
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/schedule/block-report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ activityDate, blockId, status, note: status === "completed" ? "집중 블록 완료" : "집중 블록을 다음으로 미룸" }),
@@ -217,7 +237,7 @@ export default function ScheduleSurface() {
 
   const moveBlock = useCallback(async (blockId, targetBlockId, position) => {
     try {
-      const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule/block-move`, {
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/schedule/block-move`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ activityDate, blockId, targetBlockId, position }),
@@ -237,7 +257,7 @@ export default function ScheduleSurface() {
 
   const discardBlock = useCallback(async (blockId) => {
     try {
-      const result = await readJson(await fetch(`${BRIDGE_URL}/api/schedule/block-discard`, {
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/schedule/block-discard`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ activityDate, blockId }),
@@ -281,7 +301,7 @@ export default function ScheduleSurface() {
 
   const connectCalendar = useCallback(async () => {
     try {
-      const result = await readJson(await fetch(`${BRIDGE_URL}/api/calendar/connect`, { method: "POST" }));
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/calendar/connect`, { method: "POST" }));
       setCalendarConnection(result.calendar || { state: "attention", reason: "status_unavailable" });
       if (result.authorizationUrl) {
         window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");
