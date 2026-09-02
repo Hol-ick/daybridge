@@ -9,7 +9,7 @@ Daybridge is an execution layer over AIHUB, not a second diary or a second calen
 3. **Optional Quest Plan** — a sanitized derived artifact for closeout-driven or batch workflows. Stable `mission_id` and `quest_id` let a multi-day mission continue without resetting progress. The input contract is validated before any candidate reaches the scheduler; confirmation questions remain in `review_queue`.
 4. **Optional completion-driven continuation** — when enabled, closeout automation invokes the Quest Extractor only after a ready synthesis exists. No fixed 17:40 cron is required, and this path is independent of direct inbox writes.
 5. **Calendar busy reader** — a local, user-authorized, read-only adapter that returns only occupied start/end ranges. It has no calendar write path.
-6. **Routine planner** — turns personal, opt-in defaults such as Linux learning into a maximum of two optional candidates. It runs after the session inbox and any board candidates are read and never displaces user-selected work.
+6. **Routine planner** — turns personal, opt-in defaults such as a daily supplement reminder into a maximum of two optional candidates. It runs after the session inbox and any board candidates are read and never displaces user-selected work.
 7. **DailySchedule** — combines board candidates, inbox candidates, optional routine candidates, busy windows, user settings, prior receipts, and carryover. A configured work window produces deterministic focus, busy, and buffer blocks; without one it produces an untimed `mode=todo` list.
 8. **Local bridge and widget** — serves the schedule, preserves receipts, mirrors sanitized user interactions back to AIHUB, and shows one current action plus a compact timeline.
 

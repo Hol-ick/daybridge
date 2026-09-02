@@ -34,7 +34,7 @@ async function createBoard(dataDir) {
   await mkdir(join(dataDir, "boards"), { recursive: true });
   await writeFile(join(dataDir, "config.json"), JSON.stringify({ handoffSinkDir: null }));
   await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "09:00", dayEnd: "18:00", timeConfigured: true, bufferMinutes: 10 }));
-  const quests = ["GitHub Actions에서 Verify web-buyback 배포 상태와 첫 실패 로그 확인", "리눅스 학습", "내일 계획"].map((title, index) => ({
+  const quests = ["GitHub Actions에서 Verify web-buyback 배포 상태와 첫 실패 로그 확인", "리눅스 학습", "영양제 먹기"].map((title, index) => ({
     id: `quest-${index + 1}`,
     title,
     scheduleTitle: title,
@@ -60,8 +60,9 @@ test("schedule block move reorders open focus cards without entering lunch", asy
     assert.equal(rebuilt.status, 200);
     const initial = await rebuilt.json();
     const initialFocus = initial.schedule.blocks.filter((block) => block.type === "focus");
-    assert.deepEqual(initialFocus.map((block) => block.startAt.slice(11, 16)), ["09:00", "10:00", "13:00"]);
-    assert.equal(initialFocus[0].title, "배포 상태 확인");
+    assert.equal(initial.schedule.mode, "todo");
+    assert.equal(initialFocus.length, 3);
+    assert.ok(initialFocus.every((block) => block.timed === false && !block.startAt && !block.endAt));
 
     const movedResponse = await fetch(`${baseUrl}/api/schedule/block-move`, {
       method: "POST",
@@ -70,16 +71,16 @@ test("schedule block move reorders open focus cards without entering lunch", asy
     });
     assert.equal(movedResponse.status, 200);
     const moved = await movedResponse.json();
-    const movedFocus = moved.schedule.blocks.filter((block) => block.type === "focus").sort((left, right) => left.startAt.localeCompare(right.startAt));
-    assert.deepEqual(movedFocus.map((block) => [block.questId, block.startAt.slice(11, 16)]), [["quest-2", "09:00"], ["quest-3", "10:00"], ["quest-1", "13:00"]]);
-    assert.equal(movedFocus.every((block) => block.locked && block.userPositioned), true);
-    assert.equal(moved.schedule.blocks.some((block) => block.type === "focus" && ["11:00", "12:00"].includes(block.startAt.slice(11, 16))), false);
+    const movedTodo = moved.schedule.blocks.filter((block) => block.type === "focus").sort((left, right) => left.order - right.order);
+    assert.deepEqual(movedTodo.map((block) => block.questId), [initialFocus[1].questId, initialFocus[2].questId, initialFocus[0].questId]);
+    assert.ok(movedTodo.every((block) => block.timed === false && !block.startAt && !block.endAt));
+    assert.equal(movedTodo.every((block) => block.locked && block.userPositioned), true);
     assert.equal(movedResponse.headers.get("access-control-allow-origin"), "http://tauri.localhost");
     const saved = JSON.parse(await readFile(join(dataDir, "schedules", `${DATE}.json`), "utf8"));
-    assert.equal(saved.blocks.filter((block) => block.type === "focus").find((block) => block.questId === "quest-1").startAt.slice(11, 16), "13:00");
+    assert.equal(saved.blocks.filter((block) => block.type === "focus").find((block) => block.questId === initialFocus[0].questId).order, 2);
     const activity = await (await fetch(`${baseUrl}/api/activity?date=${DATE}`)).json();
     assert.equal(activity.records.at(-1).action, "task_reordered");
-    assert.equal(activity.records.at(-1).subject.title, "배포 상태 확인");
+    assert.equal(activity.records.at(-1).subject.title, initialFocus[0].title);
   } finally {
     child.kill();
     await rm(dataDir, { recursive: true, force: true });
@@ -124,7 +125,7 @@ test("schedule block discard removes the card and keeps its quest unit out after
     assert.equal(discardedResponse.headers.get("access-control-allow-origin"), "http://tauri.localhost");
     const activity = await (await fetch(`${baseUrl}/api/activity?date=${DATE}`)).json();
     assert.equal(activity.records.at(-1).action, "task_removed");
-    assert.equal(activity.records.at(-1).subject.title, "배포 상태 확인");
+    assert.equal(activity.records.at(-1).subject.title, source.title);
 
     const rebuiltAgain = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
     assert.equal(rebuiltAgain.status, 200);

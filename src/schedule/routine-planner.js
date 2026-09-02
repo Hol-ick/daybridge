@@ -1,12 +1,9 @@
-const WEEKDAYS = new Set([1, 2, 3, 4, 5]);
-
 /**
  * These are deliberately small, opt-out suggestions—not obligations. They are
  * considered only after the briefing's concrete quests have been placed.
  */
 export const DEFAULT_ROUTINES = Object.freeze([
-  Object.freeze({ id: "linux-learning", title: "리눅스 학습", estimateMinutes: 50, days: [1, 2, 3, 4, 5], category: "learning" }),
-  Object.freeze({ id: "weekly-review", title: "주간 정리", estimateMinutes: 25, days: [5], category: "review" }),
+  Object.freeze({ id: "supplement", title: "영양제 먹기", estimateMinutes: 25, days: [0, 1, 2, 3, 4, 5, 6], category: "health" }),
 ]);
 
 function weekday(date) { return new Date(`${date}T12:00:00+09:00`).getUTCDay(); }
@@ -29,6 +26,6 @@ export function buildRoutineCandidates({ date, board, routines = DEFAULT_ROUTINE
   const selected = (Array.isArray(routines) ? routines : []).map(normalizeRoutine).filter(Boolean)
     .filter((routine) => routine.days.includes(weekday(date)))
     .filter((routine) => !titles.has(routine.title.toLowerCase()));
-  // One learning block plus one short review is enough to make an empty day purposeful.
+  // Keep the default list intentionally small; user-selected work always wins.
   return selected.slice(0, 2).map(({ days, ...candidate }) => candidate);
 }

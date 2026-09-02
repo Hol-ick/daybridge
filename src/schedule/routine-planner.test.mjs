@@ -3,13 +3,14 @@ import test from "node:test";
 
 import { buildRoutineCandidates } from "./routine-planner.js";
 
-test("weekday default routines fill an otherwise empty briefing day", () => {
+test("the daily default routine fills an otherwise empty day", () => {
   const routines = buildRoutineCandidates({ date: "2026-08-24", board: { quests: [] } });
-  assert.deepEqual(routines.map((item) => [item.id, item.title, item.estimateMinutes, item.sourceKind]), [["routine-linux-learning", "리눅스 학습", 50, "routine"]]);
+  assert.deepEqual(routines.map((item) => [item.id, item.title, item.estimateMinutes, item.sourceKind, item.category]), [["routine-supplement", "영양제 먹기", 25, "routine", "health"]]);
+  assert.deepEqual(buildRoutineCandidates({ date: "2026-08-23", board: { quests: [] } }).map((item) => item.title), ["영양제 먹기"]);
 });
 
 test("briefing work with the same title suppresses a duplicate routine", () => {
-  const routines = buildRoutineCandidates({ date: "2026-08-24", board: { quests: [{ title: "리눅스 학습" }] } });
+  const routines = buildRoutineCandidates({ date: "2026-08-24", board: { quests: [{ title: "영양제 먹기" }] } });
   assert.deepEqual(routines, []);
 });
 
