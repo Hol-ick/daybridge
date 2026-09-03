@@ -82,6 +82,7 @@ function Write-DaybridgeEvent([string]$Event, [hashtable]$Details = @{{}}) {{
 try {{
   if (-not $createdNew) {{ exit 0 }}
   Write-DaybridgeEvent 'process_watchdog_started' @{{ executable = $ExecutablePath; intervalSeconds = 3 }}
+  $missingChecks = 0
   while ($true) {{
     if (Test-Path -LiteralPath $ExitMarkerPath) {{
       Write-DaybridgeEvent 'process_watchdog_stopped' @{{ reason = 'explicit_exit' }}
@@ -95,10 +96,19 @@ try {{
       Start-Sleep -Seconds 3
       continue
     }}
-    if (-not $running) {{
-      Write-DaybridgeEvent 'process_relaunch_requested' @{{ reason = 'widget_process_missing' }}
+    if ($running) {{
+      $missingChecks = 0
+    }} else {{
+      $missingChecks += 1
+    }}
+    # WMI can briefly return no matching executable during login or a WebView
+    # restart. Require three consecutive misses before relaunching so a
+    # transient query does not create duplicate Daybridge processes.
+    if (-not $running -and $missingChecks -ge 3) {{
+      Write-DaybridgeEvent 'process_relaunch_requested' @{{ reason = 'widget_process_missing'; consecutiveMisses = $missingChecks }}
       try {{
         Start-Process -FilePath $ExecutablePath -WorkingDirectory $WorkingDirectory -WindowStyle Hidden
+        $missingChecks = 0
       }} catch {{
         Write-DaybridgeEvent 'process_relaunch_error' @{{ error = $_.Exception.Message }}
       }}
@@ -821,6 +831,8 @@ mod tests {
         assert!(script.contains("explicit-exit.flag"));
         assert!(script.contains("Start-Process -FilePath $ExecutablePath"));
         assert!(script.contains("Get-CimInstance Win32_Process"));
+        assert!(script.contains("$missingChecks -ge 3"));
+        assert!(script.contains("consecutiveMisses"));
         assert!(script.contains("process_relaunch_requested"));
     }
 }
