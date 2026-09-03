@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-const ACTIONS = new Set(["task_added", "status_changed", "task_reordered", "task_removed", "schedule_rebuilt", "schedule_settings_changed"]);
+const ACTIONS = new Set(["task_added", "status_changed", "task_reordered", "task_removed", "schedule_rebuilt", "schedule_settings_changed", "daily_defaults_changed"]);
 const ACTION_LABELS = {
   task_added: "작업 추가",
   status_changed: "상태 변경",
@@ -10,13 +10,14 @@ const ACTION_LABELS = {
   task_removed: "오늘 목록에서 제거",
   schedule_rebuilt: "일정 재배치",
   schedule_settings_changed: "시간표 설정 변경",
+  daily_defaults_changed: "매일 기본 일정 변경",
 };
 const STATUS_LABELS = { planned: "미완료", ready: "미완료", in_progress: "진행 중", completed: "완료", deferred: "보류", skipped: "건너뜀" };
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const phonePattern = /(?<!\d)01[016789][ -]?\d{3,4}[ -]?\d{4}(?!\d)/g;
 const secretPattern = /(\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|client[_ -]?secret|cookie|session[_ -]?token|private[_ -]?key)\b\s*[:=]\s*)(['"]?)[^\s'"]{8,}/gi;
 const localPathPattern = /\b[A-Z]:\\[^\s|]+/gi;
-const DETAIL_KEYS = new Set(["durationMinutes", "status", "previousStatus", "position", "targetTitle", "targetBlockId", "startAt", "endAt", "mode", "timeConfigured", "dayStart", "dayEnd", "bufferMinutes", "reason"]);
+const DETAIL_KEYS = new Set(["durationMinutes", "status", "previousStatus", "position", "targetTitle", "targetBlockId", "startAt", "endAt", "mode", "timeConfigured", "dayStart", "dayEnd", "bufferMinutes", "reason", "count"]);
 let writeQueue = Promise.resolve();
 
 function assertDate(value) {
@@ -81,6 +82,7 @@ function detailText(record) {
   if (record.action === "task_reordered" && details.targetTitle) return ` · ${details.targetTitle} ${details.position === "before" ? "앞" : "뒤"}`;
   if (record.action === "task_added" && Number.isFinite(details.durationMinutes)) return ` · ${details.durationMinutes}분`;
   if (record.action === "schedule_settings_changed") return details.timeConfigured ? ` · ${details.dayStart}–${details.dayEnd}` : " · 시간 미배정 목록";
+  if (record.action === "daily_defaults_changed" && Number.isFinite(details.count)) return ` · ${details.count}개`;
   return "";
 }
 

@@ -16,6 +16,12 @@ DEFAULT_SETTINGS = json.dumps({
         "bufferMinutes": 10,
     }
 })
+DAILY_DEFAULTS = json.dumps({
+    "dailyDefaults": {
+        "schemaVersion": 1,
+        "routines": [{"id": "supplement", "title": "영양제 먹기", "estimateMinutes": 25, "days": [0, 1, 2, 3, 4, 5, 6], "enabled": True}],
+    }
+})
 CALENDAR_UNCONFIGURED = json.dumps({"calendar": {"state": "unconfigured", "reason": "oauth_client_missing", "canReadBusyBlocks": False}})
 EMPTY_SCHEDULE = json.dumps({
     "schedule": {
@@ -189,6 +195,7 @@ def freeze_page_date(context, iso_timestamp: str) -> None:
 
 def check_dashboard(browser) -> None:
     context = browser.new_context(viewport={"width": 960, "height": 760}, device_scale_factor=1)
+    daily_defaults_calls: list[dict] = []
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=EMPTY_SCHEDULE),
@@ -197,6 +204,18 @@ def check_dashboard(browser) -> None:
         "http://127.0.0.1:39393/api/schedule-settings",
         lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
     )
+    def handle_daily_defaults(route) -> None:
+        if route.request.method == "GET":
+            route.fulfill(status=200, content_type="application/json", body=DAILY_DEFAULTS)
+            return
+        payload = json.loads(route.request.post_data or "{}")
+        daily_defaults_calls.append(payload)
+        response = json.loads(DAILY_DEFAULTS)
+        response.update(json.loads(EMPTY_SCHEDULE))
+        response["dailyDefaults"] = payload.get("dailyDefaults", response["dailyDefaults"])
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(response))
+
+    context.route("http://127.0.0.1:39393/api/daily-defaults", handle_daily_defaults)
     context.route(
         "http://127.0.0.1:39393/api/calendar/status",
         lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
@@ -228,6 +247,10 @@ def check_dashboard(browser) -> None:
     assert page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
     settings_box = page.locator('form[aria-label="위젯 설정"]').bounding_box()
     assert settings_box and round(settings_box["width"]) == 288
+    assert page.get_by_text("매일 기본 일정", exact=True).is_visible()
+    page.get_by_label("새 매일 기본 일정").fill("오전 메일 확인")
+    page.get_by_role("button", name="＋ 추가").click()
+    assert page.get_by_label("오전 메일 확인 기본 일정").input_value() == "오전 메일 확인"
 
     artifact = Path("test-artifacts/daybridge-schedule-dashboard.png")
     artifact.parent.mkdir(exist_ok=True)
@@ -237,6 +260,9 @@ def check_dashboard(browser) -> None:
     refresh_button.click()
     page.wait_for_function("document.querySelector('[role=status]').textContent.includes('위젯을 새로고침했어요')")
     assert refresh_button.inner_text() == "위젯 새로고침"
+    page.get_by_role("button", name="저장", exact=True).click()
+    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('매일 기본 일정을 저장했어요')")
+    assert daily_defaults_calls and daily_defaults_calls[0]["dailyDefaults"]["routines"][-1]["title"] == "오전 메일 확인"
     assert_no_page_errors(errors)
     context.close()
 
@@ -307,6 +333,10 @@ def check_overlay(browser) -> None:
     context.route(
         "http://127.0.0.1:39393/api/schedule-settings",
         lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/daily-defaults",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DAILY_DEFAULTS),
     )
     context.route(
         "http://127.0.0.1:39393/api/calendar/status",
@@ -421,6 +451,8 @@ def check_overlay(browser) -> None:
     page.wait_for_selector('[data-testid="now-focus-overlay-settings-modal"]')
     page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 420")
     assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="privateOverlay"]').is_visible()
+    assert page.get_by_text("매일 기본 일정", exact=True).is_visible()
+    assert page.get_by_label("영양제 먹기 기본 일정").input_value() == "영양제 먹기"
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
     overlay_refresh = page.locator('[data-testid="now-focus-overlay-refresh"]')
     assert overlay_refresh.is_visible()

@@ -10,11 +10,13 @@ import { buildRoutineCandidates } from "../src/schedule/routine-planner.js";
 import {
   loadSchedule,
   loadScheduleSettings,
+  loadDailyDefaults,
   discardScheduleBlock,
   moveScheduleBlock,
   reportScheduleBlock,
   saveSchedule,
   saveScheduleSettings,
+  saveDailyDefaults,
 } from "./schedule-store.mjs";
 import { calendarEventsToBusyBlocks, inspectGoogleCalendarConnection, readGoogleCalendarBusyBlocks } from "./calendar/google-calendar-reader.mjs";
 import { createGoogleCalendarAdapter } from "./calendar/googleapis-adapter.mjs";
@@ -426,8 +428,10 @@ async function syncQuestFromScheduleBlockReport(activityDate, schedule, reportRe
 async function rebuildSchedule(activityDate) {
   const inbox = await readScheduleInbox(activityDate);
   let board = await readJson(boardPath(activityDate));
+  const dailyDefaults = await loadDailyDefaults(DATA_DIR);
   if (!board || !Array.isArray(board.quests)) {
-    if (!inbox.valid || !inbox.exists) return null;
+    // Daily defaults are a standalone source of work. Keep an empty board so
+    // a user can run Daybridge as a lightweight daily list without a briefing.
     board = emptyBoard(activityDate);
   }
   const settings = await loadScheduleSettings(DATA_DIR);
@@ -437,7 +441,7 @@ async function rebuildSchedule(activityDate) {
   // A malformed handoff must never erase a previously usable timetable.
   if (!inbox.valid && existingSchedule) return existingSchedule;
   const inboxTasks = inbox.valid ? inbox.tasks.map(toTaskCandidate).filter(Boolean) : [];
-  const routineTasks = buildRoutineCandidates({ date: activityDate, board });
+  const routineTasks = buildRoutineCandidates({ date: activityDate, board, routines: dailyDefaults.routines });
   const taskMap = new Map();
   for (const task of [...briefingTasks, ...inboxTasks, ...routineTasks]) taskMap.set(task.id, task);
   const tasks = applyDiscardedUnits([...taskMap.values()], existingSchedule);
@@ -511,6 +515,19 @@ async function handleScheduleSettingsUpdate(body) {
     details: { timeConfigured: settings.timeConfigured, dayStart: settings.dayStart, dayEnd: settings.dayEnd, bufferMinutes: settings.bufferMinutes },
   });
   return { status: 200, body: { settings } };
+}
+async function handleDailyDefaultsUpdate(body) {
+  const dailyDefaults = await saveDailyDefaults(DATA_DIR, body?.dailyDefaults ?? body?.routines ?? body);
+  const activityDate = safeDate(body?.activityDate || body?.date) || koreaNow().slice(0, 10);
+  const schedule = await rebuildSchedule(activityDate);
+  logRuntimeEvent("daily_defaults_saved", { date: activityDate, count: dailyDefaults.routines.length });
+  await recordActivity(DATA_DIR, {
+    activityDate,
+    action: "daily_defaults_changed",
+    subject: activitySubject({ type: "settings", id: "daily-defaults", title: "매일 기본 일정" }),
+    details: { count: dailyDefaults.routines.length },
+  });
+  return { status: 200, body: { dailyDefaults, schedule, nowFocus: schedule ? nowFocus(schedule) : null } };
 }
 async function handleScheduleBlockReport(body) {
   const activityDate = safeDate(body.activityDate || body.date);
@@ -651,6 +668,8 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/schedule/rebuild") { const result = await handleScheduleRebuild(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule-settings") { send(response, 200, { settings: await loadScheduleSettings(DATA_DIR) }, origin); return; }
     if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const result = await handleScheduleSettingsUpdate(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/daily-defaults") { send(response, 200, { dailyDefaults: await loadDailyDefaults(DATA_DIR) }, origin); return; }
+    if (request.method === "PUT" && url.pathname === "/api/daily-defaults") { const result = await handleDailyDefaultsUpdate(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-report") { const result = await handleScheduleBlockReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-move") { const result = await handleScheduleBlockMove(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-discard") { const result = await handleScheduleBlockDiscard(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }

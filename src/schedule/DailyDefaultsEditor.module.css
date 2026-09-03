@@ -1,0 +1,22 @@
+.editor { display: grid; gap: 9px; min-width: 0; padding: 12px; border: 1px solid rgb(98 220 165 / 28%); border-radius: 8px; background: rgb(98 220 165 / 5%); }
+.heading { display: flex; align-items: end; justify-content: space-between; gap: 10px; }
+.heading div { display: grid; gap: 2px; }
+.heading span { color: #9ef3c8; font: 800 10px/1 "Cascadia Mono", Consolas, monospace; letter-spacing: .04em; }
+.heading strong { color: #f4fff9; font-size: 15px; font-weight: 850; letter-spacing: -.055em; }
+.heading small { max-width: 160px; color: #aeb5c0; font-size: 10px; line-height: 1.35; text-align: right; }
+.list { display: grid; gap: 5px; max-height: 190px; overflow-y: auto; scrollbar-color: rgb(255 255 255 / 25%) transparent; scrollbar-width: thin; }
+.item { display: grid; grid-template-columns: 42px minmax(0, 1fr) 25px; gap: 5px; align-items: center; min-width: 0; }
+.item input { min-width: 0; min-height: 31px; box-sizing: border-box; padding: 0 8px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 6px; background: rgb(5 8 10 / 55%); color: #f3fff9; font: inherit; font-size: 12px; font-weight: 750; outline: none; }
+.item input:focus { border-color: #62dca5; box-shadow: 0 0 0 2px rgb(98 220 165 / 13%); }
+.toggle, .remove, .add { min-height: 31px; border: 1px solid rgb(98 220 165 / 38%); border-radius: 6px; background: rgb(98 220 165 / 10%); color: #bff8da; cursor: pointer; font: inherit; font-size: 10px; font-weight: 850; }
+.toggle:hover, .add:hover { border-color: #62dca5; background: rgb(98 220 165 / 18%); }
+.disabled .toggle { border-color: rgb(255 255 255 / 15%); background: rgb(255 255 255 / 4%); color: #8b919f; }
+.disabled input { color: #8b919f; text-decoration: line-through; }
+.remove { border-color: rgb(255 150 150 / 26%); background: rgb(255 100 100 / 6%); color: #f4b8b8; font-size: 16px; line-height: 1; }
+.remove:hover { border-color: rgb(255 150 150 / 65%); background: rgb(255 100 100 / 15%); }
+.addRow { display: grid; grid-template-columns: minmax(0, 1fr) 58px; gap: 5px; min-width: 0; }
+.addRow input { min-width: 0; min-height: 33px; box-sizing: border-box; padding: 0 8px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 6px; background: rgb(5 8 10 / 55%); color: #f3fff9; font: inherit; font-size: 11px; outline: none; }
+.addRow input:focus { border-color: #62dca5; box-shadow: 0 0 0 2px rgb(98 220 165 / 13%); }
+.add { width: 100%; min-height: 33px; }
+.add:disabled { cursor: default; opacity: .45; }
+.empty { margin: 0; padding: 12px 8px; border: 1px dashed rgb(255 255 255 / 13%); border-radius: 6px; color: #9da4b1; font-size: 11px; text-align: center; }

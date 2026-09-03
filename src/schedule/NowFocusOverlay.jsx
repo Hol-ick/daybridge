@@ -3,6 +3,7 @@ import { OVERLAY_COLLAPSED_HEIGHT, OVERLAY_COLLAPSED_WIDTH, OVERLAY_EXPANDED_HEI
 import { getWorkdayCountdown } from "./workday-clock.js";
 import styles from "./NowFocusOverlay.module.css";
 import ManualTaskForm from "./ManualTaskForm.jsx";
+import DailyDefaultsEditor from "./DailyDefaultsEditor.jsx";
 
 function asDate(value) {
   if (!value) return null;
@@ -200,7 +201,7 @@ function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, o
   );
 }
 
-function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget }) {
+function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading }) {
   return (
     <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
       <form className={styles.settingsForm} onSubmit={onSubmit}>
@@ -219,7 +220,8 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
         >
           {refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}
         </button>
-        <button className={styles.settingsSave} type="submit">저장</button>
+        <DailyDefaultsEditor value={dailyDefaults} onChange={onDailyDefaultsChange} loading={dailyDefaultsLoading} />
+        <button className={styles.settingsSave} type="submit" disabled={dailyDefaultsLoading}>저장</button>
       </form>
     </div>
   );
@@ -229,7 +231,7 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false }) {
   const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
   const pointerDragRef = useRef({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null });
   const suppressCardClickRef = useRef(false);
@@ -679,7 +681,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
           <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
         </time>
         </div>
-        {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} /> : null}
+        {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} /> : null}
       </div>
     </aside>
   );

@@ -23,6 +23,13 @@ export const DEFAULT_SCHEDULE_SETTINGS = Object.freeze({
   bufferMinutes: 10,
 });
 
+export const DEFAULT_DAILY_DEFAULTS = Object.freeze({
+  schemaVersion: 1,
+  routines: Object.freeze([
+    Object.freeze({ id: "supplement", title: "영양제 먹기", estimateMinutes: 25, days: Object.freeze([0, 1, 2, 3, 4, 5, 6]), enabled: true }),
+  ]),
+});
+
 function isDate(value) { return DATE.test(value || ""); }
 function minutes(value) { const [hour, minute] = String(value).split(":").map(Number); return (hour * 60) + minute; }
 function now() { return new Date().toISOString(); }
@@ -137,6 +144,45 @@ function normalizeSchedule(date, input = {}) {
 
 export function schedulePath(dataDir, date) { return join(resolve(dataDir), "schedules", `${assertDate(date)}.json`); }
 export function settingsPath(dataDir) { return join(resolve(dataDir), "schedule-settings.json"); }
+export function dailyDefaultsPath(dataDir) { return join(resolve(dataDir), "daily-defaults.json"); }
+
+function normalizeDailyDefault(raw, index) {
+  const candidate = raw && typeof raw === "object" ? raw : {};
+  const id = sanitizeText(candidate.id || `daily-${index + 1}`, 80).toLowerCase().replace(/[^a-z0-9가-힣]+/g, "-").replace(/^-|-$/g, "");
+  const title = sanitizeText(candidate.title, 120);
+  const estimateMinutes = Number(candidate.estimateMinutes) === 50 ? 50 : 25;
+  const days = [...new Set((Array.isArray(candidate.days) ? candidate.days : [0, 1, 2, 3, 4, 5, 6]).map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort((left, right) => left - right);
+  if (!id || !title || !days.length) return null;
+  return { id, title, estimateMinutes, days, enabled: candidate.enabled !== false };
+}
+
+function normalizeDailyDefaults(input) {
+  const raw = Array.isArray(input) ? input : input?.routines;
+  const routines = (Array.isArray(raw) ? raw : []).slice(0, 50).map(normalizeDailyDefault).filter(Boolean);
+  const seen = new Set();
+  return {
+    schemaVersion: 1,
+    routines: routines.filter((routine) => {
+      const key = routine.title.toLocaleLowerCase("ko-KR");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }),
+  };
+}
+
+export async function loadDailyDefaults(dataDir) {
+  const stored = await readJson(dailyDefaultsPath(dataDir));
+  const normalized = normalizeDailyDefaults(stored);
+  if (Array.isArray(stored) || Array.isArray(stored?.routines)) return normalized;
+  return { schemaVersion: 1, routines: DEFAULT_DAILY_DEFAULTS.routines.map((routine) => ({ ...routine, days: [...routine.days] })) };
+}
+
+export async function saveDailyDefaults(dataDir, input) {
+  const normalized = normalizeDailyDefaults(input);
+  await atomicWrite(dailyDefaultsPath(dataDir), normalized);
+  return normalized;
+}
 
 export async function loadScheduleSettings(dataDir) {
   const stored = await readJson(settingsPath(dataDir));

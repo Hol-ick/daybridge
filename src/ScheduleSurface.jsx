@@ -5,6 +5,7 @@ import { bindOverlayMagnet, currentSurface, placeOverlayInCorner } from "./deskt
 import Item from "./todometer/components/Item.jsx";
 import NowFocusOverlay from "./schedule/NowFocusOverlay.jsx";
 import ScheduleDashboard from "./schedule/ScheduleDashboard.jsx";
+import DailyDefaultsEditor from "./schedule/DailyDefaultsEditor.jsx";
 import { resolveActivityDate } from "./schedule/activity-date.js";
 import { recordRuntimeEvent } from "./runtime-log.js";
 import styles from "./ScheduleSurface.module.css";
@@ -75,6 +76,9 @@ export default function ScheduleSurface() {
   const [privateMode, setPrivateMode] = useState(initialPrivateMode);
   const [notice, setNotice] = useState("");
   const [refreshingWidget, setRefreshingWidget] = useState(false);
+  const [dailyDefaultsDraft, setDailyDefaultsDraft] = useState([]);
+  const [dailyDefaultsLoaded, setDailyDefaultsLoaded] = useState(false);
+  const [dailyDefaultsLoading, setDailyDefaultsLoading] = useState(false);
   // The overlay always represents today. A board persisted while the bridge
   // was unavailable must not pin schedule requests to yesterday's date.
   const activityDate = resolveActivityDate(board, kstDate());
@@ -151,6 +155,24 @@ export default function ScheduleSurface() {
       return null;
     }
   }, []);
+
+  const loadDailyDefaults = useCallback(async () => {
+    if (dailyDefaultsLoading) return false;
+    setDailyDefaultsLoading(true);
+    try {
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/daily-defaults`));
+      const routines = Array.isArray(result?.dailyDefaults?.routines) ? result.dailyDefaults.routines : [];
+      setDailyDefaultsDraft(routines);
+      setDailyDefaultsLoaded(true);
+      return true;
+    } catch (error) {
+      recordRuntimeEvent("daily_defaults_load_error", { error: error?.message || String(error), surface });
+      setNotice("매일 기본 일정을 불러오지 못했어요");
+      return false;
+    } finally {
+      setDailyDefaultsLoading(false);
+    }
+  }, [dailyDefaultsLoading, surface]);
 
   useEffect(() => { void loadSchedule({ quiet: true }); }, [loadSchedule]);
   useEffect(() => { void loadCalendarStatus({ quiet: true }); }, [loadCalendarStatus]);
@@ -277,7 +299,8 @@ export default function ScheduleSurface() {
 
   const openSettings = useCallback(() => {
     setSettingsOpen(true);
-  }, []);
+    if (!dailyDefaultsLoaded) void loadDailyDefaults();
+  }, [dailyDefaultsLoaded, loadDailyDefaults]);
 
   const refreshWidget = useCallback(async () => {
     if (refreshingWidget) return;
@@ -323,9 +346,28 @@ export default function ScheduleSurface() {
     const nextPrivateMode = form.get("privateOverlay") === "on";
     setPrivateMode(nextPrivateMode);
     try { localStorage.setItem(OVERLAY_PRIVACY_KEY, String(nextPrivateMode)); } catch { /* local privacy preference is optional */ }
-    setSettingsOpen(false);
-    setNotice("위젯 표시 설정을 저장했어요");
-  }, []);
+    if (!dailyDefaultsLoaded) {
+      setNotice("매일 기본 일정을 불러오는 중이에요");
+      return;
+    }
+    try {
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/daily-defaults`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityDate, dailyDefaults: { routines: dailyDefaultsDraft } }),
+      }));
+      setDailyDefaultsDraft(Array.isArray(result?.dailyDefaults?.routines) ? result.dailyDefaults.routines : []);
+      if (result.schedule) {
+        setSchedule(result.schedule);
+        setNowFocus(result.nowFocus);
+      }
+      setSettingsOpen(false);
+      setNotice("매일 기본 일정을 저장했어요");
+    } catch (error) {
+      recordRuntimeEvent("daily_defaults_save_error", { error: error?.message || String(error), surface });
+      setNotice("매일 기본 일정을 저장하지 못했어요");
+    }
+  }, [activityDate, dailyDefaultsDraft, dailyDefaultsLoaded, surface]);
 
   const selectedQuest = useMemo(() => board?.quests?.find((quest) => quest.id === expandedQuestId) || null, [board?.quests, expandedQuestId]);
   if (surface === "overlay") {
@@ -343,6 +385,9 @@ export default function ScheduleSurface() {
       onSaveSettings={saveSettings}
       onRefreshWidget={refreshWidget}
       refreshingWidget={refreshingWidget}
+      dailyDefaults={dailyDefaultsDraft}
+      onDailyDefaultsChange={setDailyDefaultsDraft}
+      dailyDefaultsLoading={dailyDefaultsLoading || !dailyDefaultsLoaded}
     />;
   }
 
@@ -366,7 +411,8 @@ export default function ScheduleSurface() {
         <header><div><p>WIDGET</p><strong>표시 옵션</strong></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="설정 닫기">×</button></header>
         <label className={styles.checkbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
         <button className={styles.utility} type="button" onClick={refreshWidget} disabled={refreshingWidget} data-testid="schedule-widget-refresh">{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</button>
-        <button className={styles.save} type="submit">저장</button>
+        <DailyDefaultsEditor value={dailyDefaultsDraft} onChange={setDailyDefaultsDraft} loading={dailyDefaultsLoading || !dailyDefaultsLoaded} />
+        <button className={styles.save} type="submit" disabled={dailyDefaultsLoading || !dailyDefaultsLoaded}>저장</button>
       </form>
     </div> : null}
   </div>;

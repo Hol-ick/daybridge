@@ -6,12 +6,16 @@ import test from "node:test";
 
 import {
   DEFAULT_SCHEDULE_SETTINGS,
+  DEFAULT_DAILY_DEFAULTS,
   discardScheduleBlock,
+  dailyDefaultsPath,
+  loadDailyDefaults,
   loadSchedule,
   loadScheduleSettings,
   reportScheduleBlock,
   saveSchedule,
   saveScheduleSettings,
+  saveDailyDefaults,
   schedulePath,
 } from "./schedule-store.mjs";
 
@@ -23,6 +27,27 @@ test("new stores return the scheduling defaults", async () => {
   try {
     assert.deepEqual(await loadScheduleSettings(dataDir), DEFAULT_SCHEDULE_SETTINGS);
     assert.equal(await loadSchedule(dataDir, "2026-08-24"), null);
+  } finally { remove(dataDir); }
+});
+
+test("daily defaults load the safe starter routine and persist user edits locally", async () => {
+  const dataDir = temporaryStore();
+  try {
+    assert.deepEqual(await loadDailyDefaults(dataDir), DEFAULT_DAILY_DEFAULTS);
+    const saved = await saveDailyDefaults(dataDir, {
+      routines: [
+        { id: "mail", title: "오전 메일 확인", days: [1, 2, 3, 4, 5], enabled: true },
+        { id: "off", title: "주간 정리", days: [1, 3], enabled: false, estimateMinutes: 50 },
+      ],
+    });
+    assert.deepEqual(saved.routines.map(({ id, title, enabled, days }) => ({ id, title, enabled, days })), [
+      { id: "mail", title: "오전 메일 확인", enabled: true, days: [1, 2, 3, 4, 5] },
+      { id: "off", title: "주간 정리", enabled: false, days: [1, 3] },
+    ]);
+    assert.deepEqual(await loadDailyDefaults(dataDir), saved);
+    assert.equal(readFileSync(dailyDefaultsPath(dataDir), "utf8").includes("오전 메일 확인"), true);
+    await saveDailyDefaults(dataDir, { routines: [] });
+    assert.deepEqual(await loadDailyDefaults(dataDir), { schemaVersion: 1, routines: [] });
   } finally { remove(dataDir); }
 });
 
