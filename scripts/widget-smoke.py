@@ -469,6 +469,10 @@ def check_overlay(browser) -> None:
     assert settings_box and viewport
     assert abs((settings_box["x"] + settings_box["width"] / 2) - viewport["width"] / 2) <= 1, (settings_box, viewport)
     assert abs((settings_box["y"] + settings_box["height"] / 2) - viewport["height"] / 2) <= 1, (settings_box, viewport)
+    settings_modal = page.locator('[data-testid="now-focus-overlay-settings-modal"]')
+    assert settings_modal.evaluate("element => getComputedStyle(element).backgroundColor") == "rgba(0, 0, 0, 0)"
+    assert settings_modal.evaluate("element => getComputedStyle(element).backdropFilter") == "none"
+    assert not page.locator('[data-testid="now-focus-overlay-surface"]').is_visible()
     assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="privateOverlay"]').is_visible()
     # The settings panel is deliberately a quiet desktop dialog, rather than a
     # neon-labelled generated-looking card. Its visible labels must describe

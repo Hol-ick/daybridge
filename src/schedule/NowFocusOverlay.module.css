@@ -37,7 +37,14 @@
 
 .surface:active { cursor: grabbing; }
 .surface.expanded { height: var(--overlay-expanded-height, 520px); }
-.surface.settingsMode { height: 64px; transition: none; }
+.surface.settingsMode {
+  /* Settings owns the entire native canvas. Leaving the compact card painted
+     behind it leaks a second dark strip beneath an otherwise standalone dialog. */
+  height: 64px;
+  visibility: hidden;
+  pointer-events: none;
+  transition: none;
+}
 .surface.magnetPulse { animation: overlay-magnet-catch .34s cubic-bezier(.18, .84, .32, 1); }
 
 .surface::before {
@@ -205,7 +212,6 @@
 .iconAction svg { width: 20px; height: 20px; }
 .manualTaskFooter [data-testid="manual-task-form"] { position: static; z-index: auto; width: 100%; max-width: none; padding: 5px; gap: 4px; border-radius: 6px; }
 .settingsModal {
-  --modal-canvas: rgb(9 12 17 / 58%);
   --modal-surface: #1b2029;
   --modal-surface-raised: #202631;
   --modal-field: #131820;
@@ -222,8 +228,10 @@
   place-items: center;
   box-sizing: border-box;
   padding: 24px;
-  background: var(--modal-canvas);
-  backdrop-filter: blur(7px);
+  /* This is a fixed transparent native canvas, not a page-level dimmer.
+     Painting a backdrop here made the unused canvas around the sheet appear
+     as a broad translucent rectangle on the desktop. */
+  background: transparent;
   cursor: default;
   animation: overlay-settings-in .18s cubic-bezier(.22, 1, .36, 1);
 }

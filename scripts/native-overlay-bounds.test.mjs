@@ -8,6 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const nativeMain = fs.readFileSync(path.join(root, "src-tauri", "src", "main.rs"), "utf8");
 const regionCommand = nativeMain.match(/fn set_overlay_interaction_region\([\s\S]*?\n}\n\n#\[tauri::command\]\nfn record_runtime_event/);
 const overlaySurface = fs.readFileSync(path.join(root, "src", "schedule", "NowFocusOverlay.jsx"), "utf8");
+const overlayStyles = fs.readFileSync(path.join(root, "src", "schedule", "NowFocusOverlay.module.css"), "utf8");
 const tauriConfig = JSON.parse(fs.readFileSync(path.join(root, "src-tauri", "tauri.conf.json"), "utf8"));
 
 test("overlay interaction changes do not force a new show, z-order, or native resize", () => {
@@ -34,4 +35,13 @@ test("the full-size settings region never exposes a Windows title bar or system 
   const visibleAt = nativeMain.indexOf('ensure_overlay_visible(app.handle(), "app_setup")');
   const chromeAt = nativeMain.lastIndexOf("remove_overlay_window_chrome(app.handle(), &window)");
   assert.ok(chromeAt > visibleAt, "remove native chrome after Tauri makes the overlay visible");
+});
+
+test("the centered settings dialog paints only its sheet, not a translucent canvas around it", () => {
+  const modalRule = overlayStyles.match(/\.settingsModal\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+  const settingsModeRule = overlayStyles.match(/\.surface\.settingsMode\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.match(modalRule, /background:\s*transparent/);
+  assert.doesNotMatch(modalRule, /backdrop-filter/);
+  assert.match(settingsModeRule, /visibility:\s*hidden/);
+  assert.match(settingsModeRule, /pointer-events:\s*none/);
 });
