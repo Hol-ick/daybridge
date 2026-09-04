@@ -289,7 +289,9 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   // promoted back into the compact widget as if it were the current task.
   const todoSummaryBlock = blocks.find((item) => scheduleBlockKind(item) === "focus" && item?.status === "in_progress")
     ?? blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status));
-  const summaryTitle = todoListMode ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "") : idle ? workdayCountdown.label : title;
+  const summaryTitle = todoListMode
+    ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "남은 일정이 없습니다.")
+    : idle ? workdayCountdown.label : title;
   const targetExpandedHeight = expandedOverlayHeight(blocks.length, Boolean(draggingBlockId), taskOpen);
   // The list only becomes scrollable after the native overlay has reached its
   // maximum height. Short schedules grow around every visible card instead.
@@ -721,7 +723,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
           {showIdleTitle && summaryTitle ? (
             <OverlayTitle
               data-testid="now-focus-overlay-title"
-              aria-label={todoListMode ? `오늘 할 일: ${summaryTitle}` : `${workdayCountdown.label} ${workdayCountdown.time}`}
+              aria-label={todoListMode ? (todoSummaryBlock ? `오늘 할 일: ${summaryTitle}` : summaryTitle) : `${workdayCountdown.label} ${workdayCountdown.time}`}
             >{summaryTitle}</OverlayTitle>
           ) : !showIdleTitle ? (
             <OverlayTitle data-testid="now-focus-overlay-title">{title}</OverlayTitle>

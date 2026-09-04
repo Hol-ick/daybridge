@@ -367,7 +367,7 @@ def check_overlay(browser) -> None:
     assert re.fullmatch(r"\d{2}:\d{2}", leave_timer.locator('[data-testid="now-focus-overlay-leave-time-value"]').inner_text())
     assert leave_timer.locator('[class*=timerLabel]').count() == 1
     idle_label = re.sub(r"\s+", " ", page.locator('[data-testid="now-focus-overlay-title"]').text_content() or "").strip()
-    assert re.fullmatch(r"오늘 할 일(?: · \d+개)?", idle_label), idle_label
+    assert idle_label == "남은 일정이 없습니다.", idle_label
     assert page.locator('[data-testid="now-focus-overlay-title"]').get_attribute("aria-label") == idle_label
     title_style = page.locator('[data-testid="now-focus-overlay-title"]').evaluate(
         "element => { const style = getComputedStyle(element); return { fontSize: parseFloat(style.fontSize), fontWeight: parseInt(style.fontWeight, 10), fontFamily: style.fontFamily }; }"
@@ -589,8 +589,8 @@ def check_overlay_todo_items(browser) -> None:
     context.close()
 
 
-def check_overlay_hides_completed_summary(browser) -> None:
-    """Completed history remains in the list but never becomes the active summary."""
+def check_overlay_shows_empty_summary_after_completion(browser) -> None:
+    """Completed history remains in the list while the compact card explains it is clear."""
     context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
@@ -609,7 +609,10 @@ def check_overlay_hides_completed_summary(browser) -> None:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
     page.wait_for_selector('[data-testid="now-focus-overlay-leave-time"]')
-    assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 0
+    summary = page.locator('[data-testid="now-focus-overlay-title"]')
+    assert summary.count() == 1
+    assert summary.inner_text() == "남은 일정이 없습니다."
+    assert summary.get_attribute("aria-label") == "남은 일정이 없습니다."
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-all-completed.png", full_page=True)
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     completed_card = page.locator('[data-testid="now-focus-overlay-block-todo-supplement"]')
@@ -875,7 +878,7 @@ def check_overlay_stale_card_is_not_reported_to_today(browser) -> None:
     missing_today_board = True
     page.locator('[data-testid="now-focus-overlay-block-drag-a"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-a]') === null")
-    assert page.locator('[data-testid="now-focus-overlay-title"]').text_content() == "오늘 할 일"
+    assert page.locator('[data-testid="now-focus-overlay-title"]').text_content() == "남은 일정이 없습니다."
     assert page.locator('[data-testid="now-focus-overlay-expanded"]').get_by_text("오늘 할 일이 없습니다.").count() == 1
     assert schedule_requests >= 2
     assert not report_calls
@@ -896,6 +899,7 @@ def main() -> None:
         check_overlay_compact_expansion(browser)
         check_overlay_scrolls_only_at_maximum_height(browser)
         check_overlay_todo_items(browser)
+        check_overlay_shows_empty_summary_after_completion(browser)
         check_overlay_long_title(browser)
         check_overlay_reorder(browser)
         check_overlay_stale_card_is_not_reported_to_today(browser)
