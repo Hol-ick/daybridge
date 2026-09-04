@@ -30,57 +30,80 @@
 .questDetail { margin-top: 30px; border-top: 1px solid rgb(250 250 250 / 10%); padding-top: 24px; }
 
 .settingsBackdrop {
+  --modal-surface: #1b2029;
+  --modal-raised: #202631;
+  --modal-field: #131820;
+  --modal-line: #343c4b;
+  --modal-line-strong: #4b566a;
+  --modal-ink: #f0f3f8;
+  --modal-muted: #aab3c2;
+  --modal-accent: #839eff;
   position: fixed;
   z-index: 20;
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 20px;
-  background: rgb(16 17 21 / 68%);
+  padding: 24px;
+  background: rgb(9 12 17 / 58%);
   backdrop-filter: blur(7px);
 }
 
 .settingsSheet {
   display: grid;
-  width: min(288px, 100%);
-  gap: 9px;
+  width: min(456px, 100%);
+  gap: 16px;
   box-sizing: border-box;
-  border: 1px solid rgb(250 250 250 / 13%);
-  border-radius: 10px;
-  padding: 12px;
-  background: linear-gradient(145deg, #363842, #292a31);
-  box-shadow: 0 28px 72px rgb(0 0 0 / 40%), 0 1px 0 rgb(255 255 255 / 4%) inset;
+  border: 1px solid var(--modal-line);
+  border-radius: 12px;
+  padding: 24px;
+  background: var(--modal-surface);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 44%), 0 1px 0 rgb(255 255 255 / 5%) inset;
 }
 
-.settingsSheet header { display: flex; align-items: start; justify-content: space-between; padding-bottom: 1px; }
+.settingsSheet header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
 
 .settingsSheet header p {
-  margin: 0 0 2px;
-  color: var(--green, #62dca5);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 9px;
-  font-weight: 750;
-  letter-spacing: .095em;
+  margin: 5px 0 0;
+  color: var(--modal-muted);
+  font-size: 12px;
+  font-weight: 620;
+  letter-spacing: -.025em;
+  line-height: 1.45;
 }
 
-.settingsSheet header strong { font-size: 17px; font-weight: 750; letter-spacing: -.045em; }
+.settingsSheet header strong { color: var(--modal-ink); font-size: 25px; font-weight: 800; letter-spacing: -.055em; line-height: 1.08; }
 
 .settingsSheet header button {
-  width: 24px;
-  height: 24px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--modal-line);
+  border-radius: 7px;
   background: transparent;
-  color: var(--gray, #a7a5ae);
+  color: #b5becd;
   cursor: pointer;
-  font-size: 19px;
+  font-size: 20px;
+  font-weight: 300;
   line-height: 1;
+  transition: border-color .14s ease, background-color .14s ease, color .14s ease;
 }
 
-.settingsSheet header button:hover { border-color: rgb(250 250 250 / 11%); background: rgb(250 250 250 / 5%); color: var(--font-color, #fafafa); }
+.settingsSheet header button:hover { border-color: var(--modal-line-strong); background: rgb(255 255 255 / 5%); color: var(--modal-ink); }
+
+.settingsSection { display: grid; gap: 8px; margin: 0; padding: 13px 0 0; border: 0; border-top: 1px solid var(--modal-line); }
+.settingsSectionLabel { color: #8793a8; font-size: 11px; font-weight: 750; letter-spacing: -.02em; }
 
 .settingsRow { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; min-width: 0; }
-.settingsSheet label { display: grid; gap: 4px; min-width: 0; color: #b5b7c1; font-size: 10px; font-weight: 700; }
+.settingsSheet .checkbox { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-width: 0; color: var(--modal-ink); cursor: pointer; }
+.checkbox > span:first-child { display: grid; gap: 2px; min-width: 0; }
+.checkbox strong { color: #e8edf6; font-size: 13px; font-weight: 730; letter-spacing: -.035em; }
+.checkbox small { color: var(--modal-muted); font-size: 11px; font-weight: 560; letter-spacing: -.025em; line-height: 1.35; }
+.toggleInput { position: absolute; width: 1px; height: 1px; margin: -1px; clip: rect(0 0 0 0); clip-path: inset(50%); overflow: hidden; white-space: nowrap; }
+.toggleTrack { position: relative; display: block; width: 38px; height: 22px; border: 1px solid var(--modal-line-strong); border-radius: 999px; background: #10141b; transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.toggleTrack::after { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #8e98a9; box-shadow: 0 1px 2px rgb(0 0 0 / 32%); content: ""; transition: transform .16s ease, background-color .16s ease; }
+.toggleInput:checked + .toggleTrack { border-color: #718bd9; background: #42558b; }
+.toggleInput:checked + .toggleTrack::after { background: #f4f6fb; transform: translateX(16px); }
+.toggleInput:focus-visible + .toggleTrack { outline: 2px solid var(--modal-accent); outline-offset: 3px; }
 
 .fixedSetting {
   display: flex;
@@ -89,71 +112,74 @@
   min-height: 34px;
   box-sizing: border-box;
   padding: 0 7px;
-  border: 1px solid rgb(98 220 165 / 16%);
+  border: 1px solid var(--modal-line);
   border-radius: 7px;
-  background: rgb(20 21 26 / 48%);
-  color: #b5b7c1;
+  background: var(--modal-field);
+  color: var(--modal-muted);
   font-size: 10px;
 }
 
-.fixedSetting strong { color: var(--green, #62dca5); font-size: 10px; font-weight: 800; }
+.fixedSetting strong { color: var(--modal-ink); font-size: 10px; font-weight: 800; }
 
 .settingsSheet input:not([type="checkbox"]),
 .settingsSheet select {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid rgb(250 250 250 / 11%);
+  border: 1px solid var(--modal-line);
   min-height: 32px;
-  border-radius: 6px;
+  border-radius: 7px;
   padding: 6px 7px;
-  background: rgb(20 21 26 / 64%);
-  color: var(--font-color, #fafafa);
+  background: var(--modal-field);
+  color: var(--modal-ink);
   font: inherit;
   transition: border-color .16s ease, background-color .16s ease;
 }
 
 .settingsSheet input:not([type="checkbox"]):focus,
-.settingsSheet select:focus { border-color: rgb(98 220 165 / 68%); outline: 0; background: rgb(20 21 26 / 90%); }
-
-.settingsSheet .checkbox { display: flex; align-items: center; gap: 7px; color: var(--font-color, #fafafa); font-size: 10px; }
-.settingsSheet .checkbox input { accent-color: var(--green, #62dca5); }
+.settingsSheet select:focus { border-color: #718bd9; outline: 0; box-shadow: 0 0 0 3px rgb(131 158 255 / 15%); }
 
 .save {
-  min-height: 34px;
+  min-height: 42px;
   margin-top: 1px;
-  border: 1px solid rgb(98 220 165 / 55%);
-  border-radius: 7px;
-  background: var(--green, #62dca5);
-  color: #17231d;
+  border: 1px solid #839eff;
+  border-radius: 8px;
+  background: #839eff;
+  color: #111827;
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
-  font-weight: 790;
-  letter-spacing: -.02em;
-  transition: background-color .16s ease, transform .16s ease;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: -.025em;
+  transition: background-color .14s ease, border-color .14s ease, transform .14s ease;
 }
 
-.save:hover { background: #84e7bb; }
-.save:active { transform: translateY(1px); }
+.save:hover:not(:disabled) { border-color: #a2b4ff; background: #a2b4ff; }
+.save:active:not(:disabled) { transform: translateY(1px); }
+.save:disabled { cursor: wait; opacity: .56; }
 .utility {
-  min-height: 32px;
-  border: 1px solid rgb(98 220 165 / 34%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  border: 1px solid var(--modal-line);
   border-radius: 7px;
-  background: rgb(98 220 165 / 8%);
-  color: #bff8da;
+  background: transparent;
+  color: #c8d1e3;
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
-  font-weight: 760;
-  letter-spacing: -.02em;
-  transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+  font-size: 12px;
+  font-weight: 720;
+  letter-spacing: -.025em;
+  transition: background-color .14s ease, border-color .14s ease, color .14s ease, transform .14s ease;
 }
-.utility:hover:not(:disabled) { border-color: rgb(98 220 165 / 68%); background: rgb(98 220 165 / 16%); color: #effff6; }
+.utility svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.utility:hover:not(:disabled) { border-color: #596b94; background: rgb(131 158 255 / 9%); color: #e3e9ff; }
 .utility:active:not(:disabled) { transform: translateY(1px); }
 .utility:disabled { cursor: wait; opacity: .58; }
 .save:focus-visible,
 .utility:focus-visible,
-.settingsSheet header button:focus-visible { outline: 2px solid var(--green, #62dca5); outline-offset: 2px; }
+.settingsSheet header button:focus-visible { outline: 2px solid var(--modal-accent); outline-offset: 2px; }
 
 @media (max-width: 600px) {
   .shell { width: min(100% - 32px, 960px); margin-top: 25px; }

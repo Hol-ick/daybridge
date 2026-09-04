@@ -246,8 +246,9 @@ def check_dashboard(browser) -> None:
     page.wait_for_selector('form[aria-label="위젯 설정"]')
     assert page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
     settings_box = page.locator('form[aria-label="위젯 설정"]').bounding_box()
-    assert settings_box and round(settings_box["width"]) == 288
-    assert page.get_by_text("매일 기본 일정", exact=True).is_visible()
+    assert settings_box and round(settings_box["width"]) == 456
+    assert page.get_by_text("위젯 설정", exact=True).is_visible()
+    assert page.get_by_text("매일 반복할 일", exact=True).is_visible()
     page.get_by_label("새 매일 기본 일정").fill("오전 메일 확인")
     page.get_by_role("button", name="＋ 추가").click()
     assert page.get_by_label("오전 메일 확인 기본 일정").input_value() == "오전 메일 확인"
@@ -469,7 +470,14 @@ def check_overlay(browser) -> None:
     assert abs((settings_box["x"] + settings_box["width"] / 2) - viewport["width"] / 2) <= 1, (settings_box, viewport)
     assert abs((settings_box["y"] + settings_box["height"] / 2) - viewport["height"] / 2) <= 1, (settings_box, viewport)
     assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="privateOverlay"]').is_visible()
-    assert page.get_by_text("매일 기본 일정", exact=True).is_visible()
+    # The settings panel is deliberately a quiet desktop dialog, rather than a
+    # neon-labelled generated-looking card. Its visible labels must describe
+    # the two actual settings groups without decorative product jargon.
+    assert page.get_by_text("위젯 설정", exact=True).is_visible()
+    assert page.get_by_text("매일 반복할 일", exact=True).is_visible()
+    assert page.get_by_text("WIDGET", exact=True).count() == 0
+    assert page.get_by_text("ROUTINE", exact=True).count() == 0
+    assert page.get_by_text("표시 옵션", exact=True).count() == 0
     assert page.get_by_label("영양제 먹기 기본 일정").input_value() == "영양제 먹기"
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
     # Losing focus while the options dialog is open must not collapse the

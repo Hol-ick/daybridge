@@ -205,10 +205,20 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
     <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
       <form className={styles.settingsForm} onSubmit={onSubmit} data-testid="now-focus-overlay-settings-sheet">
         <header className={styles.settingsHeader}>
-          <div><span>WIDGET</span><strong>표시 옵션</strong><p>표시 방식과 매일 기본 일정을 관리합니다.</p></div>
+          <div>
+            <strong>위젯 설정</strong>
+            <p>표시 방식과 매일 반복할 일을 관리합니다.</p>
+          </div>
           <button type="button" className={styles.settingsClose} onClick={onClose} aria-label="설정 닫기" data-tauri-drag-region="false">×</button>
         </header>
-        <label className={styles.settingsCheckbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
+        <section className={styles.settingsSection} aria-label="표시 옵션">
+          <span className={styles.settingsSectionLabel}>표시</span>
+          <label className={styles.settingsCheckbox}>
+            <span><strong>오버레이에서 작업명 숨기기</strong><small>위젯에는 집중 상태만 표시합니다.</small></span>
+            <input className={styles.settingsToggleInput} name="privateOverlay" type="checkbox" defaultChecked={privateMode} />
+            <span className={styles.settingsToggleTrack} aria-hidden="true" />
+          </label>
+        </section>
         <button
           className={styles.settingsUtility}
           type="button"
@@ -217,7 +227,8 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
           data-testid="now-focus-overlay-refresh"
           data-tauri-drag-region="false"
         >
-          {refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-14.2-4.4L4 8.5M4 4v4.5h4.5M4 13a8.1 8.1 0 0 0 14.2 4.4l1.8-1.9M20 20v-4.5h-4.5" /></svg>
+          <span>{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</span>
         </button>
         <DailyDefaultsEditor value={dailyDefaults} onChange={onDailyDefaultsChange} loading={dailyDefaultsLoading} />
         <button className={styles.settingsSave} type="submit" disabled={dailyDefaultsLoading}>저장</button>

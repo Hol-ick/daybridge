@@ -20,10 +20,9 @@ export default function DailyDefaultsEditor({ value = [], onChange, loading = fa
     <section className={styles.editor} aria-labelledby="daily-defaults-title">
       <header className={styles.heading}>
         <div>
-          <span>ROUTINE</span>
-          <strong id="daily-defaults-title">매일 기본 일정</strong>
+          <strong id="daily-defaults-title">매일 반복할 일</strong>
+          <small>켜 둔 항목만 오늘 할 일에 추가됩니다.</small>
         </div>
-        <small>켜 둔 항목은 매일 오늘 할 일에 추가됩니다.</small>
       </header>
       {loading ? <p className={styles.empty}>기본 일정을 불러오는 중…</p> : routines.length ? (
         <div className={styles.list}>
@@ -35,7 +34,7 @@ export default function DailyDefaultsEditor({ value = [], onChange, loading = fa
                 aria-pressed={item.enabled !== false}
                 onClick={() => onChange?.(updateItem(routines, item.id, { enabled: item.enabled === false }))}
               >
-                {item.enabled === false ? "끔" : "매일"}
+                {item.enabled === false ? "중지" : "활성"}
               </button>
               <input
                 value={item.title}

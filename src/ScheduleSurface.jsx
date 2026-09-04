@@ -424,9 +424,22 @@ export default function ScheduleSurface() {
     {selectedQuest ? <section className={styles.questDetail} aria-label="선택한 작업 상세"><Item quest={selectedQuest} /></section> : null}
     {settingsOpen ? <div className={styles.settingsBackdrop} role="presentation">
       <form className={styles.settingsSheet} onSubmit={saveSettings} aria-label="위젯 설정">
-        <header><div><p>WIDGET</p><strong>표시 옵션</strong></div><button type="button" onClick={() => setSettingsOpen(false)} aria-label="설정 닫기">×</button></header>
-        <label className={styles.checkbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
-        <button className={styles.utility} type="button" onClick={refreshWidget} disabled={refreshingWidget} data-testid="schedule-widget-refresh">{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</button>
+        <header>
+          <div><strong>위젯 설정</strong><p>표시 방식과 매일 반복할 일을 관리합니다.</p></div>
+          <button type="button" onClick={() => setSettingsOpen(false)} aria-label="설정 닫기">×</button>
+        </header>
+        <section className={styles.settingsSection} aria-label="표시 옵션">
+          <span className={styles.settingsSectionLabel}>표시</span>
+          <label className={styles.checkbox}>
+            <span><strong>오버레이에서 작업명 숨기기</strong><small>위젯에는 집중 상태만 표시합니다.</small></span>
+            <input className={styles.toggleInput} name="privateOverlay" type="checkbox" defaultChecked={privateMode} />
+            <span className={styles.toggleTrack} aria-hidden="true" />
+          </label>
+        </section>
+        <button className={styles.utility} type="button" onClick={refreshWidget} disabled={refreshingWidget} data-testid="schedule-widget-refresh">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-14.2-4.4L4 8.5M4 4v4.5h4.5M4 13a8.1 8.1 0 0 0 14.2 4.4l1.8-1.9M20 20v-4.5h-4.5" /></svg>
+          <span>{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</span>
+        </button>
         <DailyDefaultsEditor value={dailyDefaultsDraft} onChange={setDailyDefaultsDraft} loading={dailyDefaultsLoading || !dailyDefaultsLoaded} />
         <button className={styles.save} type="submit" disabled={dailyDefaultsLoading || !dailyDefaultsLoaded}>저장</button>
       </form>
