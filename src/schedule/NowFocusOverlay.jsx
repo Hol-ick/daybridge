@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { closeOverlaySettingsModal, openOverlaySettingsModal, OVERLAY_COLLAPSED_HEIGHT, OVERLAY_COLLAPSED_WIDTH, OVERLAY_EXPANDED_HEIGHT, resizeOverlay, startOverlayDrag } from "../desktopWindow.js";
+import { closeOverlaySettingsModal, openOverlaySettingsModal, OVERLAY_COLLAPSED_HEIGHT, OVERLAY_EXPANDED_HEIGHT, setOverlayInteractionRegion, startOverlayDrag } from "../desktopWindow.js";
 import { getWorkdayCountdown } from "./workday-clock.js";
 import styles from "./NowFocusOverlay.module.css";
 import ManualTaskForm from "./ManualTaskForm.jsx";
@@ -249,6 +249,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const [taskOpen, setTaskOpen] = useState(false);
   const [taskResetSignal, setTaskResetSignal] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const skipNextExpandedRegionSyncRef = useRef(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   useEffect(() => () => {
     if (swapTimerRef.current) window.clearTimeout(swapTimerRef.current);
@@ -506,7 +507,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const finishCollapse = () => {
     if (!collapsePendingRef.current || settingsOpen) return;
     collapsePendingRef.current = false;
-    void resizeOverlay(OVERLAY_COLLAPSED_HEIGHT, OVERLAY_COLLAPSED_WIDTH).catch(() => false);
+    void setOverlayInteractionRegion({ height: OVERLAY_COLLAPSED_HEIGHT }).catch(() => false);
   };
 
   const setExpandedMode = (next) => {
@@ -516,10 +517,12 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     }
     if (next) {
       collapsePendingRef.current = false;
-      // Grow the native viewport first. The collapsed card is already aligned
-      // to that viewport's bottom, so the CSS height animation can then pull
-      // only its top edge upward without moving the summary row.
-      void resizeOverlay(targetExpandedHeight, OVERLAY_COLLAPSED_WIDTH).catch(() => false).finally(() => setExpanded(true));
+      // The native canvas stays fixed. Expand only its clickable/visible
+      // region first, then let the card's CSS pull its top edge upward.
+      void setOverlayInteractionRegion({ height: targetExpandedHeight })
+        .then(() => { skipNextExpandedRegionSyncRef.current = true; })
+        .catch(() => { skipNextExpandedRegionSyncRef.current = false; })
+        .finally(() => setExpanded(true));
     } else {
       if (taskOpen) {
         setTaskOpen(false);
@@ -535,7 +538,11 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
 
   useEffect(() => {
     if (!expanded || settingsOpen) return undefined;
-    void resizeOverlay(targetExpandedHeight, OVERLAY_COLLAPSED_WIDTH);
+    if (skipNextExpandedRegionSyncRef.current) {
+      skipNextExpandedRegionSyncRef.current = false;
+      return undefined;
+    }
+    void setOverlayInteractionRegion({ height: targetExpandedHeight });
     return undefined;
   }, [expanded, settingsOpen, targetExpandedHeight]);
 

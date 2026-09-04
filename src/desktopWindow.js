@@ -10,11 +10,33 @@ const OVERLAY_SNAP_DISTANCE = 64;
 export const OVERLAY_COLLAPSED_HEIGHT = 64;
 export const OVERLAY_EXPANDED_HEIGHT = 520;
 export const OVERLAY_COLLAPSED_WIDTH = 288;
+// Keep the actual Windows WebView at this stable size. Its transparent
+// interaction region changes with the visible card, but the native surface
+// itself never resizes while the user opens or closes the schedule.
+export const OVERLAY_CANVAS_WIDTH = 520;
+export const OVERLAY_CANVAS_HEIGHT = 620;
 // Settings deliberately use a larger, independently positioned native
 // viewport. Keeping the form inside the expanding corner card made an open
 // dialog get clipped whenever the card collapsed on blur.
-export const OVERLAY_SETTINGS_WIDTH = 520;
-export const OVERLAY_SETTINGS_HEIGHT = 620;
+export const OVERLAY_SETTINGS_WIDTH = OVERLAY_CANVAS_WIDTH;
+export const OVERLAY_SETTINGS_HEIGHT = OVERLAY_CANVAS_HEIGHT;
+
+/** The actual visible and clickable rectangle within the fixed native canvas. */
+export function overlayInteractionRegion({ height = OVERLAY_COLLAPSED_HEIGHT, settingsOpen = false } = {}) {
+  if (settingsOpen) {
+    return { x: 0, y: 0, width: OVERLAY_CANVAS_WIDTH, height: OVERLAY_CANVAS_HEIGHT };
+  }
+  const visibleHeight = Math.min(
+    OVERLAY_EXPANDED_HEIGHT,
+    Math.max(OVERLAY_COLLAPSED_HEIGHT, Math.round(height)),
+  );
+  return {
+    x: OVERLAY_CANVAS_WIDTH - OVERLAY_COLLAPSED_WIDTH,
+    y: OVERLAY_CANVAS_HEIGHT - visibleHeight,
+    width: OVERLAY_COLLAPSED_WIDTH,
+    height: visibleHeight,
+  };
+}
 
 function readOverlayPosition() {
   try {
@@ -71,72 +93,59 @@ export async function startOverlayDrag() {
   return true;
 }
 
-/** Resize the overlay while keeping its bottom edge anchored in place. */
-export async function resizeOverlay(height, width = null) {
-  if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
+let activeOverlayRegion = overlayInteractionRegion();
+
+function shellPositionForVisiblePosition(position, region) {
+  return {
+    x: Math.round(position.x - region.x),
+    y: Math.round(position.y - region.y),
+  };
+}
+
+function visiblePositionForShellPosition(position, region) {
+  return {
+    x: Math.round(position.x + region.x),
+    y: Math.round(position.y + region.y),
+  };
+}
+
+/**
+ * Change only the visible and clickable part of the fixed transparent canvas.
+ * Unlike a WebView resize, this keeps the DirectComposition surface alive while
+ * the React card animates from its bottom edge.
+ */
+export async function setOverlayInteractionRegion(options = {}) {
+  const region = overlayInteractionRegion(options);
+  activeOverlayRegion = region;
+  if (!isTauri() || getCurrentWindow().label !== "overlay") return region;
+  await invoke("set_overlay_interaction_region", region);
+  return region;
+}
+
+async function moveOverlayCanvasToCenter() {
   const windowHandle = getCurrentWindow();
-  const targetHeight = Math.max(OVERLAY_COLLAPSED_HEIGHT, Math.round(height));
-  const targetWidth = Math.max(OVERLAY_COLLAPSED_WIDTH, Math.round(width ?? OVERLAY_COLLAPSED_WIDTH));
-  const [monitor, position, size] = await Promise.all([
-    currentMonitor(),
-    windowHandle.outerPosition(),
-    windowHandle.outerSize(),
-  ]);
+  const [monitor, size] = await Promise.all([currentMonitor(), windowHandle.outerSize()]);
   if (!monitor) return false;
-  const bottom = position.y + size.height;
-  const right = position.x + size.width;
-  const bounds = overlayBounds(monitor, { width: targetWidth, height: targetHeight });
-  const nextX = Math.min(bounds.maxX, Math.max(bounds.minX, right - targetWidth));
-  const nextY = Math.min(bounds.maxY, Math.max(bounds.minY, bottom - targetHeight));
-  // A size change followed by a position change exposes a one-frame native
-  // top-left resize. The compact card briefly appears away from its corner
-  // after closing. Ask the native host to apply both bounds atomically.
-  await invoke("set_overlay_bounds", {
-    x: Math.round(nextX),
-    y: Math.round(nextY),
-    width: targetWidth,
-    height: targetHeight,
-  });
+  const nextX = Math.round(monitor.workArea.position.x + (monitor.workArea.size.width - size.width) / 2);
+  const nextY = Math.round(monitor.workArea.position.y + (monitor.workArea.size.height - size.height) / 2);
+  await windowHandle.setPosition(new PhysicalPosition(nextX, nextY));
   rememberOverlayPosition({ x: nextX, y: nextY });
+  await invoke("save_overlay_position", { x: nextX, y: nextY });
   return true;
 }
 
 /** Open the settings surface as a true screen-centred modal-sized viewport. */
 export async function openOverlaySettingsModal() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
-  const monitor = await currentMonitor();
-  if (!monitor) return false;
-  const availableWidth = Math.max(OVERLAY_COLLAPSED_WIDTH, monitor.workArea.size.width - 24);
-  const availableHeight = Math.max(OVERLAY_COLLAPSED_HEIGHT, monitor.workArea.size.height - 24);
-  const targetWidth = Math.min(OVERLAY_SETTINGS_WIDTH, availableWidth);
-  const targetHeight = Math.min(OVERLAY_SETTINGS_HEIGHT, availableHeight);
-  const nextX = Math.round(monitor.workArea.position.x + (monitor.workArea.size.width - targetWidth) / 2);
-  const nextY = Math.round(monitor.workArea.position.y + (monitor.workArea.size.height - targetHeight) / 2);
-  await invoke("set_overlay_bounds", {
-    x: nextX,
-    y: nextY,
-    width: targetWidth,
-    height: targetHeight,
-  });
-  return true;
+  await setOverlayInteractionRegion({ settingsOpen: true });
+  return moveOverlayCanvasToCenter();
 }
 
 /** Return the settings viewport to the compact card, flush with the work area. */
 export async function closeOverlaySettingsModal() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
-  const monitor = await currentMonitor();
-  if (!monitor) return false;
-  const bounds = overlayBounds(monitor, {
-    width: OVERLAY_COLLAPSED_WIDTH,
-    height: OVERLAY_COLLAPSED_HEIGHT,
-  });
-  await invoke("set_overlay_bounds", {
-    x: Math.round(bounds.maxX),
-    y: Math.round(bounds.maxY),
-    width: OVERLAY_COLLAPSED_WIDTH,
-    height: OVERLAY_COLLAPSED_HEIGHT,
-  });
-  rememberOverlayPosition({ x: bounds.maxX, y: bounds.maxY });
+  await setOverlayInteractionRegion({ height: OVERLAY_COLLAPSED_HEIGHT });
+  await placeOverlayInCorner();
   return true;
 }
 
@@ -165,32 +174,31 @@ export async function bindOverlayMagnet({ onSnap } = {}) {
 export async function snapOverlayToCorner() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return { snapped: false, position: null };
   const windowHandle = getCurrentWindow();
-  const [monitor, position, size] = await Promise.all([
+  const [monitor, position] = await Promise.all([
     currentMonitor(),
     windowHandle.outerPosition(),
-    windowHandle.outerSize(),
   ]);
   if (!monitor) return { snapped: false, position: null };
-  const next = nearestOverlayCorner(position, monitor, size);
-  const snapped = next.x !== position.x || next.y !== position.y;
-  rememberOverlayPosition(next);
-  if (snapped) await windowHandle.setPosition(new PhysicalPosition(next.x, next.y));
-  await invoke("save_overlay_position", { x: Math.round(next.x), y: Math.round(next.y) });
-  return { snapped, position: next };
+  const visiblePosition = visiblePositionForShellPosition(position, activeOverlayRegion);
+  const nextVisiblePosition = nearestOverlayCorner(visiblePosition, monitor, activeOverlayRegion);
+  const nextShellPosition = shellPositionForVisiblePosition(nextVisiblePosition, activeOverlayRegion);
+  const snapped = nextShellPosition.x !== position.x || nextShellPosition.y !== position.y;
+  rememberOverlayPosition(nextShellPosition);
+  if (snapped) await windowHandle.setPosition(new PhysicalPosition(nextShellPosition.x, nextShellPosition.y));
+  await invoke("save_overlay_position", { x: nextShellPosition.x, y: nextShellPosition.y });
+  return { snapped, position: nextVisiblePosition };
 }
 
 export async function placeOverlayInCorner() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return;
   const windowHandle = getCurrentWindow();
-  const [monitor, size] = await Promise.all([currentMonitor(), windowHandle.outerSize()]);
+  const monitor = await currentMonitor();
   if (!monitor) return;
-  const bounds = overlayBounds(monitor, size);
-  // Startup is deterministic: always place the widget flush with the
-  // current monitor's work-area bottom-right corner. User drags still work
-  // during the session, but a stale saved position must not make the widget
-  // appear somewhere unexpected after login, a display change, or a restart.
-  const next = new PhysicalPosition(bounds.maxX, bounds.maxY);
-  await windowHandle.setPosition(next);
+  const bounds = overlayBounds(monitor, activeOverlayRegion);
+  // The visible card, rather than the invisible canvas around it, attaches to
+  // the work-area corner. This preserves the magnetic feeling on every edge.
+  const next = shellPositionForVisiblePosition({ x: bounds.maxX, y: bounds.maxY }, activeOverlayRegion);
+  await windowHandle.setPosition(new PhysicalPosition(next.x, next.y));
   rememberOverlayPosition(next);
-  await invoke("save_overlay_position", { x: Math.round(next.x), y: Math.round(next.y) });
+  await invoke("save_overlay_position", { x: next.x, y: next.y });
 }

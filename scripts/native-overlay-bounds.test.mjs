@@ -6,11 +6,19 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const nativeMain = fs.readFileSync(path.join(root, "src-tauri", "src", "main.rs"), "utf8");
-const boundsCommand = nativeMain.match(/fn set_overlay_bounds\([\s\S]*?\n}\n\n#\[tauri::command\]\nfn record_runtime_event/);
+const regionCommand = nativeMain.match(/fn set_overlay_interaction_region\([\s\S]*?\n}\n\n#\[tauri::command\]\nfn record_runtime_event/);
+const overlaySurface = fs.readFileSync(path.join(root, "src", "schedule", "NowFocusOverlay.jsx"), "utf8");
 
-test("overlay bounds update changes geometry without forcing a new show or z-order", () => {
-  assert.ok(boundsCommand, "set_overlay_bounds command should exist");
-  assert.doesNotMatch(boundsCommand[0], /HWND_TOPMOST/);
-  assert.doesNotMatch(boundsCommand[0], /SWP_SHOWWINDOW/);
-  assert.match(boundsCommand[0], /SWP_NOZORDER/);
+test("overlay interaction changes do not force a new show, z-order, or native resize", () => {
+  assert.ok(regionCommand, "set_overlay_interaction_region command should exist");
+  assert.doesNotMatch(regionCommand[0], /HWND_TOPMOST/);
+  assert.doesNotMatch(regionCommand[0], /SWP_SHOWWINDOW/);
+  assert.doesNotMatch(regionCommand[0], /SetWindowPos/);
+});
+
+test("opening and closing the schedule use a native interaction region instead of resizing the transparent WebView", () => {
+  assert.match(nativeMain, /fn set_overlay_interaction_region\(/);
+  assert.doesNotMatch(nativeMain, /fn set_overlay_bounds\(/);
+  assert.match(overlaySurface, /setOverlayInteractionRegion/);
+  assert.doesNotMatch(overlaySurface, /resizeOverlay/);
 });

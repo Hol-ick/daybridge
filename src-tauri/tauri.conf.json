@@ -14,10 +14,10 @@
       {
         "label": "overlay",
         "title": "Daybridge",
-        "width": 288,
-        "height": 64,
-        "minWidth": 288,
-        "minHeight": 64,
+        "width": 520,
+        "height": 620,
+        "minWidth": 520,
+        "minHeight": 620,
         "maxWidth": 520,
         "maxHeight": 620,
         "resizable": false,
@@ -26,7 +26,8 @@
         "transparent": true,
         "shadow": false,
         "skipTaskbar": true,
-        "backgroundColor": "#00000000"
+        "backgroundColor": "#00000000",
+        "visible": false
       },
       {
         "label": "dashboard",

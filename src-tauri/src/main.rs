@@ -22,6 +22,10 @@ const LOCAL_BRIDGE_PORT: u16 = 39393;
 const LOCAL_BRIDGE_SCRIPT: &str = "scripts/local-bridge.mjs";
 const KEEP_ALIVE_SCRIPT_FILE: &str = "daybridge-keep-alive.ps1";
 const EXPLICIT_EXIT_MARKER_FILE: &str = "explicit-exit.flag";
+const OVERLAY_CANVAS_WIDTH: i32 = 520;
+const OVERLAY_CANVAS_HEIGHT: i32 = 620;
+const OVERLAY_CARD_WIDTH: i32 = 288;
+const OVERLAY_COLLAPSED_HEIGHT: i32 = 64;
 
 #[cfg(windows)]
 fn configure_windows_startup() -> Result<(), String> {
@@ -629,12 +633,79 @@ fn save_overlay_position(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), St
     persist_overlay_position(&app, x, y)
 }
 
-/// Move and resize the transparent overlay in one native operation. This is a
-/// geometry-only operation: visibility recovery owns showing and topmost
-/// order, because reasserting either during every animation frame flashes the
-/// transparent WebView on Windows.
+/// Restrict a fixed transparent canvas to its currently painted card. This
+/// changes visibility and hit-testing without rebuilding the WebView's native
+/// surface, which is essential for a smooth bottom-anchored card animation.
+#[cfg(windows)]
+fn apply_overlay_interaction_region(
+    window: &WebviewWindow,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) -> Result<(), String> {
+    use windows::core::Free;
+    use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn};
+
+    let handle = window.hwnd().map_err(|error| error.to_string())?;
+    let mut region = unsafe {
+        CreateRoundRectRgn(
+            x,
+            y,
+            x.saturating_add(width),
+            y.saturating_add(height),
+            22,
+            22,
+        )
+    };
+    if unsafe { SetWindowRgn(handle, Some(region), false) } == 0 {
+        unsafe { region.free() };
+        return Err("위젯의 클릭 가능한 영역을 갱신하지 못했습니다.".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn apply_overlay_interaction_region(
+    _window: &WebviewWindow,
+    _x: i32,
+    _y: i32,
+    _width: i32,
+    _height: i32,
+) -> Result<(), String> {
+    Ok(())
+}
+
+fn prepare_overlay_canvas(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), String> {
+    let monitor = window
+        .current_monitor()
+        .map_err(|error| error.to_string())?
+        .or(app.primary_monitor().map_err(|error| error.to_string())?);
+    let Some(monitor) = monitor else {
+        return Ok(());
+    };
+    let work_area = monitor.work_area();
+    let x = work_area.position.x
+        + i32::try_from(work_area.size.width).unwrap_or(i32::MAX)
+        - OVERLAY_CANVAS_WIDTH;
+    let y = work_area.position.y
+        + i32::try_from(work_area.size.height).unwrap_or(i32::MAX)
+        - OVERLAY_CANVAS_HEIGHT;
+    window
+        .set_position(Position::Physical(PhysicalPosition::new(x, y)))
+        .map_err(|error| error.to_string())?;
+    apply_overlay_interaction_region(
+        window,
+        OVERLAY_CANVAS_WIDTH - OVERLAY_CARD_WIDTH,
+        OVERLAY_CANVAS_HEIGHT - OVERLAY_COLLAPSED_HEIGHT,
+        OVERLAY_CARD_WIDTH,
+        OVERLAY_COLLAPSED_HEIGHT,
+    )?;
+    persist_overlay_position(app, x, y)
+}
+
 #[tauri::command]
-fn set_overlay_bounds(
+fn set_overlay_interaction_region(
     app: tauri::AppHandle,
     x: i32,
     y: i32,
@@ -644,39 +715,27 @@ fn set_overlay_bounds(
     let window = app
         .get_webview_window("overlay")
         .ok_or_else(|| "오버레이 창을 찾을 수 없습니다.".to_string())?;
-
-    #[cfg(windows)]
-    {
-        use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER};
-
-        let handle = window.hwnd().map_err(|error| error.to_string())?;
-        let native_width = i32::try_from(width).map_err(|error| error.to_string())?;
-        let native_height = i32::try_from(height).map_err(|error| error.to_string())?;
-        unsafe {
-            SetWindowPos(
-                handle,
-                None,
-                x,
-                y,
-                native_width,
-                native_height,
-                SWP_NOACTIVATE | SWP_NOZORDER,
-            )
-            .map_err(|error| error.to_string())?;
-        }
-    }
-
-    #[cfg(not(windows))]
-    {
-        window
-            .set_size(tauri::PhysicalSize::new(width, height))
-            .map_err(|error| error.to_string())?;
-        window
-            .set_position(Position::Physical(PhysicalPosition::new(x, y)))
-            .map_err(|error| error.to_string())?;
-    }
-
-    persist_overlay_position(&app, x, y)
+    let safe_x = x.clamp(0, OVERLAY_CANVAS_WIDTH - 1);
+    let safe_y = y.clamp(0, OVERLAY_CANVAS_HEIGHT - 1);
+    let safe_width = i32::try_from(width)
+        .map_err(|error| error.to_string())?
+        .clamp(1, OVERLAY_CANVAS_WIDTH - safe_x);
+    let safe_height = i32::try_from(height)
+        .map_err(|error| error.to_string())?
+        .clamp(1, OVERLAY_CANVAS_HEIGHT - safe_y);
+    apply_overlay_interaction_region(&window, safe_x, safe_y, safe_width, safe_height)?;
+    let _ = append_runtime_event(
+        &app,
+        "overlay_interaction_region_applied",
+        &json!({
+            "x": safe_x,
+            "y": safe_y,
+            "width": safe_width,
+            "height": safe_height,
+        })
+        .to_string(),
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -741,6 +800,13 @@ fn main() {
             start_local_bridge_watchdog(app.handle().clone());
             if let Some(window) = app.get_webview_window("overlay") {
                 let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+                if let Err(error) = prepare_overlay_canvas(app.handle(), &window) {
+                    let _ = append_runtime_event(
+                        app.handle(),
+                        "overlay_canvas_prepare_error",
+                        &json!({ "error": error }).to_string(),
+                    );
+                }
             }
             let _ = ensure_overlay_visible(app.handle(), "app_setup");
             start_overlay_visibility_watchdog(app.handle().clone());
@@ -797,7 +863,7 @@ fn main() {
             show_overlay,
             get_overlay_position,
             save_overlay_position,
-            set_overlay_bounds,
+            set_overlay_interaction_region,
             record_runtime_event,
             ensure_local_bridge,
             exit_app
