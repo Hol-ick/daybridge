@@ -629,9 +629,10 @@ fn save_overlay_position(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), St
     persist_overlay_position(&app, x, y)
 }
 
-/// Move and resize the transparent overlay in one native operation. Calling
-/// the framework size and position methods one after the other exposed a
-/// visible intermediate frame while the compact card was closing.
+/// Move and resize the transparent overlay in one native operation. This is a
+/// geometry-only operation: visibility recovery owns showing and topmost
+/// order, because reasserting either during every animation frame flashes the
+/// transparent WebView on Windows.
 #[tauri::command]
 fn set_overlay_bounds(
     app: tauri::AppHandle,
@@ -646,9 +647,7 @@ fn set_overlay_bounds(
 
     #[cfg(windows)]
     {
-        use windows::Win32::UI::WindowsAndMessaging::{
-            SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_SHOWWINDOW,
-        };
+        use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER};
 
         let handle = window.hwnd().map_err(|error| error.to_string())?;
         let native_width = i32::try_from(width).map_err(|error| error.to_string())?;
@@ -656,12 +655,12 @@ fn set_overlay_bounds(
         unsafe {
             SetWindowPos(
                 handle,
-                Some(HWND_TOPMOST),
+                None,
                 x,
                 y,
                 native_width,
                 native_height,
-                SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                SWP_NOACTIVATE | SWP_NOZORDER,
             )
             .map_err(|error| error.to_string())?;
         }
