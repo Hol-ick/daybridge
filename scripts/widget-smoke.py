@@ -447,20 +447,43 @@ def check_overlay(browser) -> None:
     assert collapsed_box and round(collapsed_box["height"]) == 64
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
+    # This is the modal viewport used by the native overlay while options are
+    # open. The compact corner card itself remains 288px wide.
+    page.set_viewport_size({"width": 520, "height": 620})
     page.locator('[data-testid="now-focus-overlay-settings"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-settings-modal"]')
-    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 420")
+    page.wait_for_selector('[data-testid="now-focus-overlay-settings-sheet"]')
+    settings_sheet = page.locator('[data-testid="now-focus-overlay-settings-sheet"]')
+    page.wait_for_function("""() => {
+        const sheet = document.querySelector('[data-testid=now-focus-overlay-settings-sheet]');
+        if (!sheet) return false;
+        const rect = sheet.getBoundingClientRect();
+        return Math.abs((rect.x + rect.width / 2) - window.innerWidth / 2) <= 1
+          && Math.abs((rect.y + rect.height / 2) - window.innerHeight / 2) <= 1;
+    }""")
+    settings_box = settings_sheet.bounding_box()
+    viewport = page.viewport_size
+    assert settings_box and viewport
+    assert abs((settings_box["x"] + settings_box["width"] / 2) - viewport["width"] / 2) <= 1, (settings_box, viewport)
+    assert abs((settings_box["y"] + settings_box["height"] / 2) - viewport["height"] / 2) <= 1, (settings_box, viewport)
     assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="privateOverlay"]').is_visible()
     assert page.get_by_text("매일 기본 일정", exact=True).is_visible()
     assert page.get_by_label("영양제 먹기 기본 일정").input_value() == "영양제 먹기"
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
+    # Losing focus while the options dialog is open must not collapse the
+    # underlying card and leave the still-open form clipped to 64px.
+    page.evaluate("window.dispatchEvent(new Event('blur'))")
+    page.wait_for_timeout(360)
+    assert page.locator('[data-testid="now-focus-overlay-settings-modal"]').is_visible()
+    settings_box = settings_sheet.bounding_box()
+    assert settings_box and settings_box["y"] >= 0 and settings_box["y"] + settings_box["height"] <= viewport["height"], (settings_box, viewport)
     overlay_refresh = page.locator('[data-testid="now-focus-overlay-refresh"]')
     assert overlay_refresh.is_visible()
     overlay_refresh.click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-refresh]')?.textContent?.includes('위젯 새로고침')")
     page.locator('[data-testid="now-focus-overlay-settings-modal"] [aria-label="설정 닫기"]').click()
     assert page.locator('[data-testid="now-focus-overlay-settings-modal"]').count() == 0
-    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().width) === 288")
+    page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().width) === 288 && Math.round(surface.getBoundingClientRect().height) === 64; })()")
     assert_no_page_errors(errors)
     context.close()
 

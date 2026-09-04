@@ -10,7 +10,11 @@ const OVERLAY_SNAP_DISTANCE = 64;
 export const OVERLAY_COLLAPSED_HEIGHT = 64;
 export const OVERLAY_EXPANDED_HEIGHT = 520;
 export const OVERLAY_COLLAPSED_WIDTH = 288;
-export const OVERLAY_MODAL_WIDTH = 420;
+// Settings deliberately use a larger, independently positioned native
+// viewport. Keeping the form inside the expanding corner card made an open
+// dialog get clipped whenever the card collapsed on blur.
+export const OVERLAY_SETTINGS_WIDTH = 520;
+export const OVERLAY_SETTINGS_HEIGHT = 620;
 
 function readOverlayPosition() {
   try {
@@ -91,7 +95,41 @@ export async function resizeOverlay(height, width = null) {
   return true;
 }
 
-export async function bindOverlayMagnet() {
+/** Open the settings surface as a true screen-centred modal-sized viewport. */
+export async function openOverlaySettingsModal() {
+  if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
+  const windowHandle = getCurrentWindow();
+  const monitor = await currentMonitor();
+  if (!monitor) return false;
+  const availableWidth = Math.max(OVERLAY_COLLAPSED_WIDTH, monitor.workArea.size.width - 24);
+  const availableHeight = Math.max(OVERLAY_COLLAPSED_HEIGHT, monitor.workArea.size.height - 24);
+  const targetWidth = Math.min(OVERLAY_SETTINGS_WIDTH, availableWidth);
+  const targetHeight = Math.min(OVERLAY_SETTINGS_HEIGHT, availableHeight);
+  const nextX = Math.round(monitor.workArea.position.x + (monitor.workArea.size.width - targetWidth) / 2);
+  const nextY = Math.round(monitor.workArea.position.y + (monitor.workArea.size.height - targetHeight) / 2);
+  await windowHandle.setSize(new PhysicalSize(targetWidth, targetHeight));
+  await windowHandle.setPosition(new PhysicalPosition(nextX, nextY));
+  return true;
+}
+
+/** Return the settings viewport to the compact card, flush with the work area. */
+export async function closeOverlaySettingsModal() {
+  if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
+  const windowHandle = getCurrentWindow();
+  const monitor = await currentMonitor();
+  if (!monitor) return false;
+  const bounds = overlayBounds(monitor, {
+    width: OVERLAY_COLLAPSED_WIDTH,
+    height: OVERLAY_COLLAPSED_HEIGHT,
+  });
+  await windowHandle.setSize(new PhysicalSize(OVERLAY_COLLAPSED_WIDTH, OVERLAY_COLLAPSED_HEIGHT));
+  await windowHandle.setPosition(new PhysicalPosition(bounds.maxX, bounds.maxY));
+  rememberOverlayPosition({ x: bounds.maxX, y: bounds.maxY });
+  await invoke("save_overlay_position", { x: Math.round(bounds.maxX), y: Math.round(bounds.maxY) });
+  return true;
+}
+
+export async function bindOverlayMagnet({ onSnap } = {}) {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return () => {};
   const windowHandle = getCurrentWindow();
   let timer = null;
@@ -99,7 +137,10 @@ export async function bindOverlayMagnet() {
   const scheduleSnap = () => {
     if (timer) window.clearTimeout(timer);
     timer = window.setTimeout(() => {
-      if (!disposed) void snapOverlayToCorner();
+      if (disposed) return;
+      void snapOverlayToCorner().then((result) => {
+        if (!disposed && result?.snapped) onSnap?.(result);
+      }).catch(() => {});
     }, 180);
   };
   const unlisten = await windowHandle.onMoved(scheduleSnap);
@@ -111,18 +152,20 @@ export async function bindOverlayMagnet() {
 }
 
 export async function snapOverlayToCorner() {
-  if (!isTauri() || getCurrentWindow().label !== "overlay") return;
+  if (!isTauri() || getCurrentWindow().label !== "overlay") return { snapped: false, position: null };
   const windowHandle = getCurrentWindow();
   const [monitor, position, size] = await Promise.all([
     currentMonitor(),
     windowHandle.outerPosition(),
     windowHandle.outerSize(),
   ]);
-  if (!monitor) return;
+  if (!monitor) return { snapped: false, position: null };
   const next = nearestOverlayCorner(position, monitor, size);
+  const snapped = next.x !== position.x || next.y !== position.y;
   rememberOverlayPosition(next);
-  if (next.x !== position.x || next.y !== position.y) await windowHandle.setPosition(new PhysicalPosition(next.x, next.y));
+  if (snapped) await windowHandle.setPosition(new PhysicalPosition(next.x, next.y));
   await invoke("save_overlay_position", { x: Math.round(next.x), y: Math.round(next.y) });
+  return { snapped, position: next };
 }
 
 export async function placeOverlayInCorner() {

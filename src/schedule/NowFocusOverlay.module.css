@@ -14,8 +14,6 @@
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-.overlay.settingsOpen { width: 420px; }
-
 .surface {
   position: relative;
   display: block;
@@ -38,7 +36,8 @@
 
 .surface:active { cursor: grabbing; }
 .surface.expanded { height: var(--overlay-expanded-height, 520px); }
-.surface.settingsOpen { width: 420px; }
+.surface.settingsMode { height: 64px; transition: none; }
+.surface.magnetPulse { animation: overlay-magnet-catch .34s cubic-bezier(.18, .84, .32, 1); }
 
 .surface::before {
   position: absolute;
@@ -203,12 +202,13 @@
 .expandedFooter .iconAction { min-height: 38px; }
 .iconAction svg { width: 20px; height: 20px; }
 .manualTaskFooter [data-testid="manual-task-form"] { position: static; z-index: auto; width: 100%; max-width: none; padding: 5px; gap: 4px; border-radius: 6px; }
-.settingsModal { position: absolute; inset: 12px; z-index: 40; display: grid; place-items: center; border: 1px solid rgb(98 220 165 / 42%); border-radius: 10px; background: linear-gradient(145deg, rgb(27 32 41 / 99%), rgb(13 16 21 / 99%)); box-shadow: 0 18px 32px rgb(0 0 0 / 42%), 0 0 0 1px rgb(255 255 255 / 5%) inset; animation: overlay-settings-in .22s cubic-bezier(.22, 1, .36, 1); }
-.settingsForm { display: grid; width: min(100%, 360px); gap: 11px; padding: 18px; box-sizing: border-box; }
+.settingsModal { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; box-sizing: border-box; padding: 20px; background: radial-gradient(circle at 50% 42%, rgb(98 220 165 / 9%), transparent 62%); cursor: default; animation: overlay-settings-in .22s cubic-bezier(.22, 1, .36, 1); }
+.settingsForm { display: grid; width: min(100%, 480px); max-height: 100%; gap: 13px; padding: 22px; box-sizing: border-box; overflow-y: auto; border: 1px solid rgb(98 220 165 / 44%); border-radius: 13px; background: linear-gradient(145deg, rgb(29 35 45 / 99%), rgb(13 16 21 / 99%)); box-shadow: 0 22px 46px rgb(0 0 0 / 48%), 0 0 0 1px rgb(255 255 255 / 6%) inset; scrollbar-color: rgb(255 255 255 / 26%) transparent; scrollbar-width: thin; }
 .settingsHeader { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
 .settingsHeader div { display: grid; gap: 2px; }
 .settingsHeader span { color: #9ef3c8; font-size: 12px; font-weight: 850; letter-spacing: -.04em; }
-.settingsHeader strong { color: #f4fff9; font-size: 22px; font-weight: 850; letter-spacing: -.06em; }
+.settingsHeader strong { color: #f4fff9; font-size: 24px; font-weight: 850; letter-spacing: -.06em; }
+.settingsHeader p { margin: 3px 0 0; color: #aeb6c3; font-size: 11px; font-weight: 650; letter-spacing: -.025em; line-height: 1.35; }
 .settingsClose { display: grid; width: 24px; height: 24px; place-items: center; padding: 0; border: 1px solid rgb(255 255 255 / 14%); border-radius: 5px; background: rgb(255 255 255 / 5%); color: #c1c5d0; cursor: pointer; font: inherit; font-size: 18px; line-height: 1; }
 .settingsRow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
 .settingsForm label { display: grid; gap: 5px; min-width: 0; color: #b9bdc9; font-size: 11px; font-weight: 750; letter-spacing: -.03em; }
@@ -350,13 +350,20 @@
 }
 
 @keyframes overlay-settings-in {
-  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  from { opacity: 0; transform: translateY(12px) scale(.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes overlay-magnet-catch {
+  0% { border-color: rgb(255 255 255 / 14%); box-shadow: 0 12px 28px rgb(0 0 0 / 26%), 0 1px 0 rgb(255 255 255 / 6%) inset; }
+  38% { border-color: rgb(119 242 184 / 96%); box-shadow: 0 0 0 3px rgb(98 220 165 / 20%), 0 16px 34px rgb(0 0 0 / 34%), 0 1px 0 rgb(255 255 255 / 8%) inset; }
+  100% { border-color: rgb(255 255 255 / 14%); box-shadow: 0 12px 28px rgb(0 0 0 / 26%), 0 1px 0 rgb(255 255 255 / 6%) inset; }
 }
 
 .open:hover .title { color: var(--green, #62dca5); }
 
 @media (prefers-reduced-motion: reduce) {
   .surface, .expandedPanel, .title { transition: none; }
+  .surface.magnetPulse { animation: none; }
   .titleTrackMoving, .compactBlock.dropTarget, .compactBlock.swapSource, .compactBlock.swapTargetBefore, .compactBlock.swapTargetAfter, .trashZone, .trashZone.trashActive { animation: none; }
 }

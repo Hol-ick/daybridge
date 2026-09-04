@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { OVERLAY_COLLAPSED_HEIGHT, OVERLAY_COLLAPSED_WIDTH, OVERLAY_EXPANDED_HEIGHT, OVERLAY_MODAL_WIDTH, resizeOverlay, startOverlayDrag } from "../desktopWindow.js";
+import { closeOverlaySettingsModal, openOverlaySettingsModal, OVERLAY_COLLAPSED_HEIGHT, OVERLAY_COLLAPSED_WIDTH, OVERLAY_EXPANDED_HEIGHT, resizeOverlay, startOverlayDrag } from "../desktopWindow.js";
 import { getWorkdayCountdown } from "./workday-clock.js";
 import styles from "./NowFocusOverlay.module.css";
 import ManualTaskForm from "./ManualTaskForm.jsx";
@@ -81,8 +81,7 @@ const OVERLAY_EMPTY_LIST_HEIGHT = 62;
 // so reserve only the additional height it needs beyond the normal toolbar.
 const OVERLAY_MANUAL_FORM_EXTRA_HEIGHT = 8;
 
-function expandedOverlayHeight(blockCount, settingsOpen, trashVisible = false, taskOpen = false) {
-  if (settingsOpen) return OVERLAY_EXPANDED_HEIGHT;
+function expandedOverlayHeight(blockCount, trashVisible = false, taskOpen = false) {
   const listHeight = blockCount
     ? blockCount * OVERLAY_CARD_HEIGHT + Math.max(0, blockCount - 1) * OVERLAY_CARD_GAP
     : OVERLAY_EMPTY_LIST_HEIGHT;
@@ -204,9 +203,9 @@ function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, o
 function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading }) {
   return (
     <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
-      <form className={styles.settingsForm} onSubmit={onSubmit}>
+      <form className={styles.settingsForm} onSubmit={onSubmit} data-testid="now-focus-overlay-settings-sheet">
         <header className={styles.settingsHeader}>
-          <div><span>WIDGET</span><strong>표시 옵션</strong></div>
+          <div><span>WIDGET</span><strong>표시 옵션</strong><p>표시 방식과 매일 기본 일정을 관리합니다.</p></div>
           <button type="button" className={styles.settingsClose} onClick={onClose} aria-label="설정 닫기" data-tauri-drag-region="false">×</button>
         </header>
         <label className={styles.settingsCheckbox}><input name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span>오버레이에서 작업명 숨기기</span></label>
@@ -231,11 +230,12 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false, magnetPulse = false }) {
   const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
   const pointerDragRef = useRef({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null });
   const suppressCardClickRef = useRef(false);
-  const resizeTimerRef = useRef(null);
+  const collapsePendingRef = useRef(false);
+  const settingsWasOpenRef = useRef(false);
   const swapTimerRef = useRef(null);
   const flipRectsRef = useRef(new Map());
   const flipAnimationsRef = useRef(new Set());
@@ -251,7 +251,6 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const [expanded, setExpanded] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   useEffect(() => () => {
-    if (resizeTimerRef.current) window.clearTimeout(resizeTimerRef.current);
     if (swapTimerRef.current) window.clearTimeout(swapTimerRef.current);
     flipAnimationsRef.current.forEach((animation) => animation.cancel());
     flipAnimationsRef.current.clear();
@@ -280,7 +279,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     ?? blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status))
     ?? blocks[0];
   const summaryTitle = todoListMode ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "오늘 할 일") : idle ? workdayCountdown.label : title;
-  const targetExpandedHeight = expandedOverlayHeight(blocks.length, settingsOpen, Boolean(draggingBlockId), taskOpen);
+  const targetExpandedHeight = expandedOverlayHeight(blocks.length, Boolean(draggingBlockId), taskOpen);
   // The list only becomes scrollable after the native overlay has reached its
   // maximum height. Short schedules grow around every visible card instead.
   const listCanScroll = targetExpandedHeight >= OVERLAY_EXPANDED_HEIGHT;
@@ -328,6 +327,27 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     });
     flipRectsRef.current = nextRects;
   }, [blocks, expanded]);
+
+  useLayoutEffect(() => {
+    const wasSettingsOpen = settingsWasOpenRef.current;
+    settingsWasOpenRef.current = settingsOpen;
+    if (settingsOpen) {
+      // A dialog must never share the corner card's collapsing viewport. The
+      // native window moves to the screen centre while the underlying card is
+      // made inert, so a blur cannot leave a 64px-tall clipped form behind.
+      collapsePendingRef.current = false;
+      if (taskOpen) {
+        setTaskOpen(false);
+        setTaskResetSignal((value) => value + 1);
+      }
+      if (expanded) setExpanded(false);
+      void openOverlaySettingsModal().catch(() => false);
+      return;
+    }
+    if (wasSettingsOpen) {
+      void closeOverlaySettingsModal().catch(() => false);
+    }
+  }, [settingsOpen]);
 
   const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks]);
   const findDropTarget = (clientX, clientY, sourceId = "") => {
@@ -483,33 +503,44 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     await onMoveBlock(sourceId, target.id, key === "ArrowUp" ? "before" : "after");
   };
 
+  const finishCollapse = () => {
+    if (!collapsePendingRef.current || settingsOpen) return;
+    collapsePendingRef.current = false;
+    void resizeOverlay(OVERLAY_COLLAPSED_HEIGHT, OVERLAY_COLLAPSED_WIDTH).catch(() => false);
+  };
+
   const setExpandedMode = (next) => {
-    if (resizeTimerRef.current) window.clearTimeout(resizeTimerRef.current);
+    if (settingsOpen) {
+      if (!next) onCloseSettings?.();
+      return;
+    }
     if (next) {
+      collapsePendingRef.current = false;
       // Grow the native viewport first. The collapsed card is already aligned
       // to that viewport's bottom, so the CSS height animation can then pull
       // only its top edge upward without moving the summary row.
-      void resizeOverlay(targetExpandedHeight, settingsOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH).catch(() => false).finally(() => setExpanded(true));
+      void resizeOverlay(targetExpandedHeight, OVERLAY_COLLAPSED_WIDTH).catch(() => false).finally(() => setExpanded(true));
     } else {
       if (taskOpen) {
         setTaskOpen(false);
         setTaskResetSignal((value) => value + 1);
       }
+      collapsePendingRef.current = true;
       setExpanded(false);
-      resizeTimerRef.current = window.setTimeout(() => {
-        void resizeOverlay(OVERLAY_COLLAPSED_HEIGHT, settingsOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH);
-      }, 280);
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+        window.requestAnimationFrame(finishCollapse);
+      }
     }
   };
 
   useEffect(() => {
-    if (!expanded) return undefined;
-    void resizeOverlay(targetExpandedHeight, settingsOpen ? OVERLAY_MODAL_WIDTH : OVERLAY_COLLAPSED_WIDTH);
+    if (!expanded || settingsOpen) return undefined;
+    void resizeOverlay(targetExpandedHeight, OVERLAY_COLLAPSED_WIDTH);
     return undefined;
   }, [expanded, settingsOpen, targetExpandedHeight]);
 
   useEffect(() => {
-    if (!expanded) return undefined;
+    if (!expanded || settingsOpen) return undefined;
     const collapse = () => setExpandedMode(false);
     const handleWindowBlur = () => collapse();
     const handleOutsidePointer = (event) => {
@@ -578,17 +609,24 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     setExpandedMode(!expanded);
   };
 
-  const surfaceClassName = [styles.surface, expanded ? styles.expanded : "", settingsOpen ? styles.settingsOpen : "", taskOpen ? styles.taskOpen : ""].filter(Boolean).join(" ");
+  const handleSurfaceTransitionEnd = (event) => {
+    if (event.target !== event.currentTarget || event.propertyName !== "height") return;
+    finishCollapse();
+  };
+
+  const surfaceClassName = [styles.surface, expanded ? styles.expanded : "", settingsOpen ? styles.settingsMode : "", taskOpen ? styles.taskOpen : "", magnetPulse ? styles.magnetPulse : ""].filter(Boolean).join(" ");
 
   return (
-    <aside className={[styles.overlay, settingsOpen ? styles.settingsOpen : ""].filter(Boolean).join(" ")} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
+    <aside className={styles.overlay} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
       <div
         className={surfaceClassName}
         style={{ "--overlay-expanded-height": `${targetExpandedHeight}px` }}
         onPointerDown={handlePointerDown}
         onMouseDown={handlePointerDown}
+        onTransitionEnd={handleSurfaceTransitionEnd}
         data-testid="now-focus-overlay-surface"
         data-expanded-height={targetExpandedHeight}
+        aria-hidden={settingsOpen ? "true" : undefined}
       >
         <section className={styles.expandedPanel} aria-label={todoListMode ? "오늘 할 일 목록" : "오늘 시간표 관리"} aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
           {blocks.length ? (
@@ -681,8 +719,8 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
           <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
         </time>
         </div>
-        {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} /> : null}
       </div>
+      {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} /> : null}
     </aside>
   );
 }

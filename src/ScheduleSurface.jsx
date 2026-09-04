@@ -73,6 +73,7 @@ export default function ScheduleSurface() {
   const [calendarCoverage, setCalendarCoverage] = useState("attention");
   const [calendarConnection, setCalendarConnection] = useState({ state: "attention", reason: "status_pending" });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [overlayMagnetPulse, setOverlayMagnetPulse] = useState(false);
   const [privateMode, setPrivateMode] = useState(initialPrivateMode);
   const [notice, setNotice] = useState("");
   const [refreshingWidget, setRefreshingWidget] = useState(false);
@@ -216,12 +217,26 @@ export default function ScheduleSurface() {
     if (surface !== "overlay") return undefined;
     let disposed = false;
     let cleanup;
-    void bindOverlayMagnet().then((dispose) => {
+    let pulseTimer = null;
+    const pulseOnSnap = () => {
+      if (disposed) return;
+      setOverlayMagnetPulse(false);
+      window.requestAnimationFrame(() => {
+        if (!disposed) setOverlayMagnetPulse(true);
+      });
+      if (pulseTimer) window.clearTimeout(pulseTimer);
+      pulseTimer = window.setTimeout(() => {
+        if (!disposed) setOverlayMagnetPulse(false);
+      }, 360);
+    };
+    void bindOverlayMagnet({ onSnap: pulseOnSnap }).then((dispose) => {
       if (disposed) dispose();
       else cleanup = dispose;
     });
     return () => {
       disposed = true;
+      if (pulseTimer) window.clearTimeout(pulseTimer);
+      setOverlayMagnetPulse(false);
       cleanup?.();
     };
   }, [surface]);
@@ -388,6 +403,7 @@ export default function ScheduleSurface() {
       dailyDefaults={dailyDefaultsDraft}
       onDailyDefaultsChange={setDailyDefaultsDraft}
       dailyDefaultsLoading={dailyDefaultsLoading || !dailyDefaultsLoaded}
+      magnetPulse={overlayMagnetPulse}
     />;
   }
 
