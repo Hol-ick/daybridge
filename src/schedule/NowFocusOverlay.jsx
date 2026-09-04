@@ -285,12 +285,11 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const timeLabel = start && end ? `${start} — ${end}` : start || end || "";
   const workdayCountdown = getWorkdayCountdown(currentTime);
   // In untimed todo mode the user's active work takes precedence over list
-  // order. If nothing is active yet, keep the first actionable item as the
-  // gentle next-step prompt.
+  // order. Completed history stays in the expanded list, but it must never be
+  // promoted back into the compact widget as if it were the current task.
   const todoSummaryBlock = blocks.find((item) => scheduleBlockKind(item) === "focus" && item?.status === "in_progress")
-    ?? blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status))
-    ?? blocks[0];
-  const summaryTitle = todoListMode ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "오늘 할 일") : idle ? workdayCountdown.label : title;
+    ?? blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status));
+  const summaryTitle = todoListMode ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "") : idle ? workdayCountdown.label : title;
   const targetExpandedHeight = expandedOverlayHeight(blocks.length, Boolean(draggingBlockId), taskOpen);
   // The list only becomes scrollable after the native overlay has reached its
   // maximum height. Short schedules grow around every visible card instead.
@@ -719,14 +718,14 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
               <span className={styles.time} data-testid="now-focus-overlay-time">{timeLabel}</span>
             </span>
           ) : null}
-          {showIdleTitle ? (
+          {showIdleTitle && summaryTitle ? (
             <OverlayTitle
               data-testid="now-focus-overlay-title"
-              aria-label={todoListMode ? (todoSummaryBlock ? `오늘 할 일: ${summaryTitle}` : summaryTitle) : `${workdayCountdown.label} ${workdayCountdown.time}`}
+              aria-label={todoListMode ? `오늘 할 일: ${summaryTitle}` : `${workdayCountdown.label} ${workdayCountdown.time}`}
             >{summaryTitle}</OverlayTitle>
-          ) : (
+          ) : !showIdleTitle ? (
             <OverlayTitle data-testid="now-focus-overlay-title">{title}</OverlayTitle>
-          )}
+          ) : null}
         </button>
         <button
           className={styles.timer}

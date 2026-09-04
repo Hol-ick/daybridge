@@ -53,6 +53,10 @@ TODO_SCHEDULE = json.dumps({
     "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": TODO_BLOCKS, "unscheduled": [], "calendar": {"coverage": "attention"}},
     "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
 })
+TODO_ALL_COMPLETED_SCHEDULE = json.dumps({
+    "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": [{"id": "todo-supplement", "type": "focus", "questId": "routine-supplement", "title": "영양제 먹기", "order": 0, "timed": False, "status": "completed"}], "unscheduled": [], "calendar": {"coverage": "attention"}},
+    "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
+})
 FUNCTIONAL_BOARD = json.dumps({
     "board": {
         "schemaVersion": 2,
@@ -581,6 +585,37 @@ def check_overlay_todo_items(browser) -> None:
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-linux]') === null")
     assert discard_calls and discard_calls[0]["blockId"] == "todo-linux"
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-todo-items.png", full_page=True)
+    assert_no_page_errors(errors)
+    context.close()
+
+
+def check_overlay_hides_completed_summary(browser) -> None:
+    """Completed history remains in the list but never becomes the active summary."""
+    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=TODO_ALL_COMPLETED_SCHEDULE),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/schedule-settings",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.wait_for_selector('[data-testid="now-focus-overlay-leave-time"]')
+    assert page.locator('[data-testid="now-focus-overlay-title"]').count() == 0
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-all-completed.png", full_page=True)
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    completed_card = page.locator('[data-testid="now-focus-overlay-block-todo-supplement"]')
+    completed_card.wait_for()
+    assert completed_card.get_attribute("data-status") == "completed"
+    assert completed_card.get_by_text("영양제 먹기", exact=True).is_visible()
     assert_no_page_errors(errors)
     context.close()
 
