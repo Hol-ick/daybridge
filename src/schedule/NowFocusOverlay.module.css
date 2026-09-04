@@ -54,6 +54,7 @@
 }
 
 .open:focus-visible,
+.timer:focus-visible,
 .expandedPanel button:focus-visible { outline: 2px solid var(--green, #62dca5); outline-offset: 3px; }
 
 .summary {
@@ -264,10 +265,18 @@
   justify-content: center;
   align-self: center;
   min-width: 96px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
   gap: 2px;
   text-align: right;
   white-space: nowrap;
 }
+
+.timer:hover .timerValue { color: #e0fff0; }
 
 .timerLabel {
   color: #b7f6d3;

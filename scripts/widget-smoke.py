@@ -384,7 +384,9 @@ def check_overlay(browser) -> None:
         selection.addRange(range);
     }""")
     assert page.evaluate("window.getSelection().rangeCount") == 1
-    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    # The countdown is part of the compact widget's primary action area, not
+    # decorative text. Clicking it must expand the same way as the title.
+    leave_timer.click()
     assert page.evaluate("window.getSelection().rangeCount") == 0
     page.wait_for_timeout(100)
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-animation-mid.png", full_page=True)

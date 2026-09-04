@@ -629,6 +629,57 @@ fn save_overlay_position(app: tauri::AppHandle, x: i32, y: i32) -> Result<(), St
     persist_overlay_position(&app, x, y)
 }
 
+/// Move and resize the transparent overlay in one native operation. Calling
+/// the framework size and position methods one after the other exposed a
+/// visible intermediate frame while the compact card was closing.
+#[tauri::command]
+fn set_overlay_bounds(
+    app: tauri::AppHandle,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    let window = app
+        .get_webview_window("overlay")
+        .ok_or_else(|| "오버레이 창을 찾을 수 없습니다.".to_string())?;
+
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{
+            SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_SHOWWINDOW,
+        };
+
+        let handle = window.hwnd().map_err(|error| error.to_string())?;
+        let native_width = i32::try_from(width).map_err(|error| error.to_string())?;
+        let native_height = i32::try_from(height).map_err(|error| error.to_string())?;
+        unsafe {
+            SetWindowPos(
+                handle,
+                Some(HWND_TOPMOST),
+                x,
+                y,
+                native_width,
+                native_height,
+                SWP_NOACTIVATE | SWP_SHOWWINDOW,
+            )
+            .map_err(|error| error.to_string())?;
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        window
+            .set_size(tauri::PhysicalSize::new(width, height))
+            .map_err(|error| error.to_string())?;
+        window
+            .set_position(Position::Physical(PhysicalPosition::new(x, y)))
+            .map_err(|error| error.to_string())?;
+    }
+
+    persist_overlay_position(&app, x, y)
+}
+
 #[tauri::command]
 fn record_runtime_event(
     app: tauri::AppHandle,
@@ -747,6 +798,7 @@ fn main() {
             show_overlay,
             get_overlay_position,
             save_overlay_position,
+            set_overlay_bounds,
             record_runtime_event,
             ensure_local_bridge,
             exit_app

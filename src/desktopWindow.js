@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { PhysicalPosition, PhysicalSize, currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
+import { PhysicalPosition, currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 
 const OVERLAY_POSITION_KEY = "daybridge.overlay-position.v1";
 // The overlay is deliberately flush with the monitor work-area edge. The
@@ -88,17 +88,22 @@ export async function resizeOverlay(height, width = null) {
   const bounds = overlayBounds(monitor, { width: targetWidth, height: targetHeight });
   const nextX = Math.min(bounds.maxX, Math.max(bounds.minX, right - targetWidth));
   const nextY = Math.min(bounds.maxY, Math.max(bounds.minY, bottom - targetHeight));
-  await windowHandle.setSize(new PhysicalSize(targetWidth, targetHeight));
-  await windowHandle.setPosition(new PhysicalPosition(nextX, nextY));
+  // A size change followed by a position change exposes a one-frame native
+  // top-left resize. The compact card briefly appears away from its corner
+  // after closing. Ask the native host to apply both bounds atomically.
+  await invoke("set_overlay_bounds", {
+    x: Math.round(nextX),
+    y: Math.round(nextY),
+    width: targetWidth,
+    height: targetHeight,
+  });
   rememberOverlayPosition({ x: nextX, y: nextY });
-  await invoke("save_overlay_position", { x: Math.round(nextX), y: Math.round(nextY) });
   return true;
 }
 
 /** Open the settings surface as a true screen-centred modal-sized viewport. */
 export async function openOverlaySettingsModal() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
-  const windowHandle = getCurrentWindow();
   const monitor = await currentMonitor();
   if (!monitor) return false;
   const availableWidth = Math.max(OVERLAY_COLLAPSED_WIDTH, monitor.workArea.size.width - 24);
@@ -107,25 +112,31 @@ export async function openOverlaySettingsModal() {
   const targetHeight = Math.min(OVERLAY_SETTINGS_HEIGHT, availableHeight);
   const nextX = Math.round(monitor.workArea.position.x + (monitor.workArea.size.width - targetWidth) / 2);
   const nextY = Math.round(monitor.workArea.position.y + (monitor.workArea.size.height - targetHeight) / 2);
-  await windowHandle.setSize(new PhysicalSize(targetWidth, targetHeight));
-  await windowHandle.setPosition(new PhysicalPosition(nextX, nextY));
+  await invoke("set_overlay_bounds", {
+    x: nextX,
+    y: nextY,
+    width: targetWidth,
+    height: targetHeight,
+  });
   return true;
 }
 
 /** Return the settings viewport to the compact card, flush with the work area. */
 export async function closeOverlaySettingsModal() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
-  const windowHandle = getCurrentWindow();
   const monitor = await currentMonitor();
   if (!monitor) return false;
   const bounds = overlayBounds(monitor, {
     width: OVERLAY_COLLAPSED_WIDTH,
     height: OVERLAY_COLLAPSED_HEIGHT,
   });
-  await windowHandle.setSize(new PhysicalSize(OVERLAY_COLLAPSED_WIDTH, OVERLAY_COLLAPSED_HEIGHT));
-  await windowHandle.setPosition(new PhysicalPosition(bounds.maxX, bounds.maxY));
+  await invoke("set_overlay_bounds", {
+    x: Math.round(bounds.maxX),
+    y: Math.round(bounds.maxY),
+    width: OVERLAY_COLLAPSED_WIDTH,
+    height: OVERLAY_COLLAPSED_HEIGHT,
+  });
   rememberOverlayPosition({ x: bounds.maxX, y: bounds.maxY });
-  await invoke("save_overlay_position", { x: Math.round(bounds.maxX), y: Math.round(bounds.maxY) });
   return true;
 }
 

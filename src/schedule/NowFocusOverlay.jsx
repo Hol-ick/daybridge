@@ -710,14 +710,18 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
             <OverlayTitle data-testid="now-focus-overlay-title">{title}</OverlayTitle>
           )}
         </button>
-        <time
+        <button
           className={styles.timer}
+          type="button"
+          onClick={handleToggleExpanded}
+          data-tauri-drag-region="false"
           data-testid="now-focus-overlay-leave-time"
           aria-label={`${workdayCountdown.label} ${workdayCountdown.time}`}
+          aria-expanded={expanded}
         >
           <span className={styles.timerLabel}>{workdayCountdown.label}</span>
           <strong className={styles.timerValue} data-testid="now-focus-overlay-leave-time-value">{workdayCountdown.time}</strong>
-        </time>
+        </button>
         </div>
       </div>
       {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} /> : null}
