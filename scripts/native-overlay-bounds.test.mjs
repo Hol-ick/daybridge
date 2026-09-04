@@ -8,6 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const nativeMain = fs.readFileSync(path.join(root, "src-tauri", "src", "main.rs"), "utf8");
 const regionCommand = nativeMain.match(/fn set_overlay_interaction_region\([\s\S]*?\n}\n\n#\[tauri::command\]\nfn record_runtime_event/);
 const overlaySurface = fs.readFileSync(path.join(root, "src", "schedule", "NowFocusOverlay.jsx"), "utf8");
+const tauriConfig = JSON.parse(fs.readFileSync(path.join(root, "src-tauri", "tauri.conf.json"), "utf8"));
 
 test("overlay interaction changes do not force a new show, z-order, or native resize", () => {
   assert.ok(regionCommand, "set_overlay_interaction_region command should exist");
@@ -21,4 +22,16 @@ test("opening and closing the schedule use a native interaction region instead o
   assert.doesNotMatch(nativeMain, /fn set_overlay_bounds\(/);
   assert.match(overlaySurface, /setOverlayInteractionRegion/);
   assert.doesNotMatch(overlaySurface, /resizeOverlay/);
+});
+
+test("the full-size settings region never exposes a Windows title bar or system menu", () => {
+  const overlayWindow = tauriConfig.app.windows.find((window) => window.label === "overlay");
+  assert.equal(overlayWindow?.decorations, false);
+  assert.match(nativeMain, /fn remove_overlay_window_chrome\(/);
+  assert.match(nativeMain, /WS_CAPTION/);
+  assert.match(nativeMain, /WS_SYSMENU/);
+  assert.match(nativeMain, /remove_overlay_window_chrome\(app\.handle\(\), &window\)/);
+  const visibleAt = nativeMain.indexOf('ensure_overlay_visible(app.handle(), "app_setup")');
+  const chromeAt = nativeMain.lastIndexOf("remove_overlay_window_chrome(app.handle(), &window)");
+  assert.ok(chromeAt > visibleAt, "remove native chrome after Tauri makes the overlay visible");
 });

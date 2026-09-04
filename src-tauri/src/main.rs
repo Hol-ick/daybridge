@@ -516,6 +516,53 @@ fn force_native_overlay_visible(_window: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+/// Tauri declares the overlay undecorated, but Windows can still preserve the
+/// previous caption style on a transparent topmost WebView. The compact card
+/// hides that chrome through its small region; opening settings reveals it.
+/// Remove the non-client chrome once during startup, after Tauri completes its
+/// initial visibility recovery, so the full-size settings region remains a
+/// clean app-owned surface.
+#[cfg(windows)]
+fn remove_overlay_window_chrome(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), String> {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_STYLE, SWP_FRAMECHANGED,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_CAPTION, WS_MAXIMIZEBOX,
+        WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME,
+    };
+
+    let handle = window.hwnd().map_err(|error| error.to_string())?;
+    let chrome_flags = (WS_CAPTION.0 | WS_THICKFRAME.0 | WS_SYSMENU.0 | WS_MINIMIZEBOX.0 | WS_MAXIMIZEBOX.0) as isize;
+    let current_style = unsafe { GetWindowLongPtrW(handle, GWL_STYLE) };
+    if current_style & chrome_flags == 0 {
+        return Ok(());
+    }
+
+    unsafe {
+        SetWindowLongPtrW(handle, GWL_STYLE, current_style & !chrome_flags);
+        SetWindowPos(
+            handle,
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    let _ = append_runtime_event(
+        app,
+        "overlay_window_chrome_removed",
+        &json!({ "removedFlags": format!("0x{chrome_flags:X}") }).to_string(),
+    );
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn remove_overlay_window_chrome(_app: &tauri::AppHandle, _window: &WebviewWindow) -> Result<(), String> {
+    Ok(())
+}
+
 fn ensure_overlay_visible(app: &tauri::AppHandle, source: &str) -> Result<bool, String> {
     let window = app
         .get_webview_window("overlay")
@@ -809,6 +856,15 @@ fn main() {
                 }
             }
             let _ = ensure_overlay_visible(app.handle(), "app_setup");
+            if let Some(window) = app.get_webview_window("overlay") {
+                if let Err(error) = remove_overlay_window_chrome(app.handle(), &window) {
+                    let _ = append_runtime_event(
+                        app.handle(),
+                        "overlay_window_chrome_remove_error",
+                        &json!({ "error": error }).to_string(),
+                    );
+                }
+            }
             start_overlay_visibility_watchdog(app.handle().clone());
             let show = MenuItem::with_id(app, "show", "Daybridge 열기", true, None::<&str>)?;
             let show_overlay_item =
