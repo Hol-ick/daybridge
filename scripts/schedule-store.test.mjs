@@ -146,6 +146,27 @@ test("completing an in-progress focus block starts the next planned focus block 
   } finally { remove(dataDir); }
 });
 
+test("completing a focus block never auto-starts another task while a different task is already in progress", async () => {
+  const dataDir = temporaryStore();
+  try {
+    await saveSchedule(dataDir, "2026-08-24", {
+      date: "2026-08-24",
+      mode: "todo",
+      timeConfigured: false,
+      blocks: [
+        { id: "focus-completing", type: "focus", taskId: "quest-completing", title: "완료할 작업", status: "in_progress", order: 0 },
+        { id: "focus-existing", type: "focus", taskId: "quest-existing", title: "이미 진행 중인 작업", status: "in_progress", order: 1 },
+        { id: "focus-next", type: "focus", taskId: "quest-next", title: "다음 작업", status: "planned", order: 2 },
+      ],
+    });
+    const result = await reportScheduleBlock(dataDir, "2026-08-24", { blockId: "focus-completing", status: "completed", note: "완료" });
+    assert.equal(result.schedule.blocks.find((block) => block.id === "focus-completing").status, "completed");
+    assert.equal(result.schedule.blocks.find((block) => block.id === "focus-existing").status, "in_progress");
+    assert.equal(result.schedule.blocks.find((block) => block.id === "focus-next").status, "planned");
+    assert.equal(result.autoStarted, null);
+  } finally { remove(dataDir); }
+});
+
 test("discarding an open focus block removes one schedule unit and persists a sanitized receipt", async () => {
   const dataDir = temporaryStore();
   try {

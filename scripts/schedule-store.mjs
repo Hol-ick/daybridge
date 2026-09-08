@@ -141,6 +141,10 @@ function nextPlannedFocusBlock(blocks, completedBlockId) {
   const candidates = [...focusBlocks.slice(completedIndex + 1), ...focusBlocks.slice(0, completedIndex)];
   return candidates.find(({ block }) => block.status === "planned") || null;
 }
+
+function hasOtherInProgressBlock(blocks, completedBlockId) {
+  return blocks.some((block) => block.id !== completedBlockId && block.status === "in_progress");
+}
 function normalizeDiscardedBlocks(value) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => ({
@@ -261,7 +265,10 @@ export async function reportScheduleBlock(dataDir, date, input = {}) {
     note: sanitizeText(input.note, 600),
     source: "daybridge",
   };
-  const nextFocus = status === "completed" && previous?.status === "in_progress"
+  // The completion may arrive after another card has been started manually.
+  // In that case, preserve that explicit focus instead of creating a second
+  // in-progress card through automatic promotion.
+  const nextFocus = status === "completed" && previous?.status === "in_progress" && !hasOtherInProgressBlock(schedule.blocks, blockId)
     ? nextPlannedFocusBlock(schedule.blocks, blockId)
     : null;
   const autoStarted = nextFocus ? {
