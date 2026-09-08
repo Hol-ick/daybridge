@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 import { nearestOverlayCorner, overlayInteractionRegion } from "./desktopWindow.js";
 
@@ -41,4 +44,12 @@ test("overlay interaction region gives the centered settings modal the entire fi
     width: 520,
     height: 620,
   });
+});
+
+test("a packaged restart replaces its own local bridge instead of reusing an older listener", async () => {
+  const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+  const source = await readFile(resolve(root, "src-tauri", "src", "main.rs"), "utf8");
+  assert.match(source, /fn stop_existing_local_bridge\(/);
+  assert.match(source, /bridge_autostart_replacing_existing/);
+  assert.match(source, /stop_existing_local_bridge\(&app, &script\)/);
 });

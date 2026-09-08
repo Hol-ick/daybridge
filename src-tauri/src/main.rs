@@ -239,16 +239,56 @@ fn bridge_project_root() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
-    if bridge_is_reachable() {
+#[cfg(windows)]
+fn stop_existing_local_bridge(app: &tauri::AppHandle, script: &std::path::Path) -> Result<usize, String> {
+    // The bridge is a separate Node process and survives when an older widget
+    // executable is replaced. Restrict the stop operation to the exact script
+    // path from this checkout; never terminate a process merely because it
+    // happens to use the bridge port.
+    let command_text = r#"
+$ErrorActionPreference = 'Stop'
+$target = $env:DAYBRIDGE_LOCAL_BRIDGE_SCRIPT
+$matches = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object {
+  $_.CommandLine -and $_.CommandLine.IndexOf($target, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+})
+foreach ($match in $matches) { Stop-Process -Id $match.ProcessId -Force }
+$matches.Count
+"#;
+    let mut command = Command::new("powershell.exe");
+    command
+        .arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-Command")
+        .arg(command_text)
+        .env("DAYBRIDGE_LOCAL_BRIDGE_SCRIPT", script)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null());
+    use std::os::windows::process::CommandExt;
+    command.creation_flags(0x08000000);
+    let output = command.output().map_err(|error| format!("기존 로컬 브리지를 확인할 수 없습니다: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "기존 로컬 브리지를 종료하지 못했습니다: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let stopped = String::from_utf8_lossy(&output.stdout).trim().parse::<usize>().unwrap_or(0);
+    if stopped > 0 {
         let _ = append_runtime_event(
             app,
-            "bridge_autostart_already_running",
-            &json!({ "port": LOCAL_BRIDGE_PORT }).to_string(),
+            "bridge_autostart_replacing_existing",
+            &json!({ "port": LOCAL_BRIDGE_PORT, "stoppedCount": stopped }).to_string(),
         );
-        return Ok(());
     }
+    Ok(stopped)
+}
 
+#[cfg(not(windows))]
+fn stop_existing_local_bridge(_app: &tauri::AppHandle, _script: &std::path::Path) -> Result<usize, String> {
+    Ok(0)
+}
+
+fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
     let project_root = bridge_project_root()
         .ok_or_else(|| "Daybridge 프로젝트 경로를 확인할 수 없습니다.".to_string())?;
     let script = project_root.join(LOCAL_BRIDGE_SCRIPT);
@@ -263,6 +303,36 @@ fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
             &json!({ "error": error }).to_string(),
         );
         return Err(error);
+    }
+
+    if bridge_is_reachable() {
+        let stopped = stop_existing_local_bridge(&app, &script)?;
+        if stopped == 0 {
+            let _ = append_runtime_event(
+                app,
+                "bridge_autostart_existing_unmanaged",
+                &json!({ "port": LOCAL_BRIDGE_PORT }).to_string(),
+            );
+            return Ok(());
+        }
+        // The port can remain reserved for a moment after Node exits. Wait for
+        // the exact bridge process to release it before starting the current
+        // script, otherwise the new child would silently lose the bind race.
+        for _ in 0..20 {
+            if !bridge_is_reachable() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        if bridge_is_reachable() {
+            let error = format!("기존 로컬 브리지가 {LOCAL_BRIDGE_PORT} 포트를 해제하지 않았습니다.");
+            let _ = append_runtime_event(
+                app,
+                "bridge_autostart_replace_timeout",
+                &json!({ "error": error, "port": LOCAL_BRIDGE_PORT }).to_string(),
+            );
+            return Err(error);
+        }
     }
 
     let node = std::env::var_os("DAYBRIDGE_NODE").unwrap_or_else(|| "node".into());
