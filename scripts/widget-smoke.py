@@ -53,6 +53,11 @@ TODO_SCHEDULE = json.dumps({
     "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": TODO_BLOCKS, "unscheduled": [], "calendar": {"coverage": "attention"}},
     "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
 })
+TODO_AUTO_STARTED_SCHEDULE = json.dumps({
+    "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": [{**TODO_BLOCKS[0], "status": "in_progress"}, {**TODO_BLOCKS[1], "status": "completed"}], "unscheduled": [], "calendar": {"coverage": "attention"}},
+    "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
+    "autoStarted": {"id": "todo-linux", "title": "리눅스 학습", "status": "in_progress"},
+})
 TODO_ALL_COMPLETED_SCHEDULE = json.dumps({
     "schedule": {"schemaVersion": 1, "date": "2026-08-24", "mode": "todo", "timeConfigured": False, "timezone": "Asia/Seoul", "generatedAt": "2026-08-24T00:00:00+09:00", "blocks": [{"id": "todo-supplement", "type": "focus", "questId": "routine-supplement", "title": "영양제 먹기", "order": 0, "timed": False, "status": "completed"}], "unscheduled": [], "calendar": {"coverage": "attention"}},
     "nowFocus": {"state": "todo_list", "block": None, "nextFocus": None},
@@ -589,6 +594,44 @@ def check_overlay_todo_items(browser) -> None:
     context.close()
 
 
+def check_overlay_auto_starts_next_todo(browser) -> None:
+    """Completing the active card must promote one remaining card in the rendered widget."""
+    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    freeze_page_date(context, "2026-08-24T01:00:00+09:00")
+    report_calls: list[dict] = []
+    context.route(
+        re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+        lambda route: route.fulfill(status=200, content_type="application/json", body=TODO_SCHEDULE),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/schedule-settings",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=DEFAULT_SETTINGS),
+    )
+    context.route(
+        "http://127.0.0.1:39393/api/calendar/status",
+        lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED),
+    )
+
+    def handle_report(route) -> None:
+        report_calls.append(json.loads(route.request.post_data or "{}"))
+        route.fulfill(status=200, content_type="application/json", body=TODO_AUTO_STARTED_SCHEDULE)
+
+    context.route("http://127.0.0.1:39393/api/schedule/block-report", handle_report)
+    page = context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.locator('[data-testid="now-focus-overlay-open"]').click()
+    page.locator('[data-testid="now-focus-overlay-block-todo-docs"]').click()
+    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-linux]')?.getAttribute('data-status') === 'in_progress'")
+    assert report_calls and report_calls[0]["blockId"] == "todo-docs" and report_calls[0]["status"] == "completed"
+    assert page.locator('[data-testid="now-focus-overlay-block-todo-docs"]').get_attribute("data-status") == "completed"
+    assert page.locator('[data-testid="now-focus-overlay-title"]').text_content() == "리눅스 학습"
+    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-auto-started.png", full_page=True)
+    assert_no_page_errors(errors)
+    context.close()
+
+
 def check_overlay_shows_empty_summary_after_completion(browser) -> None:
     """Completed history remains in the list while the compact card explains it is clear."""
     context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
@@ -899,6 +942,7 @@ def main() -> None:
         check_overlay_compact_expansion(browser)
         check_overlay_scrolls_only_at_maximum_height(browser)
         check_overlay_todo_items(browser)
+        check_overlay_auto_starts_next_todo(browser)
         check_overlay_shows_empty_summary_after_completion(browser)
         check_overlay_long_title(browser)
         check_overlay_reorder(browser)

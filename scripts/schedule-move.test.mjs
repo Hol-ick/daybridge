@@ -192,6 +192,59 @@ test("schedule block completion persists to the quest and survives adding anothe
   }
 });
 
+test("completing the active todo card automatically starts the next unfinished card and records both changes", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-todo-auto-start-"));
+  const { child, baseUrl } = await startBridge(dataDir);
+  try {
+    await createBoard(dataDir);
+    await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "", dayEnd: "", timeConfigured: false, bufferMinutes: 10 }));
+    const rebuilt = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
+    assert.equal(rebuilt.status, 200);
+    const initial = await rebuilt.json();
+    const focus = initial.schedule.blocks.filter((block) => block.type === "focus").sort((left, right) => left.order - right.order);
+    const active = focus[0];
+    const next = focus[1];
+
+    const startedResponse = await fetch(`${baseUrl}/api/schedule/block-report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityDate: DATE, blockId: active.id, status: "in_progress", note: "시작" }),
+    });
+    assert.equal(startedResponse.status, 200);
+
+    const completedResponse = await fetch(`${baseUrl}/api/schedule/block-report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityDate: DATE, blockId: active.id, status: "completed", note: "완료" }),
+    });
+    assert.equal(completedResponse.status, 200);
+    const completed = await completedResponse.json();
+    assert.equal(completed.schedule.blocks.find((block) => block.id === active.id).status, "completed");
+    assert.equal(completed.schedule.blocks.find((block) => block.id === next.id).status, "in_progress");
+    assert.equal(completed.autoStarted.id, next.id);
+
+    const activity = await (await fetch(`${baseUrl}/api/activity?date=${DATE}`)).json();
+    assert.deepEqual(activity.records.slice(-2).map((record) => record.details.status), ["completed", "in_progress"]);
+    assert.equal(activity.records.at(-1).details.automatic, true);
+    const boardAfterReport = JSON.parse(await readFile(join(dataDir, "boards", `${DATE}.json`), "utf8"));
+    assert.equal(boardAfterReport.quests.find((quest) => quest.id === active.questId).state, "completed");
+    assert.equal(boardAfterReport.quests.find((quest) => quest.id === next.questId).state, "in_progress");
+
+    const rebuiltAgain = await fetch(`${baseUrl}/api/schedule/rebuild`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityDate: DATE }),
+    });
+    assert.equal(rebuiltAgain.status, 200);
+    const persisted = await rebuiltAgain.json();
+    assert.equal(persisted.schedule.blocks.find((block) => block.id === active.id).status, "completed");
+    assert.equal(persisted.schedule.blocks.find((block) => block.id === next.id).status, "in_progress");
+  } finally {
+    child.kill();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("untimed todo completion remains completed after adding another task", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "daybridge-todo-status-"));
   const { child, baseUrl } = await startBridge(dataDir);

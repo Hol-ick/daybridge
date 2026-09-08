@@ -352,7 +352,14 @@ function preserveTodoOrder(existingSchedule, generatedSchedule, questIds) {
   for (const existing of orderedExisting) {
     const generated = generatedByQuest.get(existing.questId);
     if (generated) {
-      blocks.push({ ...generated, userPositioned: Boolean(existing.userPositioned), locked: Boolean(existing.locked), updatedAt: existing.updatedAt || generated.updatedAt });
+      blocks.push({
+        ...generated,
+        status: existing.status,
+        reports: Array.isArray(existing.reports) ? existing.reports : generated.reports,
+        userPositioned: Boolean(existing.userPositioned),
+        locked: Boolean(existing.locked),
+        updatedAt: existing.updatedAt || generated.updatedAt,
+      });
       used.add(generated.id);
     } else if (TERMINAL_BLOCK_STATUSES.has(existing.status)) {
       blocks.push(existing);
@@ -417,7 +424,7 @@ async function syncQuestFromScheduleBlockReport(activityDate, schedule, reportRe
     occurredAt,
     status,
     note: reportResult.note || "",
-    source: "daybridge",
+    source: reportResult.source || "daybridge",
   }].slice(-20);
   board.generatedAt = occurredAt;
   board.sourceCoverage = Array.isArray(board.sourceWarnings) && board.sourceWarnings.length ? "attention" : "connected";
@@ -537,11 +544,41 @@ async function handleScheduleBlockReport(body) {
   if (!result) return { status: 404, body: { error: "No schedule exists for this date." } };
   if (!result.schedule) return { status: 404, body: { error: "Schedule block was not found." } };
   await syncQuestFromScheduleBlockReport(activityDate, result.schedule, result.report);
+  if (result.autoStarted) await syncQuestFromScheduleBlockReport(activityDate, result.schedule, result.autoStarted);
   const config = await loadConfig();
   const event = { schemaVersion: 1, id: result.report.id, eventType: "schedule_block_report", activityDate, occurredAt: result.report.occurredAt, source: "daybridge", sensitivity: "sanitized", block: result.report.block, report: { id: result.report.id, occurredAt: result.report.occurredAt, status: result.report.status, note: result.report.note, source: "daybridge" } };
   const mirrored = await writeEvent(config, event);
   await recordActivity(DATA_DIR, { activityDate, occurredAt: result.report.occurredAt, action: "status_changed", subject: activitySubject({ type: "schedule_block", id: result.report.block.id, questId: result.report.block.taskId, title: result.report.block.title }), details: { status: result.report.status } });
-  return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), connection: mirrored ? "connected" : "local", eventRecorded: mirrored } };
+  let autoStartedMirrored = true;
+  if (result.autoStarted) {
+    const autoStartedEvent = {
+      schemaVersion: 1,
+      id: result.autoStarted.id,
+      eventType: "schedule_block_auto_started",
+      activityDate,
+      occurredAt: result.autoStarted.occurredAt,
+      source: "daybridge",
+      sensitivity: "sanitized",
+      block: result.autoStarted.block,
+      report: {
+        id: result.autoStarted.id,
+        occurredAt: result.autoStarted.occurredAt,
+        status: result.autoStarted.status,
+        note: result.autoStarted.note,
+        source: result.autoStarted.source,
+        automatic: true,
+      },
+    };
+    autoStartedMirrored = await writeEvent(config, autoStartedEvent);
+    await recordActivity(DATA_DIR, {
+      activityDate,
+      occurredAt: result.autoStarted.occurredAt,
+      action: "status_changed",
+      subject: activitySubject({ type: "schedule_block", id: result.autoStarted.block.id, questId: result.autoStarted.block.taskId, title: result.autoStarted.block.title }),
+      details: { status: result.autoStarted.status, automatic: true, reason: "previous_task_completed" },
+    });
+  }
+  return { status: 200, body: { schedule: result.schedule, nowFocus: nowFocus(result.schedule), autoStarted: result.autoStarted?.block || null, connection: mirrored && autoStartedMirrored ? "connected" : "local", eventRecorded: mirrored && autoStartedMirrored } };
 }
 async function handleScheduleBlockMove(body) {
   const activityDate = safeDate(body.activityDate || body.date);

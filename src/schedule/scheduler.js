@@ -198,7 +198,7 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
       if (!slot) break;
       focusIndex += 1;
       const [start, end] = slot;
-      blocks.push({ id: `focus-${candidate.id}-${focusIndex}`, type: "focus", questId: candidate.id, title: candidate.title, priority: candidate.priority, sourceKind: candidate.sourceKind, category: candidate.category, startAt: asKstIso(start), endAt: asKstIso(end), locked: false });
+      blocks.push({ id: `focus-${candidate.id}-${focusIndex}`, type: "focus", questId: candidate.id, title: candidate.title, priority: candidate.priority, sourceKind: candidate.sourceKind, category: candidate.category, status: candidate.state === "in_progress" ? "in_progress" : candidate.state === "deferred" ? "deferred" : "planned", startAt: asKstIso(start), endAt: asKstIso(end), locked: false });
       blocks.sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));
       remaining = Math.max(0, remaining - duration);
       const laterWorkExists = remaining > 0 || candidateIndex < ordering.ordered.length - 1;

@@ -261,8 +261,11 @@ export default function ScheduleSurface() {
       }));
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
-      setNotice(status === "completed" ? "집중 시간을 완료했어요" : "이 작업은 다음 계획으로 넘겼어요");
-      recordRuntimeEvent("schedule_block_reported", { date: activityDate, blockId, status });
+      const autoStartedTitle = typeof result?.autoStarted?.title === "string" ? result.autoStarted.title : "";
+      setNotice(status === "completed"
+        ? (autoStartedTitle ? `${autoStartedTitle}을 진행 중으로 바꿨어요` : "집중 시간을 완료했어요")
+        : "이 작업은 다음 계획으로 넘겼어요");
+      recordRuntimeEvent("schedule_block_reported", { date: activityDate, blockId, status, autoStartedBlockId: result?.autoStarted?.id || null });
       void refresh();
       return true;
     } catch (error) {

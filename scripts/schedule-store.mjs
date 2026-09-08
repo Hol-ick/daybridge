@@ -110,6 +110,37 @@ function normalizeBlock(block, index) {
   const status = SCHEDULE_STATUSES.has(source.status) ? source.status : "planned";
   return { ...source, id, status };
 }
+
+function orderedFocusBlocks(blocks) {
+  return blocks
+    .map((block, index) => ({ block, index }))
+    .filter(({ block }) => block?.type === "focus")
+    .sort((left, right) => {
+      const leftOrder = Number(left.block?.order);
+      const rightOrder = Number(right.block?.order);
+      const hasLeftOrder = Number.isFinite(leftOrder);
+      const hasRightOrder = Number.isFinite(rightOrder);
+      if (hasLeftOrder && hasRightOrder && leftOrder !== rightOrder) return leftOrder - rightOrder;
+      if (hasLeftOrder !== hasRightOrder) return hasLeftOrder ? -1 : 1;
+      const leftStart = Date.parse(left.block?.startAt || "");
+      const rightStart = Date.parse(right.block?.startAt || "");
+      const hasLeftStart = Number.isFinite(leftStart);
+      const hasRightStart = Number.isFinite(rightStart);
+      if (hasLeftStart && hasRightStart && leftStart !== rightStart) return leftStart - rightStart;
+      if (hasLeftStart !== hasRightStart) return hasLeftStart ? -1 : 1;
+      return left.index - right.index;
+    });
+}
+
+function nextPlannedFocusBlock(blocks, completedBlockId) {
+  const focusBlocks = orderedFocusBlocks(blocks);
+  const completedIndex = focusBlocks.findIndex(({ block }) => block.id === completedBlockId);
+  if (completedIndex < 0) return null;
+  // Follow the order shown to the user, wrapping only when the remaining
+  // actionable card sits above the task just completed.
+  const candidates = [...focusBlocks.slice(completedIndex + 1), ...focusBlocks.slice(0, completedIndex)];
+  return candidates.find(({ block }) => block.status === "planned") || null;
+}
 function normalizeDiscardedBlocks(value) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => ({
@@ -221,6 +252,7 @@ export async function reportScheduleBlock(dataDir, date, input = {}) {
   if (!schedule) return null;
   const index = schedule.blocks.findIndex((block) => block.id === blockId);
   if (index < 0) return { schedule: null, report: null };
+  const previous = schedule.blocks[index];
   const occurredAt = typeof input.occurredAt === "string" && !Number.isNaN(Date.parse(input.occurredAt)) ? input.occurredAt : now();
   const report = {
     id: randomUUID(),
@@ -229,12 +261,41 @@ export async function reportScheduleBlock(dataDir, date, input = {}) {
     note: sanitizeText(input.note, 600),
     source: "daybridge",
   };
-  const blocks = schedule.blocks.map((block, blockIndex) => blockIndex === index
-    ? { ...block, status, updatedAt: occurredAt, reports: [...(Array.isArray(block.reports) ? block.reports : []), report].slice(-20) }
-    : block);
+  const nextFocus = status === "completed" && previous?.status === "in_progress"
+    ? nextPlannedFocusBlock(schedule.blocks, blockId)
+    : null;
+  const autoStarted = nextFocus ? {
+    id: randomUUID(),
+    occurredAt,
+    status: "in_progress",
+    note: "이전 진행 작업 완료 후 자동 시작",
+    source: "daybridge_auto_start",
+  } : null;
+  const blocks = schedule.blocks.map((block, blockIndex) => {
+    if (blockIndex === index) {
+      return { ...block, status, updatedAt: occurredAt, reports: [...(Array.isArray(block.reports) ? block.reports : []), report].slice(-20) };
+    }
+    if (nextFocus && blockIndex === nextFocus.index) {
+      return { ...block, status: "in_progress", updatedAt: occurredAt, reports: [...(Array.isArray(block.reports) ? block.reports : []), autoStarted].slice(-20) };
+    }
+    return block;
+  });
   const updated = await saveSchedule(dataDir, requestedDate, { ...schedule, blocks, updatedAt: occurredAt });
   const block = updated.blocks.find((item) => item.id === blockId);
-  return { schedule: updated, report: { ...report, block: { id: block.id, taskId: sanitizeText(block.taskId || block.questId, 120), title: sanitizeText(block.title, 180), status: block.status } } };
+  const autoStartedBlock = nextFocus ? updated.blocks.find((item) => item.id === nextFocus.block.id) : null;
+  return {
+    schedule: updated,
+    report: { ...report, block: { id: block.id, taskId: sanitizeText(block.taskId || block.questId, 120), title: sanitizeText(block.title, 180), status: block.status } },
+    autoStarted: autoStarted && autoStartedBlock ? {
+      ...autoStarted,
+      block: {
+        id: autoStartedBlock.id,
+        taskId: sanitizeText(autoStartedBlock.taskId || autoStartedBlock.questId, 120),
+        title: sanitizeText(autoStartedBlock.title, 180),
+        status: autoStartedBlock.status,
+      },
+    } : null,
+  };
 }
 
 export async function moveScheduleBlock(dataDir, date, input = {}) {

@@ -113,9 +113,36 @@ test("block reports only accept explicit schedule states and preserve a sanitize
     const result = await reportScheduleBlock(dataDir, "2026-08-24", { blockId: "focus-1", status: "completed", note: "Sent to test@example.com from C:\\private\\note" });
     assert.equal(result.schedule.blocks[0].status, "completed");
     assert.equal(result.report.block.taskId, "quest-1");
+    assert.equal(result.autoStarted, null);
     assert.match(result.schedule.blocks[0].reports[0].note, /\[email removed\]/);
     assert.match(result.schedule.blocks[0].reports[0].note, /\[local path\]/);
     await assert.rejects(reportScheduleBlock(dataDir, "2026-08-24", { blockId: "focus-1", status: "blocked" }), /valid block status/);
+  } finally { remove(dataDir); }
+});
+
+test("completing an in-progress focus block starts the next planned focus block and preserves both receipts", async () => {
+  const dataDir = temporaryStore();
+  try {
+    await saveSchedule(dataDir, "2026-08-24", {
+      date: "2026-08-24",
+      mode: "todo",
+      timeConfigured: false,
+      blocks: [
+        { id: "focus-active", type: "focus", taskId: "quest-active", title: "현재 작업", status: "in_progress", order: 0 },
+        { id: "focus-deferred", type: "focus", taskId: "quest-deferred", title: "보류 작업", status: "deferred", order: 1 },
+        { id: "focus-next", type: "focus", taskId: "quest-next", title: "다음 작업", status: "planned", order: 2 },
+        { id: "focus-later", type: "focus", taskId: "quest-later", title: "나중 작업", status: "planned", order: 3 },
+      ],
+    });
+    const result = await reportScheduleBlock(dataDir, "2026-08-24", { blockId: "focus-active", status: "completed", note: "완료" });
+    assert.equal(result.schedule.blocks.find((block) => block.id === "focus-active").status, "completed");
+    assert.equal(result.schedule.blocks.find((block) => block.id === "focus-next").status, "in_progress");
+    assert.equal(result.schedule.blocks.find((block) => block.id === "focus-later").status, "planned");
+    assert.equal(result.autoStarted.block.id, "focus-next");
+    assert.equal(result.autoStarted.source, "daybridge_auto_start");
+    assert.equal(result.schedule.blocks.find((block) => block.id === "focus-active").reports.at(-1).status, "completed");
+    assert.equal(result.schedule.blocks.find((block) => block.id === "focus-next").reports.at(-1).status, "in_progress");
+    assert.equal((await loadSchedule(dataDir, "2026-08-24")).blocks.find((block) => block.id === "focus-next").status, "in_progress");
   } finally { remove(dataDir); }
 });
 
