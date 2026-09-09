@@ -7,6 +7,7 @@ import { buildDailySchedule, resolveNowFocus } from "../src/schedule/scheduler.j
 import { toScheduleTitle } from "../src/schedule/model.js";
 import { parseScheduleInboxMarkdown } from "../src/schedule/inbox.js";
 import { buildRoutineCandidates } from "../src/schedule/routine-planner.js";
+import { carryoverTaskCandidates } from "../src/schedule/carryover.js";
 import {
   loadSchedule,
   loadScheduleSettings,
@@ -37,6 +38,10 @@ const CODEX_CALENDAR_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
 
 function now() { return new Date().toISOString(); }
 function safeDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value || "") ? value : null; }
+function previousCalendarDate(activityDate) {
+  const [year, month, day] = activityDate.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
+}
 function sanitizeText(value, limit = 600) {
   const text = String(value || "").replace(emailPattern, "[email removed]").replace(phonePattern, "[phone removed]").replace(secretPattern, "$1[sensitive value removed]").replace(localPathPattern, "[local path]").replace(/\s+/g, " ").trim();
   return text.length > limit ? text.slice(0, limit - 1).trimEnd() + "…" : text;
@@ -443,6 +448,9 @@ async function rebuildSchedule(activityDate) {
   }
   const settings = await loadScheduleSettings(DATA_DIR);
   const existingSchedule = await loadSchedule(DATA_DIR, activityDate);
+  const previousDate = previousCalendarDate(activityDate);
+  const previousSchedule = await loadSchedule(DATA_DIR, previousDate);
+  const carryoverCandidates = carryoverTaskCandidates(previousSchedule);
   const generatedAt = koreaNow();
   const briefingTasks = board.quests.map(toTaskCandidate).filter(Boolean);
   // A malformed handoff must never erase a previously usable timetable.
@@ -451,6 +459,12 @@ async function rebuildSchedule(activityDate) {
   const routineTasks = buildRoutineCandidates({ date: activityDate, board, routines: dailyDefaults.routines });
   const taskMap = new Map();
   for (const task of [...briefingTasks, ...inboxTasks, ...routineTasks]) taskMap.set(task.id, task);
+  let carryoverCount = 0;
+  for (const task of carryoverCandidates) {
+    if (taskMap.has(task.id)) continue;
+    taskMap.set(task.id, task);
+    carryoverCount += 1;
+  }
   const tasks = applyDiscardedUnits([...taskMap.values()], existingSchedule);
   const completedQuestIds = board.quests.filter((quest) => (quest?.state || quest?.status) === "completed").map((quest) => quest.id).filter((id) => typeof id === "string");
   const calendarResult = await readCalendarBusyBlocks(activityDate);
@@ -473,6 +487,10 @@ async function rebuildSchedule(activityDate) {
       excluded: inbox.excluded.length,
       errors: inbox.errors.slice(0, 10),
     },
+    carryover: {
+      sourceDate: previousDate,
+      count: carryoverCount,
+    },
   });
 }
 async function handleSchedule(url) {
@@ -485,7 +503,7 @@ async function handleSchedule(url) {
   const requestedMode = settings.timeConfigured ? "timed" : "todo";
   const settingsChanged = Boolean(existing && existingMode !== requestedMode);
   const schedule = (!existing || inboxChanged || settingsChanged) ? await rebuildSchedule(activityDate) : existing;
-  logRuntimeEvent("schedule_read", { date: activityDate, exists: Boolean(schedule), inboxExists: inbox.exists, valid: inbox.valid, accepted: inbox.tasks.length, excluded: inbox.excluded.length, inboxChanged, settingsChanged, mode: schedule?.mode || "timed", timeConfigured: schedule?.timeConfigured !== false, blocks: Array.isArray(schedule?.blocks) ? schedule.blocks.length : 0, focusBlocks: Array.isArray(schedule?.blocks) ? schedule.blocks.filter((block) => block?.type === "focus").length : 0 });
+  logRuntimeEvent("schedule_read", { date: activityDate, exists: Boolean(schedule), inboxExists: inbox.exists, valid: inbox.valid, accepted: inbox.tasks.length, excluded: inbox.excluded.length, inboxChanged, settingsChanged, mode: schedule?.mode || "timed", timeConfigured: schedule?.timeConfigured !== false, blocks: Array.isArray(schedule?.blocks) ? schedule.blocks.length : 0, focusBlocks: Array.isArray(schedule?.blocks) ? schedule.blocks.filter((block) => block?.type === "focus").length : 0, carryoverCount: Number(schedule?.carryover?.count) || 0 });
   if (!schedule) return { status: 404, body: { error: "No quest board exists for this date." } };
   return { status: 200, body: { schedule, nowFocus: nowFocus(schedule) } };
 }
@@ -508,7 +526,7 @@ async function handleScheduleRebuild(body) {
   const activityDate = safeDate(body?.activityDate || body?.date) || koreaNow().slice(0, 10);
   const schedule = await rebuildSchedule(activityDate);
   if (!schedule) return { status: 404, body: { error: "No quest board exists for this date." } };
-  await recordActivity(DATA_DIR, { activityDate, action: "schedule_rebuilt", subject: activitySubject({ type: "schedule", id: activityDate, title: "오늘 일정" }), details: { mode: schedule.mode, timeConfigured: schedule.timeConfigured !== false } });
+  await recordActivity(DATA_DIR, { activityDate, action: "schedule_rebuilt", subject: activitySubject({ type: "schedule", id: activityDate, title: "오늘 일정" }), details: { mode: schedule.mode, timeConfigured: schedule.timeConfigured !== false, carryoverCount: Number(schedule.carryover?.count) || 0, reason: Number(schedule.carryover?.count) ? "previous_day_unfinished" : "manual_rebuild" } });
   return { status: 200, body: { schedule, nowFocus: nowFocus(schedule) } };
 }
 async function handleScheduleSettingsUpdate(body) {

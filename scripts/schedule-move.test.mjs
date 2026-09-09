@@ -87,6 +87,46 @@ test("schedule block move reorders open focus cards without entering lunch", asy
   }
 });
 
+test("rebuilding a new day brings forward only the previous day's unfinished schedule cards", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-schedule-carryover-"));
+  const { child, baseUrl } = await startBridge(dataDir);
+  try {
+    await createBoard(dataDir);
+    await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "", dayEnd: "", timeConfigured: false, bufferMinutes: 10 }));
+    await mkdir(join(dataDir, "schedules"), { recursive: true });
+    await writeFile(join(dataDir, "schedules", "2099-01-02.json"), JSON.stringify({
+      date: "2099-01-02",
+      mode: "todo",
+      timeConfigured: false,
+      blocks: [
+        { id: "previous-open", type: "focus", questId: "previous-only", title: "어제 남은 작업", status: "planned", order: 0 },
+        { id: "previous-done", type: "focus", questId: "previous-done", title: "어제 끝난 작업", status: "completed", order: 1 },
+      ],
+      unscheduled: [],
+    }));
+
+    const rebuilt = await fetch(`${baseUrl}/api/schedule/rebuild`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityDate: DATE }),
+    });
+    assert.equal(rebuilt.status, 200);
+    const result = await rebuilt.json();
+    const focusIds = result.schedule.blocks.filter((block) => block.type === "focus").map((block) => block.questId);
+    assert.equal(focusIds.includes("previous-only"), true);
+    assert.equal(focusIds.includes("previous-done"), false);
+    assert.equal(result.schedule.carryover.count, 1);
+
+    const activity = await (await fetch(`${baseUrl}/api/activity?date=${DATE}`)).json();
+    assert.equal(activity.records.at(-1).action, "schedule_rebuilt");
+    assert.equal(activity.records.at(-1).details.carryoverCount, 1);
+    assert.equal(activity.records.at(-1).details.reason, "previous_day_unfinished");
+  } finally {
+    child.kill();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("schedule block move rejects completed cards and lunch-only targets", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "daybridge-schedule-move-invalid-"));
   const { child, baseUrl } = await startBridge(dataDir);

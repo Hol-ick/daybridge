@@ -17,7 +17,7 @@ const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const phonePattern = /(?<!\d)01[016789][ -]?\d{3,4}[ -]?\d{4}(?!\d)/g;
 const secretPattern = /(\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|client[_ -]?secret|cookie|session[_ -]?token|private[_ -]?key)\b\s*[:=]\s*)(['"]?)[^\s'"]{8,}/gi;
 const localPathPattern = /\b[A-Z]:\\[^\s|]+/gi;
-const DETAIL_KEYS = new Set(["durationMinutes", "status", "previousStatus", "position", "targetTitle", "targetBlockId", "startAt", "endAt", "mode", "timeConfigured", "dayStart", "dayEnd", "bufferMinutes", "reason", "count", "automatic"]);
+const DETAIL_KEYS = new Set(["durationMinutes", "status", "previousStatus", "position", "targetTitle", "targetBlockId", "startAt", "endAt", "mode", "timeConfigured", "dayStart", "dayEnd", "bufferMinutes", "reason", "count", "carryoverCount", "automatic"]);
 let writeQueue = Promise.resolve();
 
 function assertDate(value) {
