@@ -61,7 +61,7 @@ function boardPath(activityDate) { return join(DATA_DIR, "boards", activityDate 
 function inboxPath(activityDate) { return join(DATA_DIR, "inbox", `schedule-${activityDate}.md`); }
 function codexCalendarCachePath(activityDate) { return join(DATA_DIR, "calendar-codex-busy", activityDate + ".json"); }
 let RUNTIME_LOG_PATH = join(DATA_DIR, "logs", "bridge-events.ndjson");
-let TEXT_LOG_PATH = join(DATA_DIR, "logs", "daybridge.log.txt");
+let TEXT_LOG_DIRECTORY = join(DATA_DIR, "logs");
 let runtimeLogQueue = Promise.resolve();
 function logDetails(details) {
   if (!details || typeof details !== "object" || Array.isArray(details)) return {};
@@ -88,7 +88,10 @@ function logRuntimeEvent(event, details = {}) {
       await mkdir(dirname(RUNTIME_LOG_PATH), { recursive: true });
       await appendFile(RUNTIME_LOG_PATH, JSON.stringify(record) + "\n", "utf8");
       const detailText = Object.entries(record.details).map(([key, value]) => `${key}=${typeof value === "string" ? value.replace(/[\r\n]+/g, " ") : JSON.stringify(value)}`).join(" | ");
-      await appendFile(TEXT_LOG_PATH, `[${record.occurredAtKST} KST] ${record.source}.${record.event}${detailText ? ` | ${detailText}` : ""}\n`, "utf8");
+      const month = record.occurredAtKST.slice(0, 7).replace(/[^0-9-]/g, "");
+      const textLogPath = join(TEXT_LOG_DIRECTORY, `daybridge-${month}.txt`);
+      const level = /error|fail|exception|rejection|timeout/i.test(record.event) ? "ERROR" : /warn|retry|recovery/i.test(record.event) ? "WARN" : "INFO";
+      await appendFile(textLogPath, `${record.occurredAtKST.replace("T", " ")} KST | ${level} | ${record.source}.${record.event}${detailText ? ` | ${detailText}` : ""}\n`, "utf8");
     })
     .catch(() => {});
 }
@@ -183,7 +186,7 @@ async function setDataDirectory(nextPath) {
   DATA_DIR = next;
   CONFIG_PATH = join(DATA_DIR, "config.json");
   RUNTIME_LOG_PATH = join(DATA_DIR, "logs", "bridge-events.ndjson");
-  TEXT_LOG_PATH = join(DATA_DIR, "logs", "daybridge.log.txt");
+  TEXT_LOG_DIRECTORY = join(DATA_DIR, "logs");
   return DATA_DIR;
 }
 async function loadConfig() {
