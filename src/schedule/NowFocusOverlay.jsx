@@ -204,7 +204,7 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
   return (
     <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
       <form className={styles.settingsForm} onSubmit={onSubmit} data-testid="now-focus-overlay-settings-sheet">
-        <header className={styles.settingsHeader}>
+        <header className={styles.settingsHeader} data-tauri-drag-region="true">
           <div>
             <strong>위젯 설정</strong>
             <p>표시 방식과 매일 반복할 일을 관리합니다.</p>

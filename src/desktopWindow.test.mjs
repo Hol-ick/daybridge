@@ -37,12 +37,12 @@ test("overlay interaction region keeps the native canvas fixed while the compact
   });
 });
 
-test("overlay interaction region gives the centered settings modal the entire fixed canvas", () => {
+test("overlay interaction region gives the centered settings modal its compact viewport", () => {
   assert.deepEqual(overlayInteractionRegion({ settingsOpen: true }), {
     x: 0,
     y: 0,
-    width: 520,
-    height: 620,
+    width: 456,
+    height: 500,
   });
 });
 

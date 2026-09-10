@@ -15,16 +15,15 @@ export const OVERLAY_COLLAPSED_WIDTH = 288;
 // itself never resizes while the user opens or closes the schedule.
 export const OVERLAY_CANVAS_WIDTH = 520;
 export const OVERLAY_CANVAS_HEIGHT = 620;
-// Settings deliberately use a larger, independently positioned native
-// viewport. Keeping the form inside the expanding corner card made an open
-// dialog get clipped whenever the card collapsed on blur.
-export const OVERLAY_SETTINGS_WIDTH = OVERLAY_CANVAS_WIDTH;
-export const OVERLAY_SETTINGS_HEIGHT = OVERLAY_CANVAS_HEIGHT;
+// Settings use a compact, independently positioned native viewport so the
+// transparent canvas does not leave a visible halo around the form.
+export const OVERLAY_SETTINGS_WIDTH = 456;
+export const OVERLAY_SETTINGS_HEIGHT = 500;
 
 /** The actual visible and clickable rectangle within the fixed native canvas. */
 export function overlayInteractionRegion({ height = OVERLAY_COLLAPSED_HEIGHT, settingsOpen = false } = {}) {
   if (settingsOpen) {
-    return { x: 0, y: 0, width: OVERLAY_CANVAS_WIDTH, height: OVERLAY_CANVAS_HEIGHT };
+    return { x: 0, y: 0, width: OVERLAY_SETTINGS_WIDTH, height: OVERLAY_SETTINGS_HEIGHT };
   }
   const visibleHeight = Math.min(
     OVERLAY_EXPANDED_HEIGHT,
@@ -137,6 +136,7 @@ async function moveOverlayCanvasToCenter() {
 /** Open the settings surface as a true screen-centred modal-sized viewport. */
 export async function openOverlaySettingsModal() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
+  await getCurrentWindow().setSize(new PhysicalSize(OVERLAY_SETTINGS_WIDTH, OVERLAY_SETTINGS_HEIGHT));
   await setOverlayInteractionRegion({ settingsOpen: true });
   return moveOverlayCanvasToCenter();
 }
@@ -144,6 +144,7 @@ export async function openOverlaySettingsModal() {
 /** Return the settings viewport to the compact card, flush with the work area. */
 export async function closeOverlaySettingsModal() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
+  await getCurrentWindow().setSize(new PhysicalSize(OVERLAY_CANVAS_WIDTH, OVERLAY_CANVAS_HEIGHT));
   await setOverlayInteractionRegion({ height: OVERLAY_COLLAPSED_HEIGHT });
   await placeOverlayInCorner();
   return true;
