@@ -21,6 +21,7 @@ export const DEFAULT_SCHEDULE_SETTINGS = Object.freeze({
   focusDurations: [50],
   defaultFocusMinutes: 50,
   bufferMinutes: 10,
+  breaks: Object.freeze([]),
 });
 
 export const DEFAULT_DAILY_DEFAULTS = Object.freeze({
@@ -61,6 +62,15 @@ function arrayOfPositiveIntegers(value, fallback) {
   const parsed = [...new Set(value.map(Number).filter((item) => Number.isInteger(item) && item >= 5 && item <= 180))].sort((left, right) => left - right);
   return parsed.length ? parsed : fallback;
 }
+function normalizeBreaks(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item, index) => {
+    const start = typeof item?.start === "string" ? item.start.trim() : "";
+    const end = typeof item?.end === "string" ? item.end.trim() : "";
+    if (!TIME.test(start) || !TIME.test(end) || minutes(start) >= minutes(end)) throw new TypeError(`break ${index + 1} needs valid start/end times.`);
+    return { start, end, label: sanitizeText(item?.label || "점심시간", 80) || "점심시간" };
+  });
+}
 function normalizeSettings(input = {}) {
   const candidate = input && typeof input === "object" ? input : {};
   const rawStart = typeof candidate.dayStart === "string" ? candidate.dayStart.trim() : "";
@@ -80,6 +90,7 @@ function normalizeSettings(input = {}) {
   const defaultFocusMinutes = 50;
   const requestedBuffer = Number(candidate.bufferMinutes);
   const bufferMinutes = Number.isInteger(requestedBuffer) && requestedBuffer >= 0 && requestedBuffer <= 60 ? requestedBuffer : DEFAULT_SCHEDULE_SETTINGS.bufferMinutes;
+  const breaks = timeConfigured ? normalizeBreaks(candidate.breaks) : [];
   return {
     schemaVersion: 1,
     timeZone: candidate.timeZone === "Asia/Seoul" ? candidate.timeZone : DEFAULT_SCHEDULE_SETTINGS.timeZone,
@@ -89,6 +100,7 @@ function normalizeSettings(input = {}) {
     focusDurations,
     defaultFocusMinutes,
     bufferMinutes,
+    breaks,
   };
 }
 
@@ -223,12 +235,12 @@ export async function loadScheduleSettings(dataDir) {
   const stored = await readJson(settingsPath(dataDir));
   try {
     const normalized = normalizeSettings(stored || DEFAULT_SCHEDULE_SETTINGS);
-    return { ...normalized, dayStart: "", dayEnd: "", timeConfigured: false };
+    return normalized;
   } catch { return { ...DEFAULT_SCHEDULE_SETTINGS, focusDurations: [...DEFAULT_SCHEDULE_SETTINGS.focusDurations] }; }
 }
 
 export async function saveScheduleSettings(dataDir, settings) {
-  const normalized = normalizeSettings({ ...(settings || {}), dayStart: "", dayEnd: "", timeConfigured: false });
+  const normalized = normalizeSettings(settings || {});
   await atomicWrite(settingsPath(dataDir), normalized);
   return normalized;
 }

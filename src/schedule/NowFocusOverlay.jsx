@@ -201,7 +201,17 @@ function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, o
   );
 }
 
-function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading }) {
+const THEME_PRESETS = [
+  { id: "mint", label: "민트", accent: "#62dca5" },
+  { id: "blue", label: "블루", accent: "#7c9cff" },
+  { id: "amber", label: "앰버", accent: "#f4b860" },
+  { id: "violet", label: "바이올렛", accent: "#dd8aff" },
+];
+
+function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading, scheduleSettings, onScheduleSettingsChange, scheduleSettingsLoading, appearance, onAppearanceChange }) {
+  const settings = scheduleSettings || { dayStart: "", dayEnd: "", timeConfigured: false, breaks: [] };
+  const breaks = Array.isArray(settings.breaks) ? settings.breaks : [];
+  const updateSettings = (patch) => onScheduleSettingsChange?.({ ...settings, ...patch });
   return (
     <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
       <form className={styles.settingsForm} onSubmit={onSubmit} data-testid="now-focus-overlay-settings-sheet">
@@ -220,6 +230,32 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
             <span className={styles.settingsToggleTrack} aria-hidden="true" />
           </label>
         </section>
+        <section className={styles.settingsSection} aria-label="근무 시간">
+          <span className={styles.settingsSectionLabel}>시간표</span>
+          <label className={styles.settingsCheckbox}>
+            <span><strong>근무 시간 안에서 자동 배치</strong><small>끄면 시간 없는 오늘 할 일 목록으로 사용합니다.</small></span>
+            <input className={styles.settingsToggleInput} type="checkbox" checked={settings.timeConfigured} onChange={(event) => updateSettings({ timeConfigured: event.target.checked })} />
+            <span className={styles.settingsToggleTrack} aria-hidden="true" />
+          </label>
+          {settings.timeConfigured ? <>
+            <div className={styles.settingsRow}>
+              <label className={styles.settingsField}><span>출근</span><input type="time" value={settings.dayStart || "09:00"} onChange={(event) => updateSettings({ dayStart: event.target.value })} /></label>
+              <label className={styles.settingsField}><span>퇴근</span><input type="time" value={settings.dayEnd || "18:00"} onChange={(event) => updateSettings({ dayEnd: event.target.value })} /></label>
+            </div>
+            <div className={styles.settingsBreakRow}>
+              <label className={styles.settingsField}><span>점심 시작</span><input type="time" value={breaks[0]?.start || "11:30"} onChange={(event) => updateSettings({ breaks: [{ start: event.target.value, end: breaks[0]?.end || "13:00", label: "점심시간" }] })} /></label>
+              <label className={styles.settingsField}><span>점심 종료</span><input type="time" value={breaks[0]?.end || "13:00"} onChange={(event) => updateSettings({ breaks: [{ start: breaks[0]?.start || "11:30", end: event.target.value, label: "점심시간" }] })} /></label>
+            </div>
+          </> : null}
+        </section>
+        <section className={styles.settingsSection} aria-label="색상 테마">
+          <span className={styles.settingsSectionLabel}>색상</span>
+          <div className={styles.themeChoices} role="group" aria-label="강조 색상">
+            {THEME_PRESETS.map((preset) => <button key={preset.id} type="button" className={styles.themeSwatch} style={{ "--swatch": preset.accent }} aria-label={`${preset.label} 테마`} aria-pressed={appearance?.accent === preset.accent} onClick={() => onAppearanceChange?.({ accent: preset.accent })}><span aria-hidden="true" /></button>)}
+            <label className={styles.themeCustom}><span>직접 선택</span><input type="color" value={appearance?.accent || "#62dca5"} onChange={(event) => onAppearanceChange?.({ accent: event.target.value })} aria-label="강조 색상 직접 선택" /></label>
+          </div>
+          <small className={styles.settingsHint}>텍스트 대비를 해치지 않도록 강조 색상은 버튼·상태 표시 중심으로 사용합니다.</small>
+        </section>
         <button
           className={styles.settingsUtility}
           type="button"
@@ -232,7 +268,7 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
           <span>{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</span>
         </button>
         <DailyDefaultsEditor value={dailyDefaults} onChange={onDailyDefaultsChange} loading={dailyDefaultsLoading} />
-        <button className={styles.settingsSave} type="submit" disabled={dailyDefaultsLoading}>저장</button>
+        <button className={styles.settingsSave} type="submit" disabled={dailyDefaultsLoading || scheduleSettingsLoading}>저장</button>
       </form>
     </div>
   );
@@ -242,7 +278,7 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false, magnetPulse = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false, scheduleSettings = {}, onScheduleSettingsChange, scheduleSettingsLoading = false, appearance = {}, onAppearanceChange, magnetPulse = false }) {
   const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
   const pointerDragRef = useRef({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null });
   const suppressCardClickRef = useRef(false);
@@ -643,7 +679,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const surfaceClassName = [styles.surface, expanded ? styles.expanded : "", settingsOpen ? styles.settingsMode : "", taskOpen ? styles.taskOpen : "", magnetPulse ? styles.magnetPulse : ""].filter(Boolean).join(" ");
 
   return (
-    <aside className={styles.overlay} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
+    <aside className={styles.overlay} style={{ "--green": appearance?.accent || "#62dca5", "--modal-accent": appearance?.accent || "#839eff" }} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
       <div
         className={surfaceClassName}
         style={{ "--overlay-expanded-height": `${targetExpandedHeight}px` }}
@@ -750,7 +786,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
         </button>
         </div>
       </div>
-      {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} /> : null}
+      {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} scheduleSettings={scheduleSettings} onScheduleSettingsChange={onScheduleSettingsChange} scheduleSettingsLoading={scheduleSettingsLoading} appearance={appearance} onAppearanceChange={onAppearanceChange} /> : null}
     </aside>
   );
 }

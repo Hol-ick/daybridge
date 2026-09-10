@@ -51,16 +51,14 @@ test("daily defaults load the safe starter routine and persist user edits locall
   } finally { remove(dataDir); }
 });
 
-test("legacy time inputs are stored as title-only defaults", async () => {
+test("time settings preserve explicit work hours and normalize focus units", async () => {
   const dataDir = temporaryStore();
   try {
     const settings = await saveScheduleSettings(dataDir, { dayStart: "08:30", dayEnd: "21:30", focusDurations: [25, 50], defaultFocusMinutes: 25, bufferMinutes: 5 });
     assert.deepEqual(await loadScheduleSettings(dataDir), settings);
     assert.equal(settings.defaultFocusMinutes, 50);
     assert.deepEqual(settings.focusDurations, [50]);
-    const invalidLegacyHours = await saveScheduleSettings(dataDir, { dayStart: "22:00", dayEnd: "09:00" });
-    assert.equal(invalidLegacyHours.timeConfigured, false);
-    assert.equal(invalidLegacyHours.dayStart, "");
+    await assert.rejects(() => saveScheduleSettings(dataDir, { dayStart: "22:00", dayEnd: "09:00", timeConfigured: true }));
   } finally { remove(dataDir); }
 });
 
@@ -75,15 +73,17 @@ test("empty time settings keep the store in lightweight todo-list mode", async (
   } finally { remove(dataDir); }
 });
 
-test("legacy and explicit time settings are ignored in title-only mode", async () => {
+test("explicit time settings enable timed mode while blank settings stay untimed", async () => {
   const dataDir = temporaryStore();
   try {
     const migrated = await saveScheduleSettings(dataDir, { dayStart: "09:00", dayEnd: "18:00" });
     assert.equal(migrated.timeConfigured, false);
+    assert.equal(migrated.dayStart, "");
+    assert.equal(migrated.dayEnd, "");
     const explicit = await saveScheduleSettings(dataDir, { dayStart: "09:00", dayEnd: "18:00", timeConfigured: true });
-    assert.equal(explicit.timeConfigured, false);
-    assert.equal(explicit.dayStart, "");
-    assert.equal(explicit.dayEnd, "");
+    assert.equal(explicit.timeConfigured, true);
+    assert.equal(explicit.dayStart, "09:00");
+    assert.equal(explicit.dayEnd, "18:00");
   } finally { remove(dataDir); }
 });
 

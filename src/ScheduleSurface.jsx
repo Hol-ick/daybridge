@@ -12,6 +12,8 @@ import styles from "./ScheduleSurface.module.css";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
 const OVERLAY_PRIVACY_KEY = "daybridge.overlay-private.v1";
+const APPEARANCE_KEY = "daybridge.appearance.v1";
+const DEFAULT_APPEARANCE = { accent: "#62dca5" };
 
 function kstDate() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -19,6 +21,12 @@ function kstDate() {
 
 function initialPrivateMode() {
   try { return localStorage.getItem(OVERLAY_PRIVACY_KEY) === "true"; } catch { return false; }
+}
+function initialAppearance() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || "null");
+    return { ...DEFAULT_APPEARANCE, ...(parsed && typeof parsed === "object" ? parsed : {}) };
+  } catch { return { ...DEFAULT_APPEARANCE }; }
 }
 
 async function readJson(response) {
@@ -80,6 +88,10 @@ export default function ScheduleSurface() {
   const [dailyDefaultsDraft, setDailyDefaultsDraft] = useState([]);
   const [dailyDefaultsLoaded, setDailyDefaultsLoaded] = useState(false);
   const [dailyDefaultsLoading, setDailyDefaultsLoading] = useState(false);
+  const [scheduleSettingsDraft, setScheduleSettingsDraft] = useState({ dayStart: "", dayEnd: "", timeConfigured: false, breaks: [] });
+  const [scheduleSettingsLoaded, setScheduleSettingsLoaded] = useState(false);
+  const [scheduleSettingsLoading, setScheduleSettingsLoading] = useState(false);
+  const [appearance, setAppearance] = useState(initialAppearance);
   // The overlay always represents today. A board persisted while the bridge
   // was unavailable must not pin schedule requests to yesterday's date.
   const activityDate = resolveActivityDate(board, kstDate());
@@ -174,6 +186,20 @@ export default function ScheduleSurface() {
       setDailyDefaultsLoading(false);
     }
   }, [dailyDefaultsLoading, surface]);
+  const loadScheduleSettings = useCallback(async () => {
+    if (scheduleSettingsLoading) return false;
+    setScheduleSettingsLoading(true);
+    try {
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/schedule-settings`));
+      setScheduleSettingsDraft({ dayStart: result?.settings?.dayStart || "", dayEnd: result?.settings?.dayEnd || "", timeConfigured: result?.settings?.timeConfigured === true, breaks: Array.isArray(result?.settings?.breaks) ? result.settings.breaks : [] });
+      setScheduleSettingsLoaded(true);
+      return true;
+    } catch (error) {
+      recordRuntimeEvent("schedule_settings_load_error", { error: error?.message || String(error), surface });
+      setNotice("시간 설정을 불러오지 못했어요");
+      return false;
+    } finally { setScheduleSettingsLoading(false); }
+  }, [scheduleSettingsLoading, surface]);
 
   useEffect(() => { void loadSchedule({ quiet: true }); }, [loadSchedule]);
   useEffect(() => { void loadCalendarStatus({ quiet: true }); }, [loadCalendarStatus]);
@@ -318,7 +344,8 @@ export default function ScheduleSurface() {
   const openSettings = useCallback(() => {
     setSettingsOpen(true);
     if (!dailyDefaultsLoaded) void loadDailyDefaults();
-  }, [dailyDefaultsLoaded, loadDailyDefaults]);
+    if (!scheduleSettingsLoaded) void loadScheduleSettings();
+  }, [dailyDefaultsLoaded, loadDailyDefaults, scheduleSettingsLoaded, loadScheduleSettings]);
 
   const refreshWidget = useCallback(async () => {
     if (refreshingWidget) return;
@@ -369,6 +396,12 @@ export default function ScheduleSurface() {
       return;
     }
     try {
+      const scheduleResult = await readJson(await fetchBridge(`${BRIDGE_URL}/api/schedule-settings`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityDate, ...scheduleSettingsDraft }),
+      }));
+      setScheduleSettingsDraft(scheduleResult.settings);
+      await loadSchedule({ rebuild: true, quiet: true });
       const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/daily-defaults`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -385,7 +418,7 @@ export default function ScheduleSurface() {
       recordRuntimeEvent("daily_defaults_save_error", { error: error?.message || String(error), surface });
       setNotice("매일 기본 일정을 저장하지 못했어요");
     }
-  }, [activityDate, dailyDefaultsDraft, dailyDefaultsLoaded, surface]);
+  }, [activityDate, dailyDefaultsDraft, dailyDefaultsLoaded, loadSchedule, scheduleSettingsDraft, surface]);
 
   const selectedQuest = useMemo(() => board?.quests?.find((quest) => quest.id === expandedQuestId) || null, [board?.quests, expandedQuestId]);
   if (surface === "overlay") {
@@ -406,6 +439,11 @@ export default function ScheduleSurface() {
       dailyDefaults={dailyDefaultsDraft}
       onDailyDefaultsChange={setDailyDefaultsDraft}
       dailyDefaultsLoading={dailyDefaultsLoading || !dailyDefaultsLoaded}
+      scheduleSettings={scheduleSettingsDraft}
+      onScheduleSettingsChange={setScheduleSettingsDraft}
+      scheduleSettingsLoading={scheduleSettingsLoading || !scheduleSettingsLoaded}
+      appearance={appearance}
+      onAppearanceChange={(next) => { const value = { ...DEFAULT_APPEARANCE, ...next }; setAppearance(value); try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(value)); } catch {} }}
       magnetPulse={overlayMagnetPulse}
     />;
   }

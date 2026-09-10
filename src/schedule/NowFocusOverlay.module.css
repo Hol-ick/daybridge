@@ -219,8 +219,8 @@
   --modal-line-strong: #4b566a;
   --modal-ink: #f0f3f8;
   --modal-muted: #aab3c2;
-  --modal-accent: #839eff;
-  --modal-accent-strong: #9caeff;
+  --modal-accent: var(--green, #62dca5);
+  --modal-accent-strong: color-mix(in srgb, var(--modal-accent) 78%, white);
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -271,12 +271,15 @@
 .settingsToggleInput:checked + .settingsToggleTrack::after { background: #f4f6fb; transform: translateX(16px); }
 .settingsToggleInput:focus-visible + .settingsToggleTrack { outline: 2px solid var(--modal-accent); outline-offset: 3px; }
 .settingsRow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
+.settingsField { display: grid; gap: 5px; min-width: 0; color: var(--modal-muted); font-size: 10px; font-weight: 750; }
+.settingsField input[type="time"] { color-scheme: dark; }
+.settingsBreakRow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .settingsForm input:not([type="checkbox"]), .settingsForm select { width: 100%; min-height: 34px; box-sizing: border-box; padding: 0 9px; border: 1px solid var(--modal-line); border-radius: 7px; outline: none; background: var(--modal-field); color: var(--modal-ink); font: inherit; font-size: 13px; font-weight: 700; }
 .settingsForm input:not([type="checkbox"]):focus, .settingsForm select:focus { border-color: #718bd9; box-shadow: 0 0 0 3px rgb(131 158 255 / 15%); }
 .fixedSetting { display: grid; align-content: center; gap: 5px; min-width: 0; padding-top: 16px; color: var(--modal-muted); font-size: 11px; font-weight: 750; }
 .fixedSetting strong { color: var(--modal-ink); font-size: 15px; }
-.settingsSave { min-height: 42px; border: 1px solid #839eff; border-radius: 8px; background: #839eff; color: #111827; cursor: pointer; font: inherit; font-size: 13px; font-weight: 850; letter-spacing: -.025em; transition: background-color .14s ease, border-color .14s ease, transform .14s ease; }
-.settingsSave:hover:not(:disabled) { border-color: #a2b4ff; background: #a2b4ff; }
+.settingsSave { min-height: 42px; border: 1px solid var(--modal-accent); border-radius: 8px; background: var(--modal-accent); color: #111827; cursor: pointer; font: inherit; font-size: 13px; font-weight: 850; letter-spacing: -.025em; transition: background-color .14s ease, border-color .14s ease, transform .14s ease; }
+.settingsSave:hover:not(:disabled) { border-color: var(--modal-accent-strong); background: var(--modal-accent-strong); }
 .settingsSave:active:not(:disabled) { transform: translateY(1px); }
 .settingsSave:disabled { cursor: wait; opacity: .56; }
 .settingsUtility { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; border: 1px solid var(--modal-line); border-radius: 7px; background: transparent; color: #c8d1e3; cursor: pointer; font: inherit; font-size: 12px; font-weight: 720; letter-spacing: -.025em; transition: background-color .14s ease, border-color .14s ease, color .14s ease, transform .14s ease; }
@@ -285,6 +288,13 @@
 .settingsUtility:active:not(:disabled) { transform: translateY(1px); }
 .settingsUtility:disabled { cursor: wait; opacity: .58; }
 .settingsLoading { color: var(--modal-muted); font-size: 11px; font-weight: 750; }
+.settingsHint { color: var(--modal-muted); font-size: 10px; line-height: 1.35; }
+.themeChoices { display: flex; align-items: center; gap: 8px; }
+.themeSwatch { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 1px solid var(--modal-line); border-radius: 8px; background: transparent; cursor: pointer; }
+.themeSwatch[aria-pressed="true"] { border-color: var(--swatch); box-shadow: 0 0 0 2px color-mix(in srgb, var(--swatch) 28%, transparent); }
+.themeSwatch span { width: 16px; height: 16px; border-radius: 50%; background: var(--swatch); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 28%); }
+.themeCustom { display: inline-flex; align-items: center; gap: 6px; color: var(--modal-muted); font-size: 10px; font-weight: 700; }
+.themeCustom input { width: 30px; height: 30px; padding: 2px; border: 1px solid var(--modal-line); border-radius: 8px; background: var(--modal-field); cursor: pointer; }
 
 .open {
   display: grid;
