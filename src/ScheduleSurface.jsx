@@ -109,7 +109,7 @@ export default function ScheduleSurface() {
 
   const loadSchedule = useCallback(async ({ rebuild = false, quiet = false } = {}) => {
     const requestDate = activityDate;
-    recordRuntimeEvent("schedule_load_start", { date: requestDate, rebuild, quiet });
+    if (!quiet || rebuild) recordRuntimeEvent("schedule_load_start", { date: requestDate, rebuild, quiet });
     try {
       const request = rebuild
         ? fetchBridge(`${BRIDGE_URL}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: requestDate }) })
@@ -119,7 +119,7 @@ export default function ScheduleSurface() {
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       setCalendarCoverage(result.schedule?.calendar?.coverage || "attention");
-      recordRuntimeEvent("schedule_load_success", { date: requestDate, rebuild, blocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.length : 0, focusBlocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.filter((block) => block?.type === "focus").length : 0, nowFocus: result.nowFocus?.state || "none" });
+      if (!quiet || rebuild) recordRuntimeEvent("schedule_load_success", { date: requestDate, rebuild, blocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.length : 0, focusBlocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.filter((block) => block?.type === "focus").length : 0, nowFocus: result.nowFocus?.state || "none" });
       if (!quiet) setNotice(rebuild ? "오늘 남은 시간을 다시 배치했어요" : "");
       return result;
     } catch (error) {
@@ -131,7 +131,7 @@ export default function ScheduleSurface() {
         setSchedule(emptyTodoSchedule(requestDate));
         setNowFocus({ state: "todo_list", block: null, nextFocus: null });
         setCalendarCoverage("attention");
-        recordRuntimeEvent("schedule_cleared_for_missing_date", { date: requestDate, rebuild });
+        if (!quiet) recordRuntimeEvent("schedule_cleared_for_missing_date", { date: requestDate, rebuild });
         if (!quiet) setNotice("오늘 일정이 없습니다. + 버튼으로 추가할 수 있어요");
         return { schedule: emptyTodoSchedule(requestDate), nowFocus: { state: "todo_list", block: null, nextFocus: null } };
       }
@@ -165,7 +165,7 @@ export default function ScheduleSurface() {
       const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/calendar/status`));
       if (!result?.calendar) throw new Error("calendar payload missing");
       setCalendarConnection(result.calendar || { state: "attention", reason: "status_unavailable" });
-      recordRuntimeEvent("calendar_status", { state: result.calendar?.state, reason: result.calendar?.reason });
+      if (!quiet) recordRuntimeEvent("calendar_status", { state: result.calendar?.state, reason: result.calendar?.reason });
       return result.calendar;
     } catch (error) {
       recordRuntimeEvent("calendar_status_error", { error: error?.message || String(error) });

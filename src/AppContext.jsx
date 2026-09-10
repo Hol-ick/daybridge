@@ -76,7 +76,7 @@ export function AppStateProvider({ children }) {
   const refresh = useCallback(async ({ announce = false } = {}) => {
     setLoading(true);
     const requestDate = currentKstDate();
-    recordRuntimeEvent("board_refresh_start", { date: requestDate, announce });
+    if (announce) recordRuntimeEvent("board_refresh_start", { date: requestDate, announce });
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 1800);
     try {
@@ -90,7 +90,7 @@ export function AppStateProvider({ children }) {
       boardRef.current = result.board;
       dispatch({ type: "INIT", board: result.board });
       persistBoard(result.board);
-      recordRuntimeEvent("board_refresh_success", { date: requestDate, activityDate: result.board?.activityDate, questCount: Array.isArray(result.board?.quests) ? result.board.quests.length : 0, connection: result.connection || "unknown" });
+      if (announce) recordRuntimeEvent("board_refresh_success", { date: requestDate, activityDate: result.board?.activityDate, questCount: Array.isArray(result.board?.quests) ? result.board.quests.length : 0, connection: result.connection || "unknown" });
       if (announce) showNotice("브리핑을 업데이트했어요");
       return true;
     } catch (error) {
