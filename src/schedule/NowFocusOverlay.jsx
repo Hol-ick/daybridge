@@ -407,6 +407,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       if (expanded) setExpanded(false);
       void openOverlaySettingsModal().catch((error) => {
         recordRuntimeEvent("settings_modal_open_error", { error: error?.message || String(error) });
+        onCloseSettings?.();
         return false;
       });
       return;
@@ -417,7 +418,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
         return false;
       });
     }
-  }, [settingsOpen]);
+  }, [onCloseSettings, settingsOpen]);
 
   const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks]);
   const findDropTarget = (clientX, clientY, sourceId = "") => {
