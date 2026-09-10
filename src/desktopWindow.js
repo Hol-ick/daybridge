@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { PhysicalPosition, currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
+import { LogicalSize, PhysicalPosition, currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 
 const OVERLAY_POSITION_KEY = "daybridge.overlay-position.v1";
 // The overlay is deliberately flush with the monitor work-area edge. The
@@ -136,7 +136,7 @@ async function moveOverlayCanvasToCenter() {
 /** Open the settings surface as a true screen-centred modal-sized viewport. */
 export async function openOverlaySettingsModal() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
-  await getCurrentWindow().setSize(new PhysicalSize(OVERLAY_SETTINGS_WIDTH, OVERLAY_SETTINGS_HEIGHT));
+  await getCurrentWindow().setSize(new LogicalSize(OVERLAY_SETTINGS_WIDTH, OVERLAY_SETTINGS_HEIGHT));
   await setOverlayInteractionRegion({ settingsOpen: true });
   return moveOverlayCanvasToCenter();
 }
@@ -144,7 +144,7 @@ export async function openOverlaySettingsModal() {
 /** Return the settings viewport to the compact card, flush with the work area. */
 export async function closeOverlaySettingsModal() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
-  await getCurrentWindow().setSize(new PhysicalSize(OVERLAY_CANVAS_WIDTH, OVERLAY_CANVAS_HEIGHT));
+  await getCurrentWindow().setSize(new LogicalSize(OVERLAY_CANVAS_WIDTH, OVERLAY_CANVAS_HEIGHT));
   await setOverlayInteractionRegion({ height: OVERLAY_COLLAPSED_HEIGHT });
   await placeOverlayInCorner();
   return true;

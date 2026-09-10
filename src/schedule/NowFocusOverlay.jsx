@@ -4,6 +4,7 @@ import { getWorkdayCountdown } from "./workday-clock.js";
 import styles from "./NowFocusOverlay.module.css";
 import ManualTaskForm from "./ManualTaskForm.jsx";
 import DailyDefaultsEditor from "./DailyDefaultsEditor.jsx";
+import { recordRuntimeEvent } from "../runtime-log.js";
 
 function asDate(value) {
   if (!value) return null;
@@ -354,11 +355,17 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
         setTaskResetSignal((value) => value + 1);
       }
       if (expanded) setExpanded(false);
-      void openOverlaySettingsModal().catch(() => false);
+      void openOverlaySettingsModal().catch((error) => {
+        recordRuntimeEvent("settings_modal_open_error", { error: error?.message || String(error) });
+        return false;
+      });
       return;
     }
     if (wasSettingsOpen) {
-      void closeOverlaySettingsModal().catch(() => false);
+      void closeOverlaySettingsModal().catch((error) => {
+        recordRuntimeEvent("settings_modal_close_error", { error: error?.message || String(error) });
+        return false;
+      });
     }
   }, [settingsOpen]);
 
