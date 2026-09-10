@@ -63,6 +63,48 @@ function codexCalendarCachePath(activityDate) { return join(DATA_DIR, "calendar-
 let RUNTIME_LOG_PATH = join(DATA_DIR, "logs", "bridge-events.ndjson");
 let TEXT_LOG_DIRECTORY = join(DATA_DIR, "logs");
 let runtimeLogQueue = Promise.resolve();
+const HUMAN_EVENT_LABELS = {
+  "bridge_started": "브리지 시작",
+  "bridge_uncaught_exception": "브리지 예외",
+  "bridge_unhandled_rejection": "브리지 처리되지 않은 거부",
+  "storage_location_changed": "저장 폴더 변경",
+  "schedule_rebuilt": "일정 재생성",
+  "daily_defaults_saved": "기본 일정 저장",
+  "http_error": "HTTP 오류",
+  "manual_task_added": "수동 일정 추가",
+  "manual_task_add_error": "수동 일정 추가 실패",
+  "schedule_block_reported": "일정 상태 변경",
+  "schedule_block_report_error": "일정 상태 변경 실패",
+  "schedule_block_moved": "일정 순서 변경",
+  "schedule_block_move_error": "일정 순서 변경 실패",
+  "schedule_block_discarded": "일정 삭제",
+  "schedule_block_discard_error": "일정 삭제 실패",
+  "daily_defaults_save_error": "기본 일정 저장 실패",
+  "overlay_manual_refresh": "수동 새로고침",
+  "overlay_manual_refresh_error": "수동 새로고침 실패",
+  "window_error": "화면 오류",
+  "unhandled_rejection": "처리되지 않은 오류",
+};
+const HUMAN_DETAIL_LABELS = {
+  date: "날짜", reason: "사유", mode: "모드", blocks: "카드 수", focusBlocks: "집중 카드 수", carryoverCount: "이월 수",
+  accepted: "처리 수", excluded: "제외 수", status: "상태", state: "상태", title: "제목", message: "메시지", error: "오류",
+  blockId: "일정 ID", targetBlockId: "대상 일정 ID", position: "위치", durationMinutes: "예상 시간(분)", surface: "화면",
+  connection: "연결", dataDirectory: "데이터 폴더", logDirectory: "로그 폴더", scheduleDirectory: "일정 폴더",
+  event: "이벤트", sourceKind: "출처", rebuild: "재생성", timeConfigured: "시간 설정", nowFocus: "현재 일정",
+};
+function humanEventLabel(event) {
+  const normalized = event.replace(/^client:/, "");
+  return HUMAN_EVENT_LABELS[normalized] || normalized.replace(/_/g, " ");
+}
+function humanDetailLabel(key, value) {
+  if (key === "accepted" && typeof value === "boolean") return "처리 여부";
+  if (key === "exists") return "존재 여부";
+  if (key === "inboxExists") return "입력 파일 존재 여부";
+  if (key === "valid") return "유효 여부";
+  if (key === "inboxChanged") return "입력 변경 여부";
+  if (key === "settingsChanged") return "설정 변경 여부";
+  return HUMAN_DETAIL_LABELS[key] || key;
+}
 function logDetails(details) {
   if (!details || typeof details !== "object" || Array.isArray(details)) return {};
   const result = {};
@@ -87,11 +129,12 @@ function logRuntimeEvent(event, details = {}) {
     .then(async () => {
       await mkdir(dirname(RUNTIME_LOG_PATH), { recursive: true });
       await appendFile(RUNTIME_LOG_PATH, JSON.stringify(record) + "\n", "utf8");
-      const detailText = Object.entries(record.details).map(([key, value]) => `${key}=${typeof value === "string" ? value.replace(/[\r\n]+/g, " ") : JSON.stringify(value)}`).join(" | ");
+      const detailText = Object.entries(record.details).map(([key, value]) => `${humanDetailLabel(key, value)}=${typeof value === "string" ? value.replace(/[\r\n]+/g, " ") : JSON.stringify(value)}`).join(" | ");
       const month = record.occurredAtKST.slice(0, 7).replace(/[^0-9-]/g, "");
       const textLogPath = join(TEXT_LOG_DIRECTORY, `daybridge-${month}.txt`);
-      const level = /error|fail|exception|rejection|timeout/i.test(record.event) ? "ERROR" : /warn|retry|recovery/i.test(record.event) ? "WARN" : "INFO";
-      await appendFile(textLogPath, `${record.occurredAtKST.replace("T", " ")} | ${level} | ${record.source}.${record.event}${detailText ? ` | ${detailText}` : ""}\n`, "utf8");
+      const level = /error|fail|exception|rejection|timeout/i.test(record.event) ? "오류" : /warn|retry|recovery/i.test(record.event) ? "경고" : "정보";
+      const occurredAt = record.occurredAtKST.slice(0, 19).replace("T", " ");
+      await appendFile(textLogPath, `${occurredAt} | ${level} | ${humanEventLabel(record.event)}${detailText ? ` | ${detailText}` : ""}\n`, "utf8");
     })
     .catch(() => {});
 }
