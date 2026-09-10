@@ -13,7 +13,7 @@ use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, PhysicalPosition, Position, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
-    WindowEvent,
+    WindowEvent, Emitter,
 };
 
 const OVERLAY_POSITION_FILE: &str = "overlay-position.json";
@@ -232,7 +232,8 @@ fn bridge_is_reachable() -> bool {
 fn bridge_project_root() -> Option<PathBuf> {
     let executable = std::env::current_exe().ok()?;
     // Packaged local builds live at <project>/src-tauri/target/<profile>/daybridge.exe.
-    // Walking up four parents also keeps this working for target/debug builds.
+    // Walking up four parents reaches the checkout root:
+    // <project>/src-tauri/target/<profile>/daybridge.exe
     executable
         .parent()?
         .parent()?
@@ -745,6 +746,12 @@ fn open_dashboard(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn open_dashboard_settings(app: tauri::AppHandle) -> Result<(), String> {
+    show_dashboard(&app).map_err(|error| error.to_string())?;
+    app.emit("daybridge:open-settings", ()).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn open_daybridge_data_directory(path: Option<String>) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -1014,6 +1021,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             open_dashboard,
+            open_dashboard_settings,
             open_daybridge_data_directory,
             show_overlay,
             get_overlay_position,

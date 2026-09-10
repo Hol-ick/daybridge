@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useAppActions, useAppState } from "./AppContext.jsx";
-import { bindOverlayMagnet, currentSurface, placeOverlayInCorner } from "./desktopWindow.js";
+import { bindOverlayMagnet, currentSurface, openDashboardSettings, placeOverlayInCorner } from "./desktopWindow.js";
 import Item from "./todometer/components/Item.jsx";
-import NowFocusOverlay from "./schedule/NowFocusOverlay.jsx";
+import NowFocusOverlay, { OverlaySettingsModal } from "./schedule/NowFocusOverlay.jsx";
 import ScheduleDashboard from "./schedule/ScheduleDashboard.jsx";
 import DailyDefaultsEditor from "./schedule/DailyDefaultsEditor.jsx";
 import { resolveActivityDate } from "./schedule/activity-date.js";
@@ -14,6 +15,7 @@ const BRIDGE_URL = "http://127.0.0.1:39393";
 const OVERLAY_PRIVACY_KEY = "daybridge.overlay-private.v1";
 const APPEARANCE_KEY = "daybridge.appearance.v1";
 const DEFAULT_APPEARANCE = { accent: "#62dca5" };
+const OPEN_SETTINGS_KEY = "daybridge.open-settings.v1";
 
 function kstDate() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
@@ -226,6 +228,24 @@ export default function ScheduleSurface() {
     return () => window.clearTimeout(timeoutId);
   }, [notice]);
   useEffect(() => {
+    if (surface !== "dashboard") return undefined;
+    const consumeOpenRequest = () => {
+      let requested = false;
+      try { requested = localStorage.getItem(OPEN_SETTINGS_KEY) === "true"; if (requested) localStorage.removeItem(OPEN_SETTINGS_KEY); } catch {}
+      if (!requested) return;
+      setSettingsOpen(true);
+      if (!dailyDefaultsLoaded) void loadDailyDefaults();
+      if (!scheduleSettingsLoaded) void loadScheduleSettings();
+      if (!storageDirectoryLoaded) void loadStorageLocation();
+    };
+    consumeOpenRequest();
+    let unlisten;
+    void listen("daybridge:open-settings", () => consumeOpenRequest()).then((stopListening) => { unlisten = stopListening; });
+    const timer = window.setInterval(consumeOpenRequest, 200);
+    const stop = window.setTimeout(() => window.clearInterval(timer), 3_000);
+    return () => { window.clearInterval(timer); window.clearTimeout(stop); unlisten?.(); };
+  }, [dailyDefaultsLoaded, loadDailyDefaults, loadScheduleSettings, loadStorageLocation, scheduleSettingsLoaded, storageDirectoryLoaded, surface]);
+  useEffect(() => {
     const interval = window.setInterval(() => { void loadSchedule({ quiet: true }); }, 60_000);
     return () => window.clearInterval(interval);
   }, [loadSchedule]);
@@ -364,11 +384,17 @@ export default function ScheduleSurface() {
   }, [activityDate, refresh]);
 
   const openSettings = useCallback(() => {
+    if (surface === "overlay") {
+      try { localStorage.setItem(OPEN_SETTINGS_KEY, "true"); } catch {}
+      void openDashboardSettings();
+      setNotice("Daybridge 설정 창을 열었어요");
+      return;
+    }
     setSettingsOpen(true);
     if (!dailyDefaultsLoaded) void loadDailyDefaults();
     if (!scheduleSettingsLoaded) void loadScheduleSettings();
     if (!storageDirectoryLoaded) void loadStorageLocation();
-  }, [dailyDefaultsLoaded, loadDailyDefaults, scheduleSettingsLoaded, loadScheduleSettings, storageDirectoryLoaded, loadStorageLocation]);
+  }, [dailyDefaultsLoaded, loadDailyDefaults, scheduleSettingsLoaded, loadScheduleSettings, storageDirectoryLoaded, loadStorageLocation, surface]);
 
   const refreshWidget = useCallback(async () => {
     if (refreshingWidget) return;
@@ -442,10 +468,10 @@ export default function ScheduleSurface() {
         setSchedule(result.schedule);
         setNowFocus(result.nowFocus);
       }
-      setNotice("매일 기본 일정을 저장했어요");
+      setNotice("설정을 저장했어요");
     } catch (error) {
       recordRuntimeEvent("daily_defaults_save_error", { error: error?.message || String(error), surface });
-      setNotice("매일 기본 일정을 저장하지 못했어요");
+      setNotice("설정을 저장하지 못했어요");
     }
   }, [activityDate, dailyDefaultsDraft, dailyDefaultsLoaded, loadSchedule, scheduleSettingsDraft, storageDirectoryDraft, surface]);
 
@@ -496,27 +522,24 @@ export default function ScheduleSurface() {
     />
     <p className={styles.notice} role="status" data-visible={notice ? "true" : "false"}>{notice}</p>
     {selectedQuest ? <section className={styles.questDetail} aria-label="선택한 작업 상세"><Item quest={selectedQuest} /></section> : null}
-    {settingsOpen ? <div className={styles.settingsBackdrop} role="presentation">
-      <form className={styles.settingsSheet} onSubmit={saveSettings} aria-label="위젯 설정">
-        <header>
-          <div><strong>위젯 설정</strong><p>표시 방식과 매일 반복할 일을 관리합니다.</p></div>
-          <button type="button" onClick={() => setSettingsOpen(false)} aria-label="설정 닫기">×</button>
-        </header>
-        <section className={styles.settingsSection} aria-label="표시 옵션">
-          <span className={styles.settingsSectionLabel}>표시</span>
-          <label className={styles.checkbox}>
-            <span><strong>오버레이에서 작업명 숨기기</strong><small>위젯에는 집중 상태만 표시합니다.</small></span>
-            <input className={styles.toggleInput} name="privateOverlay" type="checkbox" defaultChecked={privateMode} />
-            <span className={styles.toggleTrack} aria-hidden="true" />
-          </label>
-        </section>
-        <button className={styles.utility} type="button" onClick={refreshWidget} disabled={refreshingWidget} data-testid="schedule-widget-refresh">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-14.2-4.4L4 8.5M4 4v4.5h4.5M4 13a8.1 8.1 0 0 0 14.2 4.4l1.8-1.9M20 20v-4.5h-4.5" /></svg>
-          <span>{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</span>
-        </button>
-        <DailyDefaultsEditor value={dailyDefaultsDraft} onChange={setDailyDefaultsDraft} loading={dailyDefaultsLoading || !dailyDefaultsLoaded} />
-        <button className={styles.save} type="submit" disabled={dailyDefaultsLoading || !dailyDefaultsLoaded}>저장</button>
-      </form>
-    </div> : null}
+    {settingsOpen ? <OverlaySettingsModal
+      privateMode={privateMode}
+      onClose={() => setSettingsOpen(false)}
+      onSubmit={saveSettings}
+      onRefreshWidget={refreshWidget}
+      refreshingWidget={refreshingWidget}
+      dailyDefaults={dailyDefaultsDraft}
+      onDailyDefaultsChange={setDailyDefaultsDraft}
+      dailyDefaultsLoading={dailyDefaultsLoading || !dailyDefaultsLoaded}
+      scheduleSettings={scheduleSettingsDraft}
+      onScheduleSettingsChange={setScheduleSettingsDraft}
+      scheduleSettingsLoading={scheduleSettingsLoading}
+      appearance={appearance}
+      onAppearanceChange={(next) => { const value = { ...DEFAULT_APPEARANCE, ...next }; setAppearance(value); try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(value)); } catch {} }}
+      storageDirectory={storageDirectoryDraft}
+      onStorageDirectoryChange={setStorageDirectoryDraft}
+      storageDirectoryLoading={storageDirectoryLoading || !storageDirectoryLoaded}
+      notice={notice}
+    /> : null}
   </div>;
 }

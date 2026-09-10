@@ -63,14 +63,14 @@ function codexCalendarCachePath(activityDate) { return join(DATA_DIR, "calendar-
 let RUNTIME_LOG_PATH = join(DATA_DIR, "logs", "bridge-events.ndjson");
 let TEXT_LOG_PATH = join(DATA_DIR, "logs", "daybridge.log.txt");
 let runtimeLogQueue = Promise.resolve();
-const LOG_DETAIL_KEYS = new Set(["date", "activityDate", "surface", "status", "state", "error", "message", "reason", "connection", "sourceKind", "event", "clientOccurredAt", "announce", "quiet", "rebuild", "mode", "window", "debug", "timeConfigured", "blocks", "focusBlocks", "nowFocus", "questCount", "accepted", "excluded", "valid", "exists", "inboxChanged", "boardExists", "inboxExists", "blockId", "targetBlockId", "position", "durationMinutes", "title", "dayStart", "dayEnd", "dataDirectory", "logDirectory", "scheduleDirectory"]);
 function logDetails(details) {
   if (!details || typeof details !== "object" || Array.isArray(details)) return {};
   const result = {};
-  for (const [key, value] of Object.entries(details)) {
-    if (!LOG_DETAIL_KEYS.has(key)) continue;
+  for (const [key, value] of Object.entries(details).slice(0, 40)) {
+    if (!/^[A-Za-z][A-Za-z0-9_.-]{0,80}$/.test(key)) continue;
     if (typeof value === "string") result[key] = ["dataDirectory", "logDirectory", "scheduleDirectory"].includes(key) ? value.slice(0, 1_000) : sanitizeText(value, 500);
     else if (typeof value === "number" || typeof value === "boolean" || value === null) result[key] = value;
+    else result[key] = sanitizeText(JSON.stringify(value), 1_000);
   }
   return result;
 }
@@ -80,14 +80,15 @@ function logRuntimeEvent(event, details = {}) {
     source: "bridge",
     event: sanitizeText(event, 80).replace(/[^a-zA-Z0-9_.:-]/g, "_") || "unknown",
     occurredAt: now(),
+    occurredAtKST: koreaNow(),
     details: logDetails(details),
   };
   runtimeLogQueue = runtimeLogQueue
     .then(async () => {
       await mkdir(dirname(RUNTIME_LOG_PATH), { recursive: true });
       await appendFile(RUNTIME_LOG_PATH, JSON.stringify(record) + "\n", "utf8");
-      const detailText = Object.keys(record.details).length ? `\n${JSON.stringify(record.details, null, 2)}` : "";
-      await appendFile(TEXT_LOG_PATH, `[${record.occurredAt}] ${record.source}.${record.event}${detailText}\n${"-".repeat(72)}\n`, "utf8");
+      const detailText = Object.entries(record.details).map(([key, value]) => `${key}=${typeof value === "string" ? value.replace(/[\r\n]+/g, " ") : JSON.stringify(value)}`).join(" | ");
+      await appendFile(TEXT_LOG_PATH, `[${record.occurredAtKST} KST] ${record.source}.${record.event}${detailText ? ` | ${detailText}` : ""}\n`, "utf8");
     })
     .catch(() => {});
 }

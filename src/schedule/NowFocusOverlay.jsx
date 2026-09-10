@@ -214,7 +214,7 @@ const DEFAULT_MEALS = {
 };
 const MEAL_LABELS = { breakfast: "아침시간", lunch: "점심시간", dinner: "저녁시간" };
 
-function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading, scheduleSettings, onScheduleSettingsChange, scheduleSettingsLoading, appearance, onAppearanceChange, storageDirectory, onStorageDirectoryChange, storageDirectoryLoading }) {
+export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading, scheduleSettings, onScheduleSettingsChange, scheduleSettingsLoading, appearance, onAppearanceChange, storageDirectory, onStorageDirectoryChange, storageDirectoryLoading, notice = "" }) {
   const settings = scheduleSettings || { dayStart: "", dayEnd: "", timeConfigured: false, breaks: [], meals: DEFAULT_MEALS };
   const meals = { ...DEFAULT_MEALS, ...(settings.meals || {}) };
   const [activeTab, setActiveTab] = useState("schedule");
@@ -228,6 +228,7 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
   const timeConfigured = settings.timeConfigured === true;
   return (
     <div className={`${styles.settingsModal} ${closing ? styles.settingsModalClosing : ""}`} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
+      {notice ? <div className={styles.overlayToast} role="status" aria-live="polite" data-testid="daybridge-settings-toast">{notice}</div> : null}
       <form className={styles.settingsForm} onSubmit={onSubmit} data-testid="now-focus-overlay-settings-sheet">
         <header className={styles.settingsHeader} data-tauri-drag-region="true">
           <div>
@@ -706,7 +707,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
 
   return (
     <aside className={styles.overlay} style={{ "--green": appearance?.accent || "#62dca5", "--modal-accent": appearance?.accent || "#839eff" }} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
-      {notice ? <div className={styles.overlayToast} role="status" aria-live="polite" data-testid="daybridge-toast">{notice}</div> : null}
+      {!settingsOpen && notice ? <div className={styles.overlayToast} role="status" aria-live="polite" data-testid="daybridge-toast">{notice}</div> : null}
       <div
         className={surfaceClassName}
         style={{ "--overlay-expanded-height": `${targetExpandedHeight}px` }}
@@ -813,7 +814,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
         </button>
         </div>
       </div>
-      {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} scheduleSettings={scheduleSettings} onScheduleSettingsChange={onScheduleSettingsChange} scheduleSettingsLoading={scheduleSettingsLoading} appearance={appearance} onAppearanceChange={onAppearanceChange} storageDirectory={storageDirectory} onStorageDirectoryChange={onStorageDirectoryChange} storageDirectoryLoading={storageDirectoryLoading} /> : null}
+      {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} scheduleSettings={scheduleSettings} onScheduleSettingsChange={onScheduleSettingsChange} scheduleSettingsLoading={scheduleSettingsLoading} appearance={appearance} onAppearanceChange={onAppearanceChange} storageDirectory={storageDirectory} onStorageDirectoryChange={onStorageDirectoryChange} storageDirectoryLoading={storageDirectoryLoading} notice={notice} /> : null}
     </aside>
   );
 }

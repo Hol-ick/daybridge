@@ -86,6 +86,12 @@ export async function openDashboard() {
   await invoke("open_dashboard");
 }
 
+export async function openDashboardSettings() {
+  if (!isTauri()) return false;
+  await invoke("open_dashboard_settings");
+  return true;
+}
+
 export async function openDaybridgeDataDirectory(path = "") {
   if (!isTauri()) return false;
   await invoke("open_daybridge_data_directory", { path: path || null });
