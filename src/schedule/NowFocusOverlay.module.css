@@ -238,6 +238,8 @@
   cursor: default;
   animation: overlay-settings-in .18s cubic-bezier(.22, 1, .36, 1);
 }
+.settingsModalClosing { animation: overlay-settings-out .18s cubic-bezier(.4, 0, 1, 1) forwards; pointer-events: none; }
+@keyframes overlay-settings-out { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(8px) scale(.985); } }
 .settingsForm {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
@@ -290,6 +292,7 @@
 .settingsBreakRow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .settingsForm input:not([type="checkbox"]), .settingsForm select { width: 100%; min-height: 34px; box-sizing: border-box; padding: 0 9px; border: 1px solid var(--modal-line); border-radius: 7px; outline: none; background: var(--modal-field); color: var(--modal-ink); font: inherit; font-size: 13px; font-weight: 700; }
 .settingsForm input:disabled { cursor: not-allowed; opacity: .46; }
+.settingsForm input[type="text"] { text-overflow: ellipsis; }
 .settingsForm input:not([type="checkbox"]):focus, .settingsForm select:focus { border-color: #718bd9; box-shadow: 0 0 0 3px rgb(131 158 255 / 15%); }
 .fixedSetting { display: grid; align-content: center; gap: 5px; min-width: 0; padding-top: 16px; color: var(--modal-muted); font-size: 11px; font-weight: 750; }
 .fixedSetting strong { color: var(--modal-ink); font-size: 15px; }

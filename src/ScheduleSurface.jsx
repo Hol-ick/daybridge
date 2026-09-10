@@ -92,6 +92,9 @@ export default function ScheduleSurface() {
   const [scheduleSettingsLoaded, setScheduleSettingsLoaded] = useState(false);
   const [scheduleSettingsLoading, setScheduleSettingsLoading] = useState(false);
   const [appearance, setAppearance] = useState(initialAppearance);
+  const [storageDirectoryDraft, setStorageDirectoryDraft] = useState("");
+  const [storageDirectoryLoaded, setStorageDirectoryLoaded] = useState(false);
+  const [storageDirectoryLoading, setStorageDirectoryLoading] = useState(false);
   // The overlay always represents today. A board persisted while the bridge
   // was unavailable must not pin schedule requests to yesterday's date.
   const activityDate = resolveActivityDate(board, kstDate());
@@ -200,6 +203,20 @@ export default function ScheduleSurface() {
       return false;
     } finally { setScheduleSettingsLoading(false); }
   }, [scheduleSettingsLoading, surface]);
+  const loadStorageLocation = useCallback(async () => {
+    if (storageDirectoryLoading) return false;
+    setStorageDirectoryLoading(true);
+    try {
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/storage-location`));
+      setStorageDirectoryDraft(result?.dataDirectory || "");
+      setStorageDirectoryLoaded(true);
+      return true;
+    } catch (error) {
+      recordRuntimeEvent("storage_location_load_error", { error: error?.message || String(error), surface });
+      setNotice("로컬 폴더 경로를 불러오지 못했어요");
+      return false;
+    } finally { setStorageDirectoryLoading(false); }
+  }, [storageDirectoryLoading, surface]);
 
   useEffect(() => { void loadSchedule({ quiet: true }); }, [loadSchedule]);
   useEffect(() => { void loadCalendarStatus({ quiet: true }); }, [loadCalendarStatus]);
@@ -350,7 +367,8 @@ export default function ScheduleSurface() {
     setSettingsOpen(true);
     if (!dailyDefaultsLoaded) void loadDailyDefaults();
     if (!scheduleSettingsLoaded) void loadScheduleSettings();
-  }, [dailyDefaultsLoaded, loadDailyDefaults, scheduleSettingsLoaded, loadScheduleSettings]);
+    if (!storageDirectoryLoaded) void loadStorageLocation();
+  }, [dailyDefaultsLoaded, loadDailyDefaults, scheduleSettingsLoaded, loadScheduleSettings, storageDirectoryLoaded, loadStorageLocation]);
 
   const refreshWidget = useCallback(async () => {
     if (refreshingWidget) return;
@@ -401,6 +419,13 @@ export default function ScheduleSurface() {
       return;
     }
     try {
+      if (storageDirectoryDraft.trim()) {
+        const storageResult = await readJson(await fetchBridge(`${BRIDGE_URL}/api/storage-location`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dataDirectory: storageDirectoryDraft.trim() }),
+        }));
+        setStorageDirectoryDraft(storageResult.dataDirectory);
+      }
       const scheduleResult = await readJson(await fetchBridge(`${BRIDGE_URL}/api/schedule-settings`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ activityDate, ...scheduleSettingsDraft }),
@@ -417,13 +442,12 @@ export default function ScheduleSurface() {
         setSchedule(result.schedule);
         setNowFocus(result.nowFocus);
       }
-      setSettingsOpen(false);
       setNotice("매일 기본 일정을 저장했어요");
     } catch (error) {
       recordRuntimeEvent("daily_defaults_save_error", { error: error?.message || String(error), surface });
       setNotice("매일 기본 일정을 저장하지 못했어요");
     }
-  }, [activityDate, dailyDefaultsDraft, dailyDefaultsLoaded, loadSchedule, scheduleSettingsDraft, surface]);
+  }, [activityDate, dailyDefaultsDraft, dailyDefaultsLoaded, loadSchedule, scheduleSettingsDraft, storageDirectoryDraft, surface]);
 
   const selectedQuest = useMemo(() => board?.quests?.find((quest) => quest.id === expandedQuestId) || null, [board?.quests, expandedQuestId]);
   if (surface === "overlay") {
@@ -450,6 +474,9 @@ export default function ScheduleSurface() {
       appearance={appearance}
       onAppearanceChange={(next) => { const value = { ...DEFAULT_APPEARANCE, ...next }; setAppearance(value); try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(value)); } catch {} }}
       notice={notice}
+      storageDirectory={storageDirectoryDraft}
+      onStorageDirectoryChange={setStorageDirectoryDraft}
+      storageDirectoryLoading={storageDirectoryLoading || !storageDirectoryLoaded}
       magnetPulse={overlayMagnetPulse}
     />;
   }

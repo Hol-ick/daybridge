@@ -745,12 +745,12 @@ fn open_dashboard(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_daybridge_data_directory() -> Result<(), String> {
+fn open_daybridge_data_directory(path: Option<String>) -> Result<(), String> {
     #[cfg(windows)]
     {
-        let local_app_data = std::env::var_os("LOCALAPPDATA")
-            .ok_or_else(|| "LOCALAPPDATA 경로를 확인할 수 없습니다.".to_string())?;
-        let directory = PathBuf::from(local_app_data).join("Daybridge");
+        let directory = path.filter(|value| !value.trim().is_empty()).map(PathBuf::from).unwrap_or_else(|| {
+            std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_default().join("Daybridge")
+        });
         std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         Command::new("explorer.exe")
             .arg(directory)

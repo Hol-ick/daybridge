@@ -214,10 +214,12 @@ const DEFAULT_MEALS = {
 };
 const MEAL_LABELS = { breakfast: "아침시간", lunch: "점심시간", dinner: "저녁시간" };
 
-function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading, scheduleSettings, onScheduleSettingsChange, scheduleSettingsLoading, appearance, onAppearanceChange }) {
+function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading, scheduleSettings, onScheduleSettingsChange, scheduleSettingsLoading, appearance, onAppearanceChange, storageDirectory, onStorageDirectoryChange, storageDirectoryLoading }) {
   const settings = scheduleSettings || { dayStart: "", dayEnd: "", timeConfigured: false, breaks: [], meals: DEFAULT_MEALS };
   const meals = { ...DEFAULT_MEALS, ...(settings.meals || {}) };
   const [activeTab, setActiveTab] = useState("schedule");
+  const [closing, setClosing] = useState(false);
+  const requestClose = () => { if (closing) return; setClosing(true); window.setTimeout(() => onClose?.(), 180); };
   const updateSettings = (patch) => onScheduleSettingsChange?.({ ...settings, ...patch });
   const updateMeal = (key, patch) => {
     const nextMeals = { ...meals, [key]: { ...meals[key], ...patch } };
@@ -225,14 +227,14 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
   };
   const timeConfigured = settings.timeConfigured === true;
   return (
-    <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
+    <div className={`${styles.settingsModal} ${closing ? styles.settingsModalClosing : ""}`} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
       <form className={styles.settingsForm} onSubmit={onSubmit} data-testid="now-focus-overlay-settings-sheet">
         <header className={styles.settingsHeader} data-tauri-drag-region="true">
           <div>
             <strong>위젯 설정</strong>
             <p>표시 방식과 매일 반복할 일을 관리합니다.</p>
           </div>
-          <button type="button" className={styles.settingsClose} onClick={onClose} aria-label="설정 닫기" data-tauri-drag-region="false">×</button>
+          <button type="button" className={styles.settingsClose} onClick={requestClose} aria-label="설정 닫기" data-tauri-drag-region="false">×</button>
         </header>
         {activeTab !== "display" ? <input type="checkbox" name="privateOverlay" defaultChecked={privateMode} hidden /> : null}
         <div className={styles.settingsLayout}>
@@ -268,7 +270,10 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
               <section className={styles.settingsSection} aria-label="표시 옵션"><span className={styles.settingsSectionLabel}>표시</span><label className={styles.settingsCheckbox}><span><strong>오버레이에서 작업명 숨기기</strong><small>위젯에는 집중 상태만 표시합니다.</small></span><input className={styles.settingsToggleInput} name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span className={styles.settingsToggleTrack} aria-hidden="true" /></label></section>
               <section className={styles.settingsSection} aria-label="색상 테마"><span className={styles.settingsSectionLabel}>색상</span><div className={styles.themeChoices} role="group" aria-label="강조 색상">{THEME_PRESETS.map((preset) => <button key={preset.id} type="button" className={styles.themeSwatch} style={{ "--swatch": preset.accent }} aria-label={`${preset.label} 테마`} aria-pressed={appearance?.accent === preset.accent} onClick={() => onAppearanceChange?.({ accent: preset.accent })}><span aria-hidden="true" /></button>)}<label className={styles.themeCustom}><span>직접 선택</span><input type="color" value={appearance?.accent || "#62dca5"} onChange={(event) => onAppearanceChange?.({ accent: event.target.value })} aria-label="강조 색상 직접 선택" /></label></div><small className={styles.settingsHint}>텍스트 대비를 해치지 않도록 강조 색상은 버튼·상태 표시 중심으로 사용합니다.</small></section>
             </> : null}
-            {activeTab === "defaults" ? <><DailyDefaultsEditor value={dailyDefaults} onChange={onDailyDefaultsChange} loading={dailyDefaultsLoading} /></> : null}
+            {activeTab === "defaults" ? <>
+              <DailyDefaultsEditor value={dailyDefaults} onChange={onDailyDefaultsChange} loading={dailyDefaultsLoading} />
+              <section className={styles.settingsSection} aria-label="로컬 저장 위치"><span className={styles.settingsSectionLabel}>로컬 저장 위치</span><small className={styles.settingsHint}>일정·설정·활동 로그를 저장하고 Daybridge가 읽을 폴더입니다.</small><label className={styles.settingsField}><span>Daybridge 폴더 경로</span><input type="text" value={storageDirectory || ""} placeholder="예: C:\\Users\\hs190\\Desktop\\THK\\보관\\Daybridge" onChange={(event) => onStorageDirectoryChange?.(event.target.value)} disabled={storageDirectoryLoading} /></label></section>
+            </> : null}
           </main>
         </div>
         <div className={styles.settingsUtilityRow}>
@@ -283,7 +288,7 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-14.2-4.4L4 8.5M4 4v4.5h4.5M4 13a8.1 8.1 0 0 0 14.2 4.4l1.8-1.9M20 20v-4.5h-4.5" /></svg>
           <span>{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</span>
         </button>
-        <button className={styles.settingsUtility} type="button" onClick={() => { void openDaybridgeDataDirectory().catch(() => {}); }} data-testid="now-focus-overlay-open-data" data-tauri-drag-region="false">
+        <button className={styles.settingsUtility} type="button" onClick={() => { void openDaybridgeDataDirectory(storageDirectory).catch(() => {}); }} data-testid="now-focus-overlay-open-data" data-tauri-drag-region="false">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10.5h-17zM3.5 6.5v-2h6l2 2" /></svg>
           <span>로컬 일정 폴더 열기</span>
         </button>
@@ -298,7 +303,7 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false, scheduleSettings = {}, onScheduleSettingsChange, scheduleSettingsLoading = false, appearance = {}, onAppearanceChange, notice = "", magnetPulse = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false, scheduleSettings = {}, onScheduleSettingsChange, scheduleSettingsLoading = false, appearance = {}, onAppearanceChange, notice = "", storageDirectory = "", onStorageDirectoryChange, storageDirectoryLoading = false, magnetPulse = false }) {
   const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
   const pointerDragRef = useRef({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null });
   const suppressCardClickRef = useRef(false);
@@ -808,7 +813,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
         </button>
         </div>
       </div>
-      {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} scheduleSettings={scheduleSettings} onScheduleSettingsChange={onScheduleSettingsChange} scheduleSettingsLoading={scheduleSettingsLoading} appearance={appearance} onAppearanceChange={onAppearanceChange} /> : null}
+      {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} scheduleSettings={scheduleSettings} onScheduleSettingsChange={onScheduleSettingsChange} scheduleSettingsLoading={scheduleSettingsLoading} appearance={appearance} onAppearanceChange={onAppearanceChange} storageDirectory={storageDirectory} onStorageDirectoryChange={onStorageDirectoryChange} storageDirectoryLoading={storageDirectoryLoading} /> : null}
     </aside>
   );
 }

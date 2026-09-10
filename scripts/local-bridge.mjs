@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { buildDailySchedule, resolveNowFocus } from "../src/schedule/scheduler.js";
 import { toScheduleTitle } from "../src/schedule/model.js";
 import { parseScheduleInboxMarkdown } from "../src/schedule/inbox.js";
@@ -26,8 +27,18 @@ import { readActivityLog, recordActivity } from "./activity-log.mjs";
 
 const PORT = Number(process.env.DAYBRIDGE_BRIDGE_PORT || 39393);
 const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
-const DATA_DIR = resolve(process.env.DAYBRIDGE_DATA_DIR || join(APP_DATA, "Daybridge"));
-const CONFIG_PATH = join(DATA_DIR, "config.json");
+const DEFAULT_DATA_DIR = resolve(join(APP_DATA, "Daybridge"));
+const LOCATION_PATH = join(DEFAULT_DATA_DIR, "storage-location.json");
+function configuredDataDir() {
+  if (process.env.DAYBRIDGE_DATA_DIR) return resolve(process.env.DAYBRIDGE_DATA_DIR);
+  try {
+    const stored = JSON.parse(readFileSync(LOCATION_PATH, "utf8"));
+    if (typeof stored?.dataDirectory === "string" && stored.dataDirectory.trim()) return resolve(stored.dataDirectory);
+  } catch {}
+  return DEFAULT_DATA_DIR;
+}
+let DATA_DIR = configuredDataDir();
+let CONFIG_PATH = join(DATA_DIR, "config.json");
 const VALID_STATUSES = new Set(["ready", "in_progress", "deferred", "completed", "blocked", "not_started", "paused", "needs_confirmation"]);
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const phonePattern = /(?<!\d)01[016789][ -]?\d{3,4}[ -]?\d{4}(?!\d)/g;
@@ -49,15 +60,16 @@ function sanitizeText(value, limit = 600) {
 function boardPath(activityDate) { return join(DATA_DIR, "boards", activityDate + ".json"); }
 function inboxPath(activityDate) { return join(DATA_DIR, "inbox", `schedule-${activityDate}.md`); }
 function codexCalendarCachePath(activityDate) { return join(DATA_DIR, "calendar-codex-busy", activityDate + ".json"); }
-const RUNTIME_LOG_PATH = join(DATA_DIR, "logs", "bridge-events.ndjson");
+let RUNTIME_LOG_PATH = join(DATA_DIR, "logs", "bridge-events.ndjson");
+let TEXT_LOG_PATH = join(DATA_DIR, "logs", "daybridge.log.txt");
 let runtimeLogQueue = Promise.resolve();
-const LOG_DETAIL_KEYS = new Set(["date", "activityDate", "surface", "status", "state", "error", "message", "reason", "connection", "sourceKind", "event", "clientOccurredAt", "announce", "quiet", "rebuild", "mode", "window", "debug", "timeConfigured", "blocks", "focusBlocks", "nowFocus", "questCount", "accepted", "excluded", "valid", "exists", "inboxChanged", "boardExists", "inboxExists", "blockId", "targetBlockId", "position", "durationMinutes", "title", "dayStart", "dayEnd"]);
+const LOG_DETAIL_KEYS = new Set(["date", "activityDate", "surface", "status", "state", "error", "message", "reason", "connection", "sourceKind", "event", "clientOccurredAt", "announce", "quiet", "rebuild", "mode", "window", "debug", "timeConfigured", "blocks", "focusBlocks", "nowFocus", "questCount", "accepted", "excluded", "valid", "exists", "inboxChanged", "boardExists", "inboxExists", "blockId", "targetBlockId", "position", "durationMinutes", "title", "dayStart", "dayEnd", "dataDirectory", "logDirectory", "scheduleDirectory"]);
 function logDetails(details) {
   if (!details || typeof details !== "object" || Array.isArray(details)) return {};
   const result = {};
   for (const [key, value] of Object.entries(details)) {
     if (!LOG_DETAIL_KEYS.has(key)) continue;
-    if (typeof value === "string") result[key] = sanitizeText(value, 500);
+    if (typeof value === "string") result[key] = ["dataDirectory", "logDirectory", "scheduleDirectory"].includes(key) ? value.slice(0, 1_000) : sanitizeText(value, 500);
     else if (typeof value === "number" || typeof value === "boolean" || value === null) result[key] = value;
   }
   return result;
@@ -74,6 +86,8 @@ function logRuntimeEvent(event, details = {}) {
     .then(async () => {
       await mkdir(dirname(RUNTIME_LOG_PATH), { recursive: true });
       await appendFile(RUNTIME_LOG_PATH, JSON.stringify(record) + "\n", "utf8");
+      const detailText = Object.keys(record.details).length ? `\n${JSON.stringify(record.details, null, 2)}` : "";
+      await appendFile(TEXT_LOG_PATH, `[${record.occurredAt}] ${record.source}.${record.event}${detailText}\n${"-".repeat(72)}\n`, "utf8");
     })
     .catch(() => {});
 }
@@ -158,6 +172,19 @@ async function atomicWrite(path, value) {
   await writeFile(temporary, JSON.stringify(value, null, 2) + "\n", "utf8");
   await rename(temporary, path);
 }
+async function setDataDirectory(nextPath) {
+  const value = typeof nextPath === "string" ? nextPath.trim() : "";
+  if (!value) throw new TypeError("dataDirectory is required.");
+  const next = resolve(value);
+  await mkdir(next, { recursive: true });
+  await mkdir(join(next, "logs"), { recursive: true });
+  await atomicWrite(LOCATION_PATH, { schemaVersion: 1, dataDirectory: next, updatedAt: now() });
+  DATA_DIR = next;
+  CONFIG_PATH = join(DATA_DIR, "config.json");
+  RUNTIME_LOG_PATH = join(DATA_DIR, "logs", "bridge-events.ndjson");
+  TEXT_LOG_PATH = join(DATA_DIR, "logs", "daybridge.log.txt");
+  return DATA_DIR;
+}
 async function loadConfig() {
   const configured = await readJson(CONFIG_PATH);
   const profile = await readJson(join(APP_DATA, "AIHUB", "environment.json"));
@@ -165,6 +192,11 @@ async function loadConfig() {
     ? join(profile.aihub_root, "04_Operations_And_Automation", "Memory_System", "reports", "daily", "_system", "daybridge_handoff")
     : null;
   return { schemaVersion: 1, handoffSinkDir: discoveredSink, ...(configured && typeof configured === "object" ? configured : {}) };
+}
+async function handleStorageLocationUpdate(body) {
+  const dataDirectory = await setDataDirectory(body?.dataDirectory);
+  logRuntimeEvent("storage_location_changed", { dataDirectory, message: "Daybridge 로컬 데이터 폴더를 변경했습니다." });
+  return { status: 200, body: { dataDirectory, logDirectory: join(dataDirectory, "logs"), scheduleDirectory: join(dataDirectory, "schedules") } };
 }
 function normalizeSteps(value, existing) {
   if (!Array.isArray(value)) return existing;
@@ -711,7 +743,7 @@ const server = createServer(async (request, response) => {
   if (request.method === "OPTIONS") { send(response, 204, {}, origin); return; }
   const url = new URL(request.url, "http://127.0.0.1:" + PORT);
   try {
-    if (request.method === "GET" && url.pathname === "/api/health") { const config = await loadConfig(); send(response, 200, { status: "ok", dataDir: DATA_DIR, handoffSinkDir: config.handoffSinkDir || null, connected: Boolean(config.handoffSinkDir) }, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/health") { const config = await loadConfig(); send(response, 200, { status: "ok", dataDir: DATA_DIR, logDirectory: join(DATA_DIR, "logs"), handoffSinkDir: config.handoffSinkDir || null, connected: Boolean(config.handoffSinkDir) }, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/calendar/oauth/callback") { await handleCalendarCallback(url, response); return; }
     if (request.method === "GET" && url.pathname === "/api/calendar/status") { const result = await handleCalendarStatus(); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/calendar/connect") { const result = await handleCalendarConnect(); send(response, result.status, result.body, origin); return; }
@@ -726,13 +758,15 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/schedule/rebuild") { const result = await handleScheduleRebuild(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule-settings") { send(response, 200, { settings: await loadScheduleSettings(DATA_DIR) }, origin); return; }
     if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const result = await handleScheduleSettingsUpdate(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/storage-location") { send(response, 200, { dataDirectory: DATA_DIR, logDirectory: join(DATA_DIR, "logs"), scheduleDirectory: join(DATA_DIR, "schedules") }, origin); return; }
+    if (request.method === "PUT" && url.pathname === "/api/storage-location") { const result = await handleStorageLocationUpdate(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/daily-defaults") { send(response, 200, { dailyDefaults: await loadDailyDefaults(DATA_DIR) }, origin); return; }
     if (request.method === "PUT" && url.pathname === "/api/daily-defaults") { const result = await handleDailyDefaultsUpdate(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-report") { const result = await handleScheduleBlockReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-move") { const result = await handleScheduleBlockMove(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-discard") { const result = await handleScheduleBlockDiscard(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     send(response, 404, { error: "Not found." }, origin);
-  } catch (error) { send(response, 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error." }, origin); }
+  } catch (error) { logRuntimeEvent("http_error", { error: error?.stack || error?.message || String(error), message: `${request.method} ${url.pathname}` }); send(response, 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error." }, origin); }
 });
 await mkdir(join(DATA_DIR, "boards"), { recursive: true });
 logRuntimeEvent("bridge_started", { accepted: true, connection: "local" });
