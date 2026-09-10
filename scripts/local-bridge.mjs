@@ -112,7 +112,7 @@ const HUMAN_DETAIL_LABELS = {
   activityDate: "활동 날짜", questCount: "일정 수", announce: "알림", quiet: "조용히 처리", refreshed: "새로고침 여부",
   clientOccurredAt: "발생 시각", state: "상태", autoStartedBlockId: "자동 시작 일정 ID", displayedDate: "표시 날짜", requestedDate: "요청 날짜",
 };
-const HUMAN_OMIT_DETAILS = new Set(["event", "clientOccurredAt"]);
+const HUMAN_OMIT_DETAILS = new Set(["event", "clientOccurredAt", "blockId", "targetBlockId", "autoStartedBlockId"]);
 function humanEventLabel(event) {
   const normalized = event.replace(/^client:/, "");
   return HUMAN_EVENT_LABELS[normalized] || normalized.replace(/_/g, " ");

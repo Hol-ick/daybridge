@@ -364,6 +364,8 @@ export default function ScheduleSurface() {
   }, [activityDate, refresh]);
 
   const discardBlock = useCallback(async (blockId) => {
+    const discardedBlock = Array.isArray(schedule?.blocks) ? schedule.blocks.find((block) => block?.id === blockId) : null;
+    const title = discardedBlock?.title || discardedBlock?.scheduleTitle || discardedBlock?.displayTitle || "제목 없음";
     try {
       const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/schedule/block-discard`, {
         method: "POST",
@@ -373,15 +375,15 @@ export default function ScheduleSurface() {
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       setNotice("작업을 오늘 시간표에서 폐기했어요");
-      recordRuntimeEvent("schedule_block_discarded", { date: activityDate, blockId });
+      recordRuntimeEvent("schedule_block_discarded", { date: activityDate, title });
       void refresh();
       return true;
     } catch (error) {
-      recordRuntimeEvent("schedule_block_discard_error", { date: activityDate, blockId, error: error?.message || String(error) });
+      recordRuntimeEvent("schedule_block_discard_error", { date: activityDate, title, error: error?.message || String(error) });
       setNotice("이 작업을 폐기하지 못했어요");
       return false;
     }
-  }, [activityDate, refresh]);
+  }, [activityDate, refresh, schedule]);
 
   const openSettings = useCallback(() => {
     if (surface === "overlay") {
