@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -26,6 +27,7 @@ const OVERLAY_CANVAS_WIDTH: i32 = 760;
 const OVERLAY_CANVAS_HEIGHT: i32 = 720;
 const OVERLAY_CARD_WIDTH: i32 = 288;
 const OVERLAY_COLLAPSED_HEIGHT: i32 = 64;
+static SETTINGS_MODAL_OPEN: AtomicBool = AtomicBool::new(false);
 
 #[cfg(windows)]
 fn configure_windows_startup() -> Result<(), String> {
@@ -644,9 +646,11 @@ fn ensure_overlay_visible(app: &tauri::AppHandle, source: &str) -> Result<bool, 
     // topmost z-order after a display/full-screen transition. Re-assert the
     // native flag whenever the tray or the visibility watchdog asks for a
     // recovery, without stealing focus from the user's current application.
-    window
-        .set_always_on_top(true)
-        .map_err(|error| error.to_string())?;
+    if !SETTINGS_MODAL_OPEN.load(Ordering::Relaxed) {
+        window
+            .set_always_on_top(true)
+            .map_err(|error| error.to_string())?;
+    }
     window.show().map_err(|error| error.to_string())?;
     force_native_overlay_visible(&window)?;
     let repositioned = restore_overlay_if_off_screen(app, &window)?;
@@ -856,6 +860,12 @@ fn set_overlay_interaction_region(
 }
 
 #[tauri::command]
+fn set_overlay_settings_mode(open: bool) -> Result<(), String> {
+    SETTINGS_MODAL_OPEN.store(open, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
 fn record_runtime_event(
     app: tauri::AppHandle,
     event: String,
@@ -990,6 +1000,7 @@ fn main() {
             get_overlay_position,
             save_overlay_position,
             set_overlay_interaction_region,
+            set_overlay_settings_mode,
             record_runtime_event,
             ensure_local_bridge,
             exit_app

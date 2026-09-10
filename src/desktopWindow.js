@@ -136,6 +136,8 @@ async function moveOverlayCanvasToCenter() {
 /** Open the settings surface as a true screen-centred modal-sized viewport. */
 export async function openOverlaySettingsModal() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
+  await invoke("set_overlay_settings_mode", { open: true });
+  await getCurrentWindow().setAlwaysOnTop(false);
   await getCurrentWindow().setSize(new LogicalSize(OVERLAY_SETTINGS_WIDTH, OVERLAY_SETTINGS_HEIGHT));
   await setOverlayInteractionRegion({ settingsOpen: true });
   return moveOverlayCanvasToCenter();
@@ -144,6 +146,8 @@ export async function openOverlaySettingsModal() {
 /** Return the settings viewport to the compact card, flush with the work area. */
 export async function closeOverlaySettingsModal() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
+  await invoke("set_overlay_settings_mode", { open: false });
+  await getCurrentWindow().setAlwaysOnTop(true);
   await getCurrentWindow().setSize(new LogicalSize(OVERLAY_CANVAS_WIDTH, OVERLAY_CANVAS_HEIGHT));
   await setOverlayInteractionRegion({ height: OVERLAY_COLLAPSED_HEIGHT });
   await placeOverlayInCorner();

@@ -237,13 +237,14 @@
 }
 .settingsForm {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   width: 100%;
   height: 100%;
   max-height: none;
   gap: 14px;
   padding: 24px;
   box-sizing: border-box;
-  overflow-y: auto;
+  overflow: hidden;
   border: 1px solid var(--modal-line);
   border-radius: 12px;
   background: var(--modal-surface);
@@ -258,7 +259,7 @@
 .settingsNavButton:hover { background: rgb(255 255 255 / 4%); color: var(--modal-ink); }
 .settingsNavActive { border-color: color-mix(in srgb, var(--modal-accent) 48%, var(--modal-line)); background: color-mix(in srgb, var(--modal-accent) 11%, transparent); color: var(--modal-ink); }
 .settingsNavActive span { color: color-mix(in srgb, var(--modal-accent) 70%, white); }
-.settingsContent { min-width: 0; min-height: 0; overflow-y: auto; padding-right: 4px; scrollbar-color: #586171 transparent; scrollbar-width: thin; }
+.settingsContent { display: grid; align-content: start; min-width: 0; min-height: 0; overflow-y: auto; padding: 0 4px 8px 0; scrollbar-color: #586171 transparent; scrollbar-width: thin; }
 .mealSettingRow { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid rgb(255 255 255 / 7%); }
 .mealSettingRow:first-of-type { border-top: 0; }
 .settingsHeader { display: flex; align-items: start; justify-content: space-between; gap: 16px; cursor: grab; user-select: none; }
