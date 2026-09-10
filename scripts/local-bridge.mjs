@@ -92,6 +92,7 @@ const HUMAN_DETAIL_LABELS = {
   connection: "연결", dataDirectory: "데이터 폴더", logDirectory: "로그 폴더", scheduleDirectory: "일정 폴더",
   event: "이벤트", sourceKind: "출처", rebuild: "재생성", timeConfigured: "시간 설정", nowFocus: "현재 일정",
 };
+const HUMAN_OMIT_DETAILS = new Set(["event", "clientOccurredAt"]);
 function humanEventLabel(event) {
   const normalized = event.replace(/^client:/, "");
   return HUMAN_EVENT_LABELS[normalized] || normalized.replace(/_/g, " ");
@@ -129,7 +130,7 @@ function logRuntimeEvent(event, details = {}) {
     .then(async () => {
       await mkdir(dirname(RUNTIME_LOG_PATH), { recursive: true });
       await appendFile(RUNTIME_LOG_PATH, JSON.stringify(record) + "\n", "utf8");
-      const detailText = Object.entries(record.details).map(([key, value]) => `${humanDetailLabel(key, value)}=${typeof value === "string" ? value.replace(/[\r\n]+/g, " ") : JSON.stringify(value)}`).join(" | ");
+      const detailText = Object.entries(record.details).filter(([key]) => !HUMAN_OMIT_DETAILS.has(key)).map(([key, value]) => `${humanDetailLabel(key, value)}=${typeof value === "string" ? value.replace(/[\r\n]+/g, " ") : JSON.stringify(value)}`).join(" | ");
       const month = record.occurredAtKST.slice(0, 7).replace(/[^0-9-]/g, "");
       const textLogPath = join(TEXT_LOG_DIRECTORY, `daybridge-${month}.txt`);
       const level = /error|fail|exception|rejection|timeout/i.test(record.event) ? "오류" : /warn|retry|recovery/i.test(record.event) ? "경고" : "정보";
