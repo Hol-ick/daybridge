@@ -292,7 +292,7 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
-export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false, scheduleSettings = {}, onScheduleSettingsChange, scheduleSettingsLoading = false, appearance = {}, onAppearanceChange, magnetPulse = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false, scheduleSettings = {}, onScheduleSettingsChange, scheduleSettingsLoading = false, appearance = {}, onAppearanceChange, notice = "", magnetPulse = false }) {
   const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
   const pointerDragRef = useRef({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null });
   const suppressCardClickRef = useRef(false);
@@ -695,6 +695,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
 
   return (
     <aside className={styles.overlay} style={{ "--green": appearance?.accent || "#62dca5", "--modal-accent": appearance?.accent || "#839eff" }} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
+      {notice ? <div className={styles.overlayToast} role="status" aria-live="polite" data-testid="daybridge-toast">{notice}</div> : null}
       <div
         className={surfaceClassName}
         style={{ "--overlay-expanded-height": `${targetExpandedHeight}px` }}

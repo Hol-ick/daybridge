@@ -204,6 +204,11 @@ export default function ScheduleSurface() {
   useEffect(() => { void loadSchedule({ quiet: true }); }, [loadSchedule]);
   useEffect(() => { void loadCalendarStatus({ quiet: true }); }, [loadCalendarStatus]);
   useEffect(() => {
+    if (!notice) return undefined;
+    const timeoutId = window.setTimeout(() => setNotice(""), 2800);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
+  useEffect(() => {
     const interval = window.setInterval(() => { void loadSchedule({ quiet: true }); }, 60_000);
     return () => window.clearInterval(interval);
   }, [loadSchedule]);
@@ -444,6 +449,7 @@ export default function ScheduleSurface() {
       scheduleSettingsLoading={scheduleSettingsLoading}
       appearance={appearance}
       onAppearanceChange={(next) => { const value = { ...DEFAULT_APPEARANCE, ...next }; setAppearance(value); try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(value)); } catch {} }}
+      notice={notice}
       magnetPulse={overlayMagnetPulse}
     />;
   }
