@@ -86,6 +86,12 @@ export async function openDashboard() {
   await invoke("open_dashboard");
 }
 
+export async function openDaybridgeDataDirectory() {
+  if (!isTauri()) return false;
+  await invoke("open_daybridge_data_directory");
+  return true;
+}
+
 export async function startOverlayDrag() {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return false;
   await getCurrentWindow().startDragging();

@@ -294,6 +294,7 @@
 .fixedSetting { display: grid; align-content: center; gap: 5px; min-width: 0; padding-top: 16px; color: var(--modal-muted); font-size: 11px; font-weight: 750; }
 .fixedSetting strong { color: var(--modal-ink); font-size: 15px; }
 .settingsSave { min-height: 42px; border: 1px solid var(--modal-accent); border-radius: 8px; background: var(--modal-accent); color: #111827; cursor: pointer; font: inherit; font-size: 13px; font-weight: 850; letter-spacing: -.025em; transition: background-color .14s ease, border-color .14s ease, transform .14s ease; }
+.settingsUtilityRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .settingsSave:hover:not(:disabled) { border-color: var(--modal-accent-strong); background: var(--modal-accent-strong); }
 .settingsSave:active:not(:disabled) { transform: translateY(1px); }
 .settingsSave:disabled { cursor: wait; opacity: .56; }

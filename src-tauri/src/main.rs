@@ -745,6 +745,24 @@ fn open_dashboard(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn open_daybridge_data_directory() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let local_app_data = std::env::var_os("LOCALAPPDATA")
+            .ok_or_else(|| "LOCALAPPDATA 경로를 확인할 수 없습니다.".to_string())?;
+        let directory = PathBuf::from(local_app_data).join("Daybridge");
+        std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        Command::new("explorer.exe")
+            .arg(directory)
+            .spawn()
+            .map_err(|error| format!("Daybridge 로컬 폴더를 열 수 없습니다: {error}"))?;
+        return Ok(());
+    }
+    #[cfg(not(windows))]
+    { Err("로컬 폴더 열기는 Windows에서만 지원합니다.".to_string()) }
+}
+
+#[tauri::command]
 fn get_overlay_position(app: tauri::AppHandle) -> Option<[i32; 2]> {
     read_overlay_position(&app)
 }
@@ -996,6 +1014,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             open_dashboard,
+            open_daybridge_data_directory,
             show_overlay,
             get_overlay_position,
             save_overlay_position,

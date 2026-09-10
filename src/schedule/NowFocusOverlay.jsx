@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { closeOverlaySettingsModal, openOverlaySettingsModal, OVERLAY_COLLAPSED_HEIGHT, OVERLAY_EXPANDED_HEIGHT, setOverlayInteractionRegion, startOverlayDrag } from "../desktopWindow.js";
+import { closeOverlaySettingsModal, openDaybridgeDataDirectory, openOverlaySettingsModal, OVERLAY_COLLAPSED_HEIGHT, OVERLAY_EXPANDED_HEIGHT, setOverlayInteractionRegion, startOverlayDrag } from "../desktopWindow.js";
 import { getWorkdayCountdown } from "./workday-clock.js";
 import styles from "./NowFocusOverlay.module.css";
 import ManualTaskForm from "./ManualTaskForm.jsx";
@@ -271,6 +271,7 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
             {activeTab === "defaults" ? <><DailyDefaultsEditor value={dailyDefaults} onChange={onDailyDefaultsChange} loading={dailyDefaultsLoading} /></> : null}
           </main>
         </div>
+        <div className={styles.settingsUtilityRow}>
         <button
           className={styles.settingsUtility}
           type="button"
@@ -282,6 +283,11 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-14.2-4.4L4 8.5M4 4v4.5h4.5M4 13a8.1 8.1 0 0 0 14.2 4.4l1.8-1.9M20 20v-4.5h-4.5" /></svg>
           <span>{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</span>
         </button>
+        <button className={styles.settingsUtility} type="button" onClick={() => { void openDaybridgeDataDirectory().catch(() => {}); }} data-testid="now-focus-overlay-open-data" data-tauri-drag-region="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10.5h-17zM3.5 6.5v-2h6l2 2" /></svg>
+          <span>로컬 일정 폴더 열기</span>
+        </button>
+        </div>
         <button className={styles.settingsSave} type="submit" disabled={dailyDefaultsLoading || scheduleSettingsLoading}>저장</button>
       </form>
     </div>

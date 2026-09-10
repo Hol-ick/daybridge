@@ -380,7 +380,10 @@ function retainedScheduleBlocks(schedule, at) {
   if (!schedule || !Array.isArray(schedule.blocks)) return [];
   const nowAt = Date.parse(at);
   return schedule.blocks
-    .filter((block) => !block?.hidden && (TERMINAL_BLOCK_STATUSES.has(block?.status) || block?.locked || (typeof block?.endAt === "string" && Date.parse(block.endAt) <= nowAt)))
+    // Untimed todo cards have no startAt/endAt. They are valid in todo mode,
+    // but must never be carried into a timed rebuild as locked blocks.
+    .filter((block) => typeof block?.startAt === "string" && typeof block?.endAt === "string")
+    .filter((block) => !block?.hidden && (TERMINAL_BLOCK_STATUSES.has(block?.status) || block?.locked || Date.parse(block.endAt) <= nowAt))
     .map((block) => block?.type === "focus" ? { ...block, title: toScheduleTitle(block.title || block.displayTitle || block.scheduleTitle) } : block);
 }
 function applyDiscardedUnits(tasks, schedule) {
