@@ -91,7 +91,7 @@ function logRuntimeEvent(event, details = {}) {
       const month = record.occurredAtKST.slice(0, 7).replace(/[^0-9-]/g, "");
       const textLogPath = join(TEXT_LOG_DIRECTORY, `daybridge-${month}.txt`);
       const level = /error|fail|exception|rejection|timeout/i.test(record.event) ? "ERROR" : /warn|retry|recovery/i.test(record.event) ? "WARN" : "INFO";
-      await appendFile(textLogPath, `${record.occurredAtKST.replace("T", " ")} KST | ${level} | ${record.source}.${record.event}${detailText ? ` | ${detailText}` : ""}\n`, "utf8");
+      await appendFile(textLogPath, `${record.occurredAtKST.replace("T", " ")} | ${level} | ${record.source}.${record.event}${detailText ? ` | ${detailText}` : ""}\n`, "utf8");
     })
     .catch(() => {});
 }
@@ -321,7 +321,6 @@ async function handleBoard(url) {
   const requestedDate = safeDate(url.searchParams.get("date")) || new Date().toISOString().slice(0, 10);
   const inbox = await readScheduleInbox(requestedDate);
   const board = mergeInboxIntoBoard(await readJson(boardPath(requestedDate)), inbox);
-  logRuntimeEvent("board_read", { date: requestedDate, boardExists: Boolean(board), inboxExists: inbox.exists, valid: inbox.valid, accepted: inbox.tasks.length, excluded: inbox.excluded.length });
   if (!board) return { status: 404, body: { error: "No quest board exists for this date." } };
   const config = await loadConfig(); const connected = typeof config.handoffSinkDir === "string" && config.handoffSinkDir.trim().length > 0;
   return { status: 200, body: responseBody(board, connected ? "connected" : "local") };
@@ -542,7 +541,9 @@ async function handleSchedule(url) {
   const requestedMode = settings.timeConfigured ? "timed" : "todo";
   const settingsChanged = Boolean(existing && existingMode !== requestedMode);
   const schedule = (!existing || inboxChanged || settingsChanged) ? await rebuildSchedule(activityDate) : existing;
-  logRuntimeEvent("schedule_read", { date: activityDate, exists: Boolean(schedule), inboxExists: inbox.exists, valid: inbox.valid, accepted: inbox.tasks.length, excluded: inbox.excluded.length, inboxChanged, settingsChanged, mode: schedule?.mode || "timed", timeConfigured: schedule?.timeConfigured !== false, blocks: Array.isArray(schedule?.blocks) ? schedule.blocks.length : 0, focusBlocks: Array.isArray(schedule?.blocks) ? schedule.blocks.filter((block) => block?.type === "focus").length : 0, carryoverCount: Number(schedule?.carryover?.count) || 0 });
+  if (inboxChanged || settingsChanged || !existing) {
+    logRuntimeEvent("schedule_rebuilt", { date: activityDate, reason: !existing ? "initial_load" : inboxChanged ? "inbox_changed" : "settings_changed", mode: schedule?.mode || "timed", blocks: Array.isArray(schedule?.blocks) ? schedule.blocks.length : 0, focusBlocks: Array.isArray(schedule?.blocks) ? schedule.blocks.filter((block) => block?.type === "focus").length : 0, carryoverCount: Number(schedule?.carryover?.count) || 0 });
+  }
   if (!schedule) return { status: 404, body: { error: "No quest board exists for this date." } };
   return { status: 200, body: { schedule, nowFocus: nowFocus(schedule) } };
 }
