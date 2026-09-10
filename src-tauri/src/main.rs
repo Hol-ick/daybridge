@@ -22,8 +22,8 @@ const LOCAL_BRIDGE_PORT: u16 = 39393;
 const LOCAL_BRIDGE_SCRIPT: &str = "scripts/local-bridge.mjs";
 const KEEP_ALIVE_SCRIPT_FILE: &str = "daybridge-keep-alive.ps1";
 const EXPLICIT_EXIT_MARKER_FILE: &str = "explicit-exit.flag";
-const OVERLAY_CANVAS_WIDTH: i32 = 520;
-const OVERLAY_CANVAS_HEIGHT: i32 = 620;
+const OVERLAY_CANVAS_WIDTH: i32 = 760;
+const OVERLAY_CANVAS_HEIGHT: i32 = 720;
 const OVERLAY_CARD_WIDTH: i32 = 288;
 const OVERLAY_COLLAPSED_HEIGHT: i32 = 64;
 

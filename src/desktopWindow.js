@@ -13,12 +13,12 @@ export const OVERLAY_COLLAPSED_WIDTH = 288;
 // Keep the actual Windows WebView at this stable size. Its transparent
 // interaction region changes with the visible card, but the native surface
 // itself never resizes while the user opens or closes the schedule.
-export const OVERLAY_CANVAS_WIDTH = 520;
-export const OVERLAY_CANVAS_HEIGHT = 620;
+export const OVERLAY_CANVAS_WIDTH = 760;
+export const OVERLAY_CANVAS_HEIGHT = 720;
 // Settings use a compact, independently positioned native viewport so the
 // transparent canvas does not leave a visible halo around the form.
-export const OVERLAY_SETTINGS_WIDTH = 456;
-export const OVERLAY_SETTINGS_HEIGHT = 500;
+export const OVERLAY_SETTINGS_WIDTH = 720;
+export const OVERLAY_SETTINGS_HEIGHT = 680;
 
 /** The actual visible and clickable rectangle within the fixed native canvas. */
 export function overlayInteractionRegion({ height = OVERLAY_COLLAPSED_HEIGHT, settingsOpen = false } = {}) {

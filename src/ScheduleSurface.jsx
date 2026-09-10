@@ -441,7 +441,7 @@ export default function ScheduleSurface() {
       dailyDefaultsLoading={dailyDefaultsLoading || !dailyDefaultsLoaded}
       scheduleSettings={scheduleSettingsDraft}
       onScheduleSettingsChange={setScheduleSettingsDraft}
-      scheduleSettingsLoading={scheduleSettingsLoading || !scheduleSettingsLoaded}
+      scheduleSettingsLoading={scheduleSettingsLoading}
       appearance={appearance}
       onAppearanceChange={(next) => { const value = { ...DEFAULT_APPEARANCE, ...next }; setAppearance(value); try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(value)); } catch {} }}
       magnetPulse={overlayMagnetPulse}

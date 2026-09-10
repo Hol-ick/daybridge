@@ -207,11 +207,23 @@ const THEME_PRESETS = [
   { id: "amber", label: "앰버", accent: "#f4b860" },
   { id: "violet", label: "바이올렛", accent: "#dd8aff" },
 ];
+const DEFAULT_MEALS = {
+  breakfast: { enabled: false, start: "08:00", end: "09:00", label: "아침시간" },
+  lunch: { enabled: true, start: "11:30", end: "13:00", label: "점심시간" },
+  dinner: { enabled: false, start: "18:00", end: "19:00", label: "저녁시간" },
+};
+const MEAL_LABELS = { breakfast: "아침시간", lunch: "점심시간", dinner: "저녁시간" };
 
 function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading, scheduleSettings, onScheduleSettingsChange, scheduleSettingsLoading, appearance, onAppearanceChange }) {
-  const settings = scheduleSettings || { dayStart: "", dayEnd: "", timeConfigured: false, breaks: [] };
-  const breaks = Array.isArray(settings.breaks) ? settings.breaks : [];
+  const settings = scheduleSettings || { dayStart: "", dayEnd: "", timeConfigured: false, breaks: [], meals: DEFAULT_MEALS };
+  const meals = { ...DEFAULT_MEALS, ...(settings.meals || {}) };
+  const [activeTab, setActiveTab] = useState("schedule");
   const updateSettings = (patch) => onScheduleSettingsChange?.({ ...settings, ...patch });
+  const updateMeal = (key, patch) => {
+    const nextMeals = { ...meals, [key]: { ...meals[key], ...patch } };
+    updateSettings({ meals: nextMeals, breaks: Object.values(nextMeals).filter((item) => item.enabled).map(({ start, end, label }) => ({ start, end, label })) });
+  };
+  const timeConfigured = settings.timeConfigured === true;
   return (
     <div className={styles.settingsModal} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
       <form className={styles.settingsForm} onSubmit={onSubmit} data-testid="now-focus-overlay-settings-sheet">
@@ -222,40 +234,43 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
           </div>
           <button type="button" className={styles.settingsClose} onClick={onClose} aria-label="설정 닫기" data-tauri-drag-region="false">×</button>
         </header>
-        <section className={styles.settingsSection} aria-label="표시 옵션">
-          <span className={styles.settingsSectionLabel}>표시</span>
-          <label className={styles.settingsCheckbox}>
-            <span><strong>오버레이에서 작업명 숨기기</strong><small>위젯에는 집중 상태만 표시합니다.</small></span>
-            <input className={styles.settingsToggleInput} name="privateOverlay" type="checkbox" defaultChecked={privateMode} />
-            <span className={styles.settingsToggleTrack} aria-hidden="true" />
-          </label>
-        </section>
-        <section className={styles.settingsSection} aria-label="근무 시간">
-          <span className={styles.settingsSectionLabel}>시간표</span>
-          <label className={styles.settingsCheckbox}>
-            <span><strong>근무 시간 안에서 자동 배치</strong><small>끄면 시간 없는 오늘 할 일 목록으로 사용합니다.</small></span>
-            <input className={styles.settingsToggleInput} type="checkbox" checked={settings.timeConfigured} onChange={(event) => updateSettings({ timeConfigured: event.target.checked })} />
-            <span className={styles.settingsToggleTrack} aria-hidden="true" />
-          </label>
-          {settings.timeConfigured ? <>
-            <div className={styles.settingsRow}>
-              <label className={styles.settingsField}><span>출근</span><input type="time" value={settings.dayStart || "09:00"} onChange={(event) => updateSettings({ dayStart: event.target.value })} /></label>
-              <label className={styles.settingsField}><span>퇴근</span><input type="time" value={settings.dayEnd || "18:00"} onChange={(event) => updateSettings({ dayEnd: event.target.value })} /></label>
-            </div>
-            <div className={styles.settingsBreakRow}>
-              <label className={styles.settingsField}><span>점심 시작</span><input type="time" value={breaks[0]?.start || "11:30"} onChange={(event) => updateSettings({ breaks: [{ start: event.target.value, end: breaks[0]?.end || "13:00", label: "점심시간" }] })} /></label>
-              <label className={styles.settingsField}><span>점심 종료</span><input type="time" value={breaks[0]?.end || "13:00"} onChange={(event) => updateSettings({ breaks: [{ start: breaks[0]?.start || "11:30", end: event.target.value, label: "점심시간" }] })} /></label>
-            </div>
-          </> : null}
-        </section>
-        <section className={styles.settingsSection} aria-label="색상 테마">
-          <span className={styles.settingsSectionLabel}>색상</span>
-          <div className={styles.themeChoices} role="group" aria-label="강조 색상">
-            {THEME_PRESETS.map((preset) => <button key={preset.id} type="button" className={styles.themeSwatch} style={{ "--swatch": preset.accent }} aria-label={`${preset.label} 테마`} aria-pressed={appearance?.accent === preset.accent} onClick={() => onAppearanceChange?.({ accent: preset.accent })}><span aria-hidden="true" /></button>)}
-            <label className={styles.themeCustom}><span>직접 선택</span><input type="color" value={appearance?.accent || "#62dca5"} onChange={(event) => onAppearanceChange?.({ accent: event.target.value })} aria-label="강조 색상 직접 선택" /></label>
-          </div>
-          <small className={styles.settingsHint}>텍스트 대비를 해치지 않도록 강조 색상은 버튼·상태 표시 중심으로 사용합니다.</small>
-        </section>
+        {activeTab !== "display" ? <input type="checkbox" name="privateOverlay" defaultChecked={privateMode} hidden /> : null}
+        <div className={styles.settingsLayout}>
+          <nav className={styles.settingsNav} aria-label="설정 메뉴">
+            <button type="button" className={activeTab === "schedule" ? styles.settingsNavActive : styles.settingsNavButton} onClick={() => setActiveTab("schedule")}>시간표<span>출퇴근·식사시간</span></button>
+            <button type="button" className={activeTab === "display" ? styles.settingsNavActive : styles.settingsNavButton} onClick={() => setActiveTab("display")}>표시·색상<span>위젯 모양</span></button>
+            <button type="button" className={activeTab === "defaults" ? styles.settingsNavActive : styles.settingsNavButton} onClick={() => setActiveTab("defaults")}>반복 일정<span>매일 기본값</span></button>
+          </nav>
+          <main className={styles.settingsContent}>
+            {activeTab === "schedule" ? <>
+              <section className={styles.settingsSection} aria-label="근무 시간">
+                <span className={styles.settingsSectionLabel}>근무 시간</span>
+                <label className={styles.settingsCheckbox}>
+                  <span><strong>근무 시간 안에서 자동 배치</strong><small>끄면 시간 없는 오늘 할 일 목록으로 사용합니다.</small></span>
+                  <input className={styles.settingsToggleInput} type="checkbox" checked={timeConfigured} onChange={(event) => updateSettings({ timeConfigured: event.target.checked, dayStart: event.target.checked ? (settings.dayStart || "09:00") : "", dayEnd: event.target.checked ? (settings.dayEnd || "18:00") : "" })} />
+                  <span className={styles.settingsToggleTrack} aria-hidden="true" />
+                </label>
+                <div className={styles.settingsRow}>
+                  <label className={styles.settingsField}><span>출근</span><input type="time" disabled={!timeConfigured} value={settings.dayStart || "09:00"} onChange={(event) => updateSettings({ dayStart: event.target.value })} /></label>
+                  <label className={styles.settingsField}><span>퇴근</span><input type="time" disabled={!timeConfigured} value={settings.dayEnd || "18:00"} onChange={(event) => updateSettings({ dayEnd: event.target.value })} /></label>
+                </div>
+              </section>
+              <section className={styles.settingsSection} aria-label="식사 시간">
+                <span className={styles.settingsSectionLabel}>식사 시간</span>
+                <small className={styles.settingsHint}>활성화된 시간은 작업 배치에서 자동으로 비워 둡니다.</small>
+                {Object.keys(DEFAULT_MEALS).map((key) => <div className={styles.mealSettingRow} key={key}>
+                  <label className={styles.settingsCheckbox}><span><strong>{MEAL_LABELS[key]}</strong><small>{key === "lunch" ? "기본 활성화" : "필요할 때 켜세요"}</small></span><input className={styles.settingsToggleInput} type="checkbox" checked={meals[key].enabled === true} onChange={(event) => updateMeal(key, { enabled: event.target.checked })} /><span className={styles.settingsToggleTrack} aria-hidden="true" /></label>
+                  <div className={styles.settingsRow}><label className={styles.settingsField}><span>시작</span><input type="time" disabled={!meals[key].enabled} value={meals[key].start || DEFAULT_MEALS[key].start} onChange={(event) => updateMeal(key, { start: event.target.value })} /></label><label className={styles.settingsField}><span>종료</span><input type="time" disabled={!meals[key].enabled} value={meals[key].end || DEFAULT_MEALS[key].end} onChange={(event) => updateMeal(key, { end: event.target.value })} /></label></div>
+                </div>)}
+              </section>
+            </> : null}
+            {activeTab === "display" ? <>
+              <section className={styles.settingsSection} aria-label="표시 옵션"><span className={styles.settingsSectionLabel}>표시</span><label className={styles.settingsCheckbox}><span><strong>오버레이에서 작업명 숨기기</strong><small>위젯에는 집중 상태만 표시합니다.</small></span><input className={styles.settingsToggleInput} name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span className={styles.settingsToggleTrack} aria-hidden="true" /></label></section>
+              <section className={styles.settingsSection} aria-label="색상 테마"><span className={styles.settingsSectionLabel}>색상</span><div className={styles.themeChoices} role="group" aria-label="강조 색상">{THEME_PRESETS.map((preset) => <button key={preset.id} type="button" className={styles.themeSwatch} style={{ "--swatch": preset.accent }} aria-label={`${preset.label} 테마`} aria-pressed={appearance?.accent === preset.accent} onClick={() => onAppearanceChange?.({ accent: preset.accent })}><span aria-hidden="true" /></button>)}<label className={styles.themeCustom}><span>직접 선택</span><input type="color" value={appearance?.accent || "#62dca5"} onChange={(event) => onAppearanceChange?.({ accent: event.target.value })} aria-label="강조 색상 직접 선택" /></label></div><small className={styles.settingsHint}>텍스트 대비를 해치지 않도록 강조 색상은 버튼·상태 표시 중심으로 사용합니다.</small></section>
+            </> : null}
+            {activeTab === "defaults" ? <><DailyDefaultsEditor value={dailyDefaults} onChange={onDailyDefaultsChange} loading={dailyDefaultsLoading} /></> : null}
+          </main>
+        </div>
         <button
           className={styles.settingsUtility}
           type="button"
@@ -267,7 +282,6 @@ function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget,
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-14.2-4.4L4 8.5M4 4v4.5h4.5M4 13a8.1 8.1 0 0 0 14.2 4.4l1.8-1.9M20 20v-4.5h-4.5" /></svg>
           <span>{refreshingWidget ? "새로고침 중…" : "위젯 새로고침"}</span>
         </button>
-        <DailyDefaultsEditor value={dailyDefaults} onChange={onDailyDefaultsChange} loading={dailyDefaultsLoading} />
         <button className={styles.settingsSave} type="submit" disabled={dailyDefaultsLoading || scheduleSettingsLoading}>저장</button>
       </form>
     </div>

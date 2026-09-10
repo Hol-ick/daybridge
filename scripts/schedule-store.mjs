@@ -22,6 +22,11 @@ export const DEFAULT_SCHEDULE_SETTINGS = Object.freeze({
   defaultFocusMinutes: 50,
   bufferMinutes: 10,
   breaks: Object.freeze([]),
+  meals: Object.freeze({
+    breakfast: Object.freeze({ enabled: false, start: "08:00", end: "09:00", label: "아침시간" }),
+    lunch: Object.freeze({ enabled: true, start: "11:30", end: "13:00", label: "점심시간" }),
+    dinner: Object.freeze({ enabled: false, start: "18:00", end: "19:00", label: "저녁시간" }),
+  }),
 });
 
 export const DEFAULT_DAILY_DEFAULTS = Object.freeze({
@@ -71,6 +76,25 @@ function normalizeBreaks(value) {
     return { start, end, label: sanitizeText(item?.label || "점심시간", 80) || "점심시간" };
   });
 }
+const DEFAULT_MEALS = {
+  breakfast: { enabled: false, start: "08:00", end: "09:00", label: "아침시간" },
+  lunch: { enabled: true, start: "11:30", end: "13:00", label: "점심시간" },
+  dinner: { enabled: false, start: "18:00", end: "19:00", label: "저녁시간" },
+};
+function normalizeMeals(value, legacyBreaks) {
+  const source = value && typeof value === "object" ? value : {};
+  const fallbackLunch = Array.isArray(legacyBreaks) && legacyBreaks[0] ? legacyBreaks[0] : {};
+  const result = {};
+  for (const [key, fallback] of Object.entries(DEFAULT_MEALS)) {
+    const item = source[key] && typeof source[key] === "object" ? source[key] : {};
+    const legacy = key === "lunch" ? fallbackLunch : {};
+    const start = typeof item.start === "string" && TIME.test(item.start) ? item.start : (TIME.test(legacy.start) ? legacy.start : fallback.start);
+    const end = typeof item.end === "string" && TIME.test(item.end) ? item.end : (TIME.test(legacy.end) ? legacy.end : fallback.end);
+    if (minutes(start) >= minutes(end)) throw new TypeError(`${key} meal end must be after start.`);
+    result[key] = { enabled: item.enabled == null ? (key === "lunch" ? Boolean(legacy.start || fallback.enabled) : fallback.enabled) : item.enabled === true, start, end, label: sanitizeText(item.label || legacy.label || fallback.label, 80) || fallback.label };
+  }
+  return result;
+}
 function normalizeSettings(input = {}) {
   const candidate = input && typeof input === "object" ? input : {};
   const rawStart = typeof candidate.dayStart === "string" ? candidate.dayStart.trim() : "";
@@ -90,7 +114,9 @@ function normalizeSettings(input = {}) {
   const defaultFocusMinutes = 50;
   const requestedBuffer = Number(candidate.bufferMinutes);
   const bufferMinutes = Number.isInteger(requestedBuffer) && requestedBuffer >= 0 && requestedBuffer <= 60 ? requestedBuffer : DEFAULT_SCHEDULE_SETTINGS.bufferMinutes;
-  const breaks = timeConfigured ? normalizeBreaks(candidate.breaks) : [];
+  const legacyBreaks = normalizeBreaks(candidate.breaks);
+  const meals = normalizeMeals(candidate.meals, legacyBreaks);
+  const breaks = timeConfigured ? Object.values(meals).filter((item) => item.enabled).map(({ start, end, label }) => ({ start, end, label })) : [];
   return {
     schemaVersion: 1,
     timeZone: candidate.timeZone === "Asia/Seoul" ? candidate.timeZone : DEFAULT_SCHEDULE_SETTINGS.timeZone,
@@ -101,6 +127,7 @@ function normalizeSettings(input = {}) {
     defaultFocusMinutes,
     bufferMinutes,
     breaks,
+    meals,
   };
 }
 

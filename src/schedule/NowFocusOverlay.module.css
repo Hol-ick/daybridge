@@ -240,7 +240,7 @@
   width: 100%;
   height: 100%;
   max-height: none;
-  gap: 16px;
+  gap: 14px;
   padding: 24px;
   box-sizing: border-box;
   overflow-y: auto;
@@ -251,6 +251,16 @@
   scrollbar-color: #586171 transparent;
   scrollbar-width: thin;
 }
+.settingsLayout { display: grid; grid-template-columns: 156px minmax(0, 1fr); gap: 18px; min-height: 0; flex: 1 1 auto; }
+.settingsNav { display: grid; align-content: start; gap: 6px; padding: 4px; border: 1px solid var(--modal-line); border-radius: 10px; background: rgb(255 255 255 / 2%); }
+.settingsNavButton, .settingsNavActive { display: grid; gap: 3px; width: 100%; padding: 10px 11px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--modal-muted); cursor: pointer; font: inherit; font-size: 12px; font-weight: 780; text-align: left; }
+.settingsNavButton span, .settingsNavActive span { color: #7e899c; font-size: 10px; font-weight: 600; }
+.settingsNavButton:hover { background: rgb(255 255 255 / 4%); color: var(--modal-ink); }
+.settingsNavActive { border-color: color-mix(in srgb, var(--modal-accent) 48%, var(--modal-line)); background: color-mix(in srgb, var(--modal-accent) 11%, transparent); color: var(--modal-ink); }
+.settingsNavActive span { color: color-mix(in srgb, var(--modal-accent) 70%, white); }
+.settingsContent { min-width: 0; min-height: 0; overflow-y: auto; padding-right: 4px; scrollbar-color: #586171 transparent; scrollbar-width: thin; }
+.mealSettingRow { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid rgb(255 255 255 / 7%); }
+.mealSettingRow:first-of-type { border-top: 0; }
 .settingsHeader { display: flex; align-items: start; justify-content: space-between; gap: 16px; cursor: grab; user-select: none; }
 .settingsHeader:active { cursor: grabbing; }
 .settingsHeader div { display: grid; gap: 5px; }
@@ -275,6 +285,7 @@
 .settingsField input[type="time"] { color-scheme: dark; }
 .settingsBreakRow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .settingsForm input:not([type="checkbox"]), .settingsForm select { width: 100%; min-height: 34px; box-sizing: border-box; padding: 0 9px; border: 1px solid var(--modal-line); border-radius: 7px; outline: none; background: var(--modal-field); color: var(--modal-ink); font: inherit; font-size: 13px; font-weight: 700; }
+.settingsForm input:disabled { cursor: not-allowed; opacity: .46; }
 .settingsForm input:not([type="checkbox"]):focus, .settingsForm select:focus { border-color: #718bd9; box-shadow: 0 0 0 3px rgb(131 158 255 / 15%); }
 .fixedSetting { display: grid; align-content: center; gap: 5px; min-width: 0; padding-top: 16px; color: var(--modal-muted); font-size: 11px; font-weight: 750; }
 .fixedSetting strong { color: var(--modal-ink); font-size: 15px; }
