@@ -553,13 +553,6 @@ async function rebuildSchedule(activityDate) {
   const previousDate = previousCalendarDate(activityDate);
   const previousSchedule = await loadSchedule(DATA_DIR, previousDate);
   const carryoverCandidates = carryoverTaskCandidates(previousSchedule);
-  logRuntimeEvent("schedule_rebuild_inputs", {
-    date: activityDate,
-    previousDate,
-    previousScheduleExists: Boolean(previousSchedule),
-    previousBlockCount: Array.isArray(previousSchedule?.blocks) ? previousSchedule.blocks.length : 0,
-    carryoverCandidates: carryoverCandidates.length,
-  });
   const generatedAt = koreaNow();
   const briefingTasks = board.quests.map(toTaskCandidate).filter(Boolean);
   // A malformed handoff must never erase a previously usable timetable.
