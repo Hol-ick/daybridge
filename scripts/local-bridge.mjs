@@ -30,11 +30,11 @@ const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local")
 const DEFAULT_DATA_DIR = resolve(join(APP_DATA, "Daybridge"));
 const LOCATION_PATH = join(DEFAULT_DATA_DIR, "storage-location.json");
 function configuredDataDir() {
-  if (process.env.DAYBRIDGE_DATA_DIR) return resolve(process.env.DAYBRIDGE_DATA_DIR);
   try {
     const stored = JSON.parse(readFileSync(LOCATION_PATH, "utf8"));
     if (typeof stored?.dataDirectory === "string" && stored.dataDirectory.trim()) return resolve(stored.dataDirectory);
   } catch {}
+  if (process.env.DAYBRIDGE_DATA_DIR) return resolve(process.env.DAYBRIDGE_DATA_DIR);
   return DEFAULT_DATA_DIR;
 }
 let DATA_DIR = configuredDataDir();
@@ -553,6 +553,13 @@ async function rebuildSchedule(activityDate) {
   const previousDate = previousCalendarDate(activityDate);
   const previousSchedule = await loadSchedule(DATA_DIR, previousDate);
   const carryoverCandidates = carryoverTaskCandidates(previousSchedule);
+  logRuntimeEvent("schedule_rebuild_inputs", {
+    date: activityDate,
+    previousDate,
+    previousScheduleExists: Boolean(previousSchedule),
+    previousBlockCount: Array.isArray(previousSchedule?.blocks) ? previousSchedule.blocks.length : 0,
+    carryoverCandidates: carryoverCandidates.length,
+  });
   const generatedAt = koreaNow();
   const briefingTasks = board.quests.map(toTaskCandidate).filter(Boolean);
   // A malformed handoff must never erase a previously usable timetable.
