@@ -41,6 +41,7 @@
         "decorations": true,
         "transparent": false,
         "shadow": true,
+        "skipTaskbar": true,
         "visible": false,
         "backgroundColor": "#252531"
       }

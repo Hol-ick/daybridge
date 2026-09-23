@@ -589,6 +589,56 @@ fn force_native_overlay_visible(_window: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(windows)]
+fn apply_taskbar_exclusion_style(window: &WebviewWindow) -> Result<(), String> {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, SWP_FRAMECHANGED,
+        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_EX_APPWINDOW,
+        WS_EX_TOOLWINDOW,
+    };
+
+    let handle = window.hwnd().map_err(|error| error.to_string())?;
+    let current_style = unsafe { GetWindowLongPtrW(handle, GWL_EXSTYLE) };
+    let next_style = (current_style & !(WS_EX_APPWINDOW.0 as isize))
+        | (WS_EX_TOOLWINDOW.0 as isize);
+    if current_style == next_style {
+        return Ok(());
+    }
+
+    unsafe {
+        SetWindowLongPtrW(handle, GWL_EXSTYLE, next_style);
+        SetWindowPos(
+            handle,
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    let _ = append_runtime_event(
+        &window.app_handle(),
+        "window_taskbar_style_applied",
+        &json!({
+            "removed": "WS_EX_APPWINDOW",
+            "added": "WS_EX_TOOLWINDOW",
+        })
+        .to_string(),
+    );
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn apply_taskbar_exclusion_style(_window: &WebviewWindow) -> Result<(), String> {
+    Ok(())
+}
+
+fn apply_overlay_taskbar_style(window: &WebviewWindow) -> Result<(), String> {
+    apply_taskbar_exclusion_style(window)
+}
+
 /// Tauri declares the overlay undecorated, but Windows can still preserve the
 /// previous caption style on a transparent topmost WebView. The compact card
 /// hides that chrome through its small region; opening settings reveals it.
@@ -654,6 +704,7 @@ fn ensure_overlay_visible(app: &tauri::AppHandle, source: &str) -> Result<bool, 
     }
     window.show().map_err(|error| error.to_string())?;
     force_native_overlay_visible(&window)?;
+    apply_overlay_taskbar_style(&window)?;
     let repositioned = restore_overlay_if_off_screen(app, &window)?;
     if !was_visible || was_minimized || repositioned {
         let _ = append_runtime_event(
@@ -712,7 +763,7 @@ fn dashboard_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
         return Ok(window);
     }
 
-    WebviewWindowBuilder::new(
+    let window = WebviewWindowBuilder::new(
         app,
         "dashboard",
         WebviewUrl::App("index.html?surface=dashboard".into()),
@@ -723,7 +774,15 @@ fn dashboard_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
     .resizable(true)
     .visible(false)
     .background_color(tauri::window::Color(37, 37, 49, 255))
-    .build()
+    .build()?;
+    if let Err(error) = apply_taskbar_exclusion_style(&window) {
+        let _ = append_runtime_event(
+            app,
+            "dashboard_taskbar_style_error",
+            &json!({ "error": error }).to_string(),
+        );
+    }
+    Ok(window)
 }
 
 fn show_dashboard(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -731,6 +790,13 @@ fn show_dashboard(app: &tauri::AppHandle) -> tauri::Result<()> {
     let window = dashboard_window(app)?;
     window.unminimize()?;
     window.show()?;
+    if let Err(error) = apply_taskbar_exclusion_style(&window) {
+        let _ = append_runtime_event(
+            app,
+            "dashboard_taskbar_style_error",
+            &json!({ "error": error }).to_string(),
+        );
+    }
     window.set_focus()?;
     Ok(())
 }
@@ -960,6 +1026,15 @@ fn main() {
                     );
                 }
             }
+            if let Some(window) = app.get_webview_window("dashboard") {
+                if let Err(error) = apply_taskbar_exclusion_style(&window) {
+                    let _ = append_runtime_event(
+                        app.handle(),
+                        "dashboard_taskbar_style_error",
+                        &json!({ "error": error }).to_string(),
+                    );
+                }
+            }
             let _ = ensure_overlay_visible(app.handle(), "app_setup");
             if let Some(window) = app.get_webview_window("overlay") {
                 if let Err(error) = remove_overlay_window_chrome(app.handle(), &window) {
@@ -1046,23 +1121,16 @@ fn main() {
                     "window_close_requested",
                     &json!({ "window": window.label() }).to_string(),
                 );
-                if window.label() == "overlay" {
-                    // The overlay has no user-facing close button. Treat an
-                    // OS close request (for example Alt+F4 or a display
-                    // manager action) as a visibility recovery request so a
-                    // transient close cannot make the widget disappear while
-                    // the Daybridge process is still running.
-                    api.prevent_close();
-                    let _ = append_runtime_event(
-                        &window.app_handle(),
-                        "overlay_close_ignored",
-                        "{\"reason\":\"overlay_is_persistent\"}",
-                    );
-                    let _ = ensure_overlay_visible(&window.app_handle(), "close_requested");
-                } else {
-                    let _ = window.hide();
-                    api.prevent_close();
-                }
+                api.prevent_close();
+                let app = window.app_handle();
+                let reason = format!("{}_close_requested", window.label());
+                let _ = append_runtime_event(
+                    &app,
+                    "window_close_requested_exit",
+                    &json!({ "window": window.label() }).to_string(),
+                );
+                request_explicit_exit(&app, &reason);
+                app.exit(0);
             }
             if let WindowEvent::Destroyed = event {
                 let _ = append_runtime_event(

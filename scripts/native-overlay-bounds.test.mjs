@@ -37,6 +37,17 @@ test("the full-size settings region never exposes a Windows title bar or system 
   assert.ok(chromeAt > visibleAt, "remove native chrome after Tauri makes the overlay visible");
 });
 
+test("the widget and its hidden management window stay out of the Windows taskbar", () => {
+  const overlayWindow = tauriConfig.app.windows.find((window) => window.label === "overlay");
+  const dashboardWindow = tauriConfig.app.windows.find((window) => window.label === "dashboard");
+  assert.equal(overlayWindow?.skipTaskbar, true);
+  assert.equal(dashboardWindow?.skipTaskbar, true);
+  assert.match(nativeMain, /fn apply_overlay_taskbar_style\(/);
+  assert.match(nativeMain, /WS_EX_APPWINDOW/);
+  assert.match(nativeMain, /WS_EX_TOOLWINDOW/);
+  assert.match(nativeMain, /apply_overlay_taskbar_style\(&window\)/);
+});
+
 test("the centered settings dialog paints only its sheet, not a translucent canvas around it", () => {
   const modalRule = overlayStyles.match(/\.settingsModal\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
   const settingsModeRule = overlayStyles.match(/\.surface\.settingsMode\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
