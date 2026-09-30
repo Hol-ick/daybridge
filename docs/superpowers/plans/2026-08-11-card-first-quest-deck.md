@@ -14,7 +14,7 @@
 - A parent quest card opens/closes by clicking its full header surface; a sub-quest card toggles completion by clicking its full surface.
 - Keep status updates as Daybridge receipts through the existing local bridge.
 - Respect `prefers-reduced-motion` and retain visible keyboard focus.
-- Do not alter the closeout compiler or AIHUB source boundary for this visual interaction change.
+- Do not alter the closeout compiler or MARU source boundary for this visual interaction change.
 
 ---
 

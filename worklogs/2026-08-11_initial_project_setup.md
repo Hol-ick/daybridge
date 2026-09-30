@@ -45,14 +45,14 @@ Create the initial Daybridge workspace for a general-purpose local desktop tool 
 
 ### Purpose
 
-Connect the daily diary to a full quest board and carry Daybridge status reports into the AIHUB closeout/morning handoff.
+Connect the daily diary to a full quest board and carry Daybridge status reports into the MARU closeout/morning handoff.
 
 ### Performed and result
 
 - Added `scripts/compile-quests.mjs`, which reads the previous KST diary (or the most recent available diary within seven days), extracts next-action sections and action fields, removes completed/policy sentences, deduplicates stable quest IDs, redacts sensitive text, and preserves prior status receipts.
 - Updated the browser board to consume all quests, show points/checklist progress, and report `completed`, `in_progress`, `blocked`, `paused`, and `needs_confirmation` transitions.
-- Updated `scripts/local-bridge.mjs` to discover the AIHUB handoff sink from the machine-local profile and mirror each sanitized status event immediately.
-- Added AIHUB `conversation_bridge/daybridge_handoff.py` plus closeout/morning prompt instructions and briefing synthesis integration.
+- Updated `scripts/local-bridge.mjs` to discover the MARU handoff sink from the machine-local profile and mirror each sanitized status event immediately.
+- Added MARU `conversation_bridge/daybridge_handoff.py` plus closeout/morning prompt instructions and briefing synthesis integration.
 
 ### Verification
 
@@ -60,11 +60,11 @@ Connect the daily diary to a full quest board and carry Daybridge status reports
 - `pnpm build` passed.
 - Compiler self-test passed and the 2026-08-10 diary produced 2 sanitized quests with safe `diary://` source references.
 - Bridge integration test returned `connected=true` and `eventRecorded=true`; the collector produced a connected handoff with one completion event. Test-only 2099 artifacts were removed.
-- AIHUB handoff and briefing self-tests passed; Python compilation passed.
+- MARU handoff and briefing self-tests passed; Python compilation passed.
 
 ### Decisions and boundaries
 
-- Original KTH diary and canonical AIHUB records remain read-only; only automation-owned handoff artifacts are written.
+- Original KTH diary and canonical MARU records remain read-only; only automation-owned handoff artifacts are written.
 - Daybridge `completed` means user-reported completion, not independent verification.
 - No Git commit, push, or public release action was performed.
 

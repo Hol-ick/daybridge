@@ -255,9 +255,9 @@ async function setDataDirectory(nextPath) {
 }
 async function loadConfig() {
   const configured = await readJson(CONFIG_PATH);
-  const profile = await readJson(join(APP_DATA, "AIHUB", "environment.json"));
-  const discoveredSink = profile && typeof profile.aihub_root === "string" && profile.aihub_root.trim()
-    ? join(profile.aihub_root, "04_Operations_And_Automation", "Memory_System", "reports", "daily", "_system", "daybridge_handoff")
+  const profile = await readJson(join(APP_DATA, "MARU", "environment.json"));
+  const discoveredSink = profile && typeof profile.maru_root === "string" && profile.maru_root.trim()
+    ? join(profile.maru_root, "04_Operations_And_Automation", "Memory_System", "reports", "daily", "_system", "daybridge_handoff")
     : null;
   return { schemaVersion: 1, handoffSinkDir: discoveredSink, ...(configured && typeof configured === "object" ? configured : {}) };
 }

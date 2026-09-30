@@ -20,7 +20,7 @@ ${rows.join("\n")}
 
 test("parses executable inbox rows into 50-minute candidates", () => {
   const parsed = parseScheduleInboxMarkdown(inbox([
-    "| path-check | 옛 KTH 경로 확인 | 1 | 1 | ready | must | independent |  | 설정에서 검색 | 결과 기록 | aihub://reports/daily/2026-08-13 |",
+    "| path-check | 옛 KTH 경로 확인 | 1 | 1 | ready | must | independent |  | 설정에서 검색 | 결과 기록 | maru://reports/daily/2026-08-13 |",
     "| follow-up | 배포 상태 확인 | 2 | 1 | deferred | should | sequential | path-check | 배포 화면 열기 | 상태 기록 | |",
   ]), { date: "2026-08-27" });
 
@@ -30,7 +30,7 @@ test("parses executable inbox rows into 50-minute candidates", () => {
     id: "path-check", questId: "path-check", title: "옛 KTH 경로 확인", scheduleTitle: "옛 KTH 경로 확인", displayTitle: "옛 KTH 경로 확인",
     priority: "must", state: "ready", status: "ready", execution: "independent", dependsOn: [], focusUnits: 1, remainingUnits: 1,
     estimateMinutes: 50, durationMinutes: 50, remainingMinutes: 50, currentAction: "설정에서 검색", firstStep: "설정에서 검색", doneWhen: "결과 기록",
-    sourceKind: "session", sourceLabel: "현재 Codex 세션 inbox", sourceRefs: ["aihub://reports/daily/2026-08-13"],
+    sourceKind: "session", sourceLabel: "현재 Codex 세션 inbox", sourceRefs: ["maru://reports/daily/2026-08-13"],
   });
   assert.deepEqual(parsed.tasks[1].dependsOn, ["path-check"]);
   assert.equal(parsed.tasks[1].remainingMinutes, 50);

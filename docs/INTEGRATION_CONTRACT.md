@@ -1,4 +1,4 @@
-# AIHUB → Daybridge 일정 입력 계약
+# MARU → Daybridge 일정 입력 계약
 
 이 문서는 어떤 Codex 세션에서든 사용자가 등록을 결정한 업무를 Daybridge가 **실행 가능한 작업 후보**로 받아 시간표에 배치하는 경계를 정의한다. closeout·브리핑은 선택적인 원문 공급원이며, 일정 등록의 선행 조건이 아니다. closeout 원문과 캘린더 원본 자체를 시간표에 넣지는 않는다.
 
@@ -19,7 +19,7 @@ daybridge-schedule-writer Skill
         ↓ 날짜별 Markdown inbox (기본 경로)
         ├──────────────────────────────┐
         │                              │
-선택: AIHUB 상세 closeout → Quest Extractor → daybridge_quest_plan
+선택: MARU 상세 closeout → Quest Extractor → daybridge_quest_plan
         └────────────── 선택 경로 ───────┘
                        ↓ 로컬 파일 fingerprint 감시
 Daybridge 입력 검증기
@@ -33,12 +33,12 @@ DailySchedule + 사용자 receipt
 
 | 데이터 | 생성자 | Daybridge의 권한 |
 |---|---|---|
-| closeout·일기·worklog | AIHUB | 읽기 전용 소비 |
-| `daybridge_quest_plan` | AIHUB Quest Extractor | 읽기 전용 소비 |
+| closeout·일기·worklog | MARU | 읽기 전용 소비 |
+| `daybridge_quest_plan` | MARU Quest Extractor | 읽기 전용 소비 |
 | 날짜별 `schedule-YYYY-MM-DD.md` | `daybridge-schedule-writer` Skill을 실행한 Codex 세션 | 검증·upsert 후 읽기 전용 소비 |
 | Calendar busy range | 사용자 캘린더 | 시작·종료 시각만 읽기 |
 | `DailySchedule`·receipt | Daybridge | 생성·수정 |
-| `review_queue` | AIHUB | 표시·확인 대기, 자동 실행 금지 |
+| `review_queue` | MARU | 표시·확인 대기, 자동 실행 금지 |
 
 ## 세션 간 전달: 날짜별 Markdown inbox
 
@@ -58,8 +58,8 @@ DailySchedule + 사용자 receipt
   "schedule_date": "2026-08-26",
   "status": "ready",
   "source": {
-    "kind": "aihub_closeout",
-    "refs": ["aihub://2026-08-25/closeout"],
+    "kind": "maru_closeout",
+    "refs": ["maru://2026-08-25/closeout"],
     "coverage": "complete",
     "quality": "aligned",
     "warnings": []
@@ -84,7 +84,7 @@ DailySchedule + 사용자 receipt
         { "id": "step-open", "label": "공식 문서와 테스트 환경을 연다", "completed": false },
         { "id": "step-record", "label": "상태와 결과를 기록한다", "completed": false, "depends_on": ["step-open"] }
       ],
-      "source_refs": ["aihub://2026-08-25/closeout#linux"]
+      "source_refs": ["maru://2026-08-25/closeout#linux"]
     },
     {
       "id": "quest-write-note",
@@ -101,7 +101,7 @@ DailySchedule + 사용자 receipt
       "remaining_units": 1,
       "first_action": "관찰 결과의 핵심 세 줄을 작성한다",
       "done_when": "노트에 결과와 다음 행동이 남아 있다",
-      "source_refs": ["aihub://2026-08-25/closeout#linux"]
+      "source_refs": ["maru://2026-08-25/closeout#linux"]
     }
   ],
   "review_queue": [
@@ -109,7 +109,7 @@ DailySchedule + 사용자 receipt
       "id": "review-calendar",
       "question": "캘린더의 오후 외부 일정이 실제 약속인지 확인",
       "reason": "needs_user_confirmation",
-      "source_refs": ["aihub://2026-08-25/closeout#calendar"]
+      "source_refs": ["maru://2026-08-25/closeout#calendar"]
     }
   ],
   "excluded": [
@@ -117,7 +117,7 @@ DailySchedule + 사용자 receipt
       "id": "excluded-monitor",
       "title": "다음 자동화 실행을 감시",
       "reason": "automation_monitoring",
-      "source_refs": ["aihub://2026-08-25/closeout"]
+      "source_refs": ["maru://2026-08-25/closeout"]
     }
   ]
 }
@@ -147,7 +147,7 @@ DailySchedule + 사용자 receipt
 - `focus_units`는 필요한 50분 집중 단위 수(양의 정수)다. `remaining_units`는 현재 남은 단위 수이며 `focus_units`보다 클 수 없다. 예: 100분 작업은 `focus_units: 2`다.
 - `estimate_minutes`·`remaining_minutes`는 1.0 호환용이다. 새 패킷에서는 스케줄링 기준으로 사용하지 않고 `focus_units`를 사용한다.
 - `first_action`은 지금 당장 시작할 한 행동, `done_when`은 사용자가 완료를 판단할 관찰 가능한 결과다. 없으면 입력 검증 경고가 발생하며 제목으로 보완된다.
-- `source_refs`는 `aihub://`, `record://` 같은 안전한 참조만 담는다. 컴퓨터 절대 경로, 토큰, 메일·전화번호를 넣지 않는다.
+- `source_refs`는 `maru://`, `record://` 같은 안전한 참조만 담는다. 컴퓨터 절대 경로, 토큰, 메일·전화번호를 넣지 않는다.
 - Quest에는 `start_at`, `end_at`을 넣지 않는다. 고정 시각이 필요한 항목은 캘린더 일정으로 전달한다.
 
 ### 50분 단위 예시
@@ -201,7 +201,7 @@ DailySchedule + 사용자 receipt
 ## 수신자가 지켜야 할 금지 사항
 
 - closeout 원문을 직접 시간표 카드로 표시하지 않는다.
-- AIHUB의 내부 운영 작업, 자동화 감시, 확인 질문을 사용자 업무로 추론하지 않는다.
+- MARU의 내부 운영 작업, 자동화 감시, 확인 질문을 사용자 업무로 추론하지 않는다.
 - 후보의 `title`을 근거로 완료로 추론하지 않는다. 완료는 사용자의 Daybridge receipt로만 기록한다.
 - coverage가 unavailable·blocked인 상태를 정상적인 `complete`으로 바꾸지 않는다.
 - 새로운 고정 시각 필드를 임의로 추가하지 않는다. 계약 변경이 필요하면 schema version을 올린다.

@@ -1,10 +1,10 @@
-# AIHUB → Daybridge 퀘스트 품질 개선 기획안
+# MARU → Daybridge 퀘스트 품질 개선 기획안
 
 > **실행 에이전트 안내:** 이 문서는 2026-08-13 closeout 결과를 기준으로 작성된 실행 전 기획안이다. 구현은 아래 지시서의 단계와 수용 기준을 순서대로 따른다.
 
 ## 목표
 
-AIHUB closeout의 상세 기록을 보존하면서, 다음 날 사용자가 실제로 수행할 수 있는 작고 명확한 퀘스트만 Daybridge에 노출한다.
+MARU closeout의 상세 기록을 보존하면서, 다음 날 사용자가 실제로 수행할 수 있는 작고 명확한 퀘스트만 Daybridge에 노출한다.
 
 핵심은 `보고서가 ready인가`가 아니라 다음 세 가지를 동시에 만족하는 것이다.
 
@@ -105,7 +105,7 @@ Daybridge board
 
 - 제목: `Codex 대화 coverage 재시도`
 - 단계: bounded `list_threads`를 재시도하고 today/all-history 범위를 기록
-- 완료 조건: coverage 결과가 AIHUB 기록에 남음
+- 완료 조건: coverage 결과가 MARU 기록에 남음
 - 상태: 실행 가능하면 `ready`, API timeout이면 `blocked`
 
 ## 수용 기준
@@ -122,7 +122,7 @@ Daybridge board
 
 ## 범위 밖
 
-- 이번 작업에서 AIHUB 원본 worklog나 일일보고서의 사실을 수정하지 않는다.
+- 이번 작업에서 MARU 원본 worklog나 일일보고서의 사실을 수정하지 않는다.
 - 실제 프로세스 종료, 배포 재실행, GitHub PAT audit, 대화 세션 보관을 자동으로 수행하지 않는다.
 - Supabase 연결이나 DB 스키마 변경은 이 작업의 선행 조건이 아니다.
 

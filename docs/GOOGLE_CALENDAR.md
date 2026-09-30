@@ -24,7 +24,7 @@ Daybridge는 아직 개인용 Google OAuth 클라이언트를 사용한다. Goog
    ```
 
 4. 내려받은 클라이언트 JSON의 이름을 `google-oauth-client.json`으로 바꾼다.
-5. 아래 개인 컴퓨터 전용 폴더에 둔다. Git 저장소나 AIHUB 폴더에는 넣지 않는다.
+5. 아래 개인 컴퓨터 전용 폴더에 둔다. Git 저장소나 MARU 폴더에는 넣지 않는다.
 
    ```text
    %LOCALAPPDATA%\Daybridge\google-oauth-client.json
@@ -43,5 +43,5 @@ Google은 이 작업에서 `calendar.readonly` 권한만 요청한다. Daybridge
 
 - OAuth client JSON은 이 Windows 사용자 기기의 `%LOCALAPPDATA%\Daybridge`에만 있다.
 - OAuth refresh token은 Windows DPAPI로 현재 Windows 사용자에게만 복호화 가능한 `google-calendar-token.dpapi` 파일로 보관한다.
-- OAuth token, client secret, 인증 코드, 일정 원문은 Daybridge UI 응답·일정 저장본·AIHUB handoff에 기록되지 않는다.
+- OAuth token, client secret, 인증 코드, 일정 원문은 Daybridge UI 응답·일정 저장본·MARU handoff에 기록되지 않는다.
 - 연결을 해제하려면 `%LOCALAPPDATA%\Daybridge\google-calendar-token.dpapi`만 삭제한 뒤 브리지를 다시 시작한다. 이 파일은 로컬 암호문이며 휴지통으로 이동해도 된다.

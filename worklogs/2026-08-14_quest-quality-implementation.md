@@ -1,4 +1,4 @@
-# 2026-08-14 AIHUB → Daybridge 퀘스트 품질 정제
+# 2026-08-14 MARU → Daybridge 퀘스트 품질 정제
 
 ## 변경
 

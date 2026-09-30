@@ -3,7 +3,7 @@
 ## 결정
 
 - 기능 개발과 UI 디버깅은 `pnpm dev` 브라우저 미리보기를 기본으로 사용한다.
-- AIHUB 상태 기록이 필요한 경우에만 별도 터미널에서 `pnpm bridge`를 실행한다.
+- MARU 상태 기록이 필요한 경우에만 별도 터미널에서 `pnpm bridge`를 실행한다.
 - `pnpm dev:widget`은 Rust/MSVC/WebView2가 준비된 환경에서 네이티브 창을 확인할 때 선택적으로 사용한다.
 - `pnpm build:widget`은 릴리스 설치 파일을 만들 때만 실행한다.
 

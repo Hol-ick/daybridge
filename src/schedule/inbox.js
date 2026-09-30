@@ -6,7 +6,7 @@ const ALLOWED_STATES = new Set(["ready", "in_progress", "deferred"]);
 const ALLOWED_PRIORITIES = new Set(["must", "should", "could"]);
 const ALLOWED_EXECUTION = new Set(["independent", "sequential"]);
 const CLOCK_PATTERN = /(?<!\d)(?:[01]\d|2[0-3]):[0-5]\d(?!\d)/;
-const SOURCE_REF_PATTERN = /^(?:aihub|record|daybridge):\/\/[^\s|]+$/;
+const SOURCE_REF_PATTERN = /^(?:maru|record|daybridge):\/\/[^\s|]+$/;
 const COLUMNS = ["id", "title", "focus_units", "remaining_units", "state", "priority", "execution", "depends_on", "first_action", "done_when", "source_refs"];
 
 function unescapeCell(value) {

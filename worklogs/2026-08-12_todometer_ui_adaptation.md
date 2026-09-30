@@ -5,16 +5,16 @@
 
 ## Purpose
 
-Replace the bespoke Daybridge card UI with a polished open-source desktop to-do renderer while keeping Daybridge's quest and AIHUB integration boundary.
+Replace the bespoke Daybridge card UI with a polished open-source desktop to-do renderer while keeping Daybridge's quest and MARU integration boundary.
 
 ## Implemented
 
 - Audited `cassidoo/todometer` source and confirmed its MIT license, React/Electron implementation, progress meter, task-card spacing, dark palette, and completion animation patterns.
 - Replaced the old vanilla TypeScript card renderer with a React renderer organized around todometer's `App`/`ItemList`/`Item`/`Progress` composition.
 - Vendored and adapted todometer's CSS modules, variables, progress meter, date treatment, SVG controls, and completion response under `src/todometer/`.
-- Connected the renderer to Daybridge's parent quest/sub-quest adapter, local receipt persistence, and AIHUB bridge reporting.
+- Connected the renderer to Daybridge's parent quest/sub-quest adapter, local receipt persistence, and MARU bridge reporting.
 - Corrected the adopted card layout so a clicked task keeps its action row intact and expands its details as a full-width section below the row instead of squeezing content into a side column.
-- Kept Daybridge's AIHUB closeout compiler, local bridge, automatic progress receipt, parent/sub-quest schema, and isolated-browser bridge abort unchanged.
+- Kept Daybridge's MARU closeout compiler, local bridge, automatic progress receipt, parent/sub-quest schema, and isolated-browser bridge abort unchanged.
 - Added `THIRD_PARTY_NOTICES.md` with the upstream attribution and MIT notice.
 
 ## Verification

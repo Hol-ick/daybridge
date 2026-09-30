@@ -5,10 +5,10 @@
 Daybridge vendors and adapts the React renderer structure, CSS modules, SVG controls, and visual
 assets from [todometer](https://github.com/cassidoo/todometer), an open-source meter-based to-do
 list by Cassidy Williams. The former Daybridge-specific card renderer was replaced by this
-todometer-based surface; Daybridge now supplies the quest adapter and AIHUB bridge around it.
+todometer-based surface; Daybridge now supplies the quest adapter and MARU bridge around it.
 
 The upstream project is licensed under the MIT License. Daybridge-specific code includes the quest
-adapter, AIHUB reporting boundary, data model, and Tauri shell; the upstream Electron shell and MCP
+adapter, MARU reporting boundary, data model, and Tauri shell; the upstream Electron shell and MCP
 server are not copied.
 
 Copyright (c) 2026 Cassidy Williams

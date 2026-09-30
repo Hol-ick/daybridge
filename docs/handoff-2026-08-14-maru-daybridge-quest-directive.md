@@ -1,10 +1,10 @@
-# 다른 세션 전달용 지시서 — AIHUB → Daybridge 퀘스트 정제
+# 다른 세션 전달용 지시서 — MARU → Daybridge 퀘스트 정제
 
 > 이 문서는 다음 세션이 바로 실행할 수 있는 작업 지시서다. 기획안의 원칙을 구현 단계로 압축했다.
 
 ## 최종 목표
 
-AIHUB closeout을 읽어 **사용자가 오늘 실제로 수행할 수 있는 카드만** Daybridge에 만든다.
+MARU closeout을 읽어 **사용자가 오늘 실제로 수행할 수 있는 카드만** Daybridge에 만든다.
 
 이번 작업의 완료 상태는 “보드가 생성됨”이 아니라 다음 문장으로 판단한다.
 
@@ -12,14 +12,14 @@ AIHUB closeout을 읽어 **사용자가 오늘 실제로 수행할 수 있는 �
 
 ## 먼저 읽을 파일
 
-1. `docs/superpowers/plans/2026-08-14-aihub-daybridge-quest-quality.md`
+1. `docs/superpowers/plans/2026-08-14-maru-daybridge-quest-quality.md`
 2. `scripts/compile-quests.mjs`
-3. AIHUB `AIHUB:/04_Operations_And_Automation/Memory_System/conversation_bridge/daybridge_quest_extractor.py`
-4. AIHUB `AIHUB:/04_Operations_And_Automation/Memory_System/reports/daily/2026-08-13.md`
-5. AIHUB `AIHUB:/04_Operations_And_Automation/Memory_System/reports/daily/_system/2026-08-13_unified.json`
-6. AIHUB `AIHUB:/04_Operations_And_Automation/Memory_System/reports/daily/_system/2026-08-13_daybridge_quest_plan.json`
-7. AIHUB `AIHUB:/04_Operations_And_Automation/Memory_System/reports/daily/_system/2026-08-13_daybridge_board.json`
-8. AIHUB `AIHUB:/04_Operations_And_Automation/Memory_System/reports/daily/_system/latest_daybridge_handoff.json`
+3. MARU `MARU:/04_Operations_And_Automation/Memory_System/conversation_bridge/daybridge_quest_extractor.py`
+4. MARU `MARU:/04_Operations_And_Automation/Memory_System/reports/daily/2026-08-13.md`
+5. MARU `MARU:/04_Operations_And_Automation/Memory_System/reports/daily/_system/2026-08-13_unified.json`
+6. MARU `MARU:/04_Operations_And_Automation/Memory_System/reports/daily/_system/2026-08-13_daybridge_quest_plan.json`
+7. MARU `MARU:/04_Operations_And_Automation/Memory_System/reports/daily/_system/2026-08-13_daybridge_board.json`
+8. MARU `MARU:/04_Operations_And_Automation/Memory_System/reports/daily/_system/latest_daybridge_handoff.json`
 
 ## 반드시 고칠 것
 
@@ -96,15 +96,15 @@ AIHUB closeout을 읽어 **사용자가 오늘 실제로 수행할 수 있는 �
 - `[local path]`, `<drive>:\...`, 사용자 컴퓨터별 절대 경로를 보드에 남기지 말 것.
 - 2099 테스트 handoff를 현재 날짜 보드에 병합하지 말 것.
 - 사용자의 완료 클릭을 독립 검증 완료로 승격하지 말 것.
-- AIHUB 원본 일일보고서·worklog를 애플리케이션이 덮어쓰지 말 것.
+- MARU 원본 일일보고서·worklog를 애플리케이션이 덮어쓰지 말 것.
 
 ## 검증 명령
 
 저장소에서 다음을 모두 실행하고 결과를 기록한다.
 
 ```powershell
-python <AIHUB>/04_Operations_And_Automation/Memory_System/conversation_bridge/daybridge_quest_extractor.py --self-test
-python -m py_compile <AIHUB>/04_Operations_And_Automation/Memory_System/conversation_bridge/daybridge_quest_extractor.py
+python <MARU>/04_Operations_And_Automation/Memory_System/conversation_bridge/daybridge_quest_extractor.py --self-test
+python -m py_compile <MARU>/04_Operations_And_Automation/Memory_System/conversation_bridge/daybridge_quest_extractor.py
 pnpm test:compiler
 pnpm check
 pnpm build

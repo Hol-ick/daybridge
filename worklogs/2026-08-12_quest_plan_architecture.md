@@ -5,11 +5,11 @@
 
 ## Purpose
 
-Separate detailed AIHUB closeout reporting from the Daybridge execution board. Preserve every eligible atomic user task, explicit ordering, and multi-day progress without XP or artificial side-quest categories.
+Separate detailed MARU closeout reporting from the Daybridge execution board. Preserve every eligible atomic user task, explicit ordering, and multi-day progress without XP or artificial side-quest categories.
 
 ## Implemented
 
-- Added the AIHUB `daybridge_quest_extractor.py` to derive a sanitized Quest Plan with stable mission/quest/step IDs, actor/kind filtering, explicit dependencies, source references, and an auditable excluded list.
+- Added the MARU `daybridge_quest_extractor.py` to derive a sanitized Quest Plan with stable mission/quest/step IDs, actor/kind filtering, explicit dependencies, source references, and an auditable excluded list.
 - Updated `daybridge_board.py` so the Quest Extractor runs before the Daybridge compiler; raw closeout fallback is visibly marked attention.
 - Rebuilt `scripts/compile-quests.mjs` around Quest Plan input while retaining a compatibility path for old closeout packets. Existing receipts are merged by stable ID and unfinished work increments carryover.
 - Added `ready`, `in_progress`, `deferred`, `blocked`, and `completed` state handling to the local bridge and React state model.
@@ -20,12 +20,12 @@ Separate detailed AIHUB closeout reporting from the Daybridge execution board. P
 
 - Quest compiler tests: 4 passed.
 - Compiler self-test: passed.
-- AIHUB Quest Extractor self-test: passed.
-- AIHUB board runner self-test: passed.
+- MARU Quest Extractor self-test: passed.
+- MARU board runner self-test: passed.
 - TypeScript check and production Vite build: passed.
 
 ## Boundaries
 
-- AIHUB source diaries, worklogs, and closeout reports remain read-only.
+- MARU source diaries, worklogs, and closeout reports remain read-only.
 - A Daybridge click is a user receipt, not independent verification.
 - Native Tauri packaging remains blocked by the existing Rust/MSVC/Windows SDK prerequisite.

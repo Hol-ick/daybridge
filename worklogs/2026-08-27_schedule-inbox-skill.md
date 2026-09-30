@@ -1,4 +1,4 @@
-# AIHUB 세션 → Daybridge 일정 inbox 연동
+# MARU 세션 → Daybridge 일정 inbox 연동
 
 - 날짜: 2026-08-27 KST
 - 범위: 날짜별 Markdown 인계 포맷, `daybridge-schedule-writer` Skill, local bridge 자동 재배치
@@ -12,8 +12,8 @@
 
 ## 구현
 
-- AIHUB 정본 `daybridge-schedule-writer`에 Korean `SKILL.md`, inbox 계약 reference, 원자적 upsert/검증 Python 스크립트를 추가했다.
-- portable profile의 `PROFILE_MANIFEST.json`, `SKILL_BUNDLE_INTEGRITY.json`, `SKILL_INSTALL_MANIFEST.md`를 42개 묶음으로 갱신하고 현재 컴퓨터에는 AIHUB 정본을 가리키는 Skill 정션을 연결했다.
+- MARU 정본 `daybridge-schedule-writer`에 Korean `SKILL.md`, inbox 계약 reference, 원자적 upsert/검증 Python 스크립트를 추가했다.
+- portable profile의 `PROFILE_MANIFEST.json`, `SKILL_BUNDLE_INTEGRITY.json`, `SKILL_INSTALL_MANIFEST.md`를 42개 묶음으로 갱신하고 현재 컴퓨터에는 MARU 정본을 가리키는 Skill 정션을 연결했다.
 - Daybridge에 Markdown parser, local bridge inbox 감시·dedupe·메타데이터, `/api/schedule/inbox` endpoint와 단위·통합 테스트를 추가했다.
 
 ## 검증
@@ -25,5 +25,5 @@
 
 ## 남은 확인
 
-- 실제 AIHUB closeout 세션이 생성한 업무 목록을 새 Skill로 한 번 변환해, 사용자의 실제 Daybridge UI에서 자동 갱신되는지 확인한다.
+- 실제 MARU closeout 세션이 생성한 업무 목록을 새 Skill로 한 번 변환해, 사용자의 실제 Daybridge UI에서 자동 갱신되는지 확인한다.
 - 현재 `check_skill_references.py --strict`의 기존 누락 참조 16건은 이번 변경과 무관하며 해결하지 않았다.

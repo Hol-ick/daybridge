@@ -9,7 +9,7 @@ const base = {
   source_date: "2026-08-25",
   schedule_date: "2026-08-26",
   status: "ready",
-  source: { coverage: "complete", quality: "aligned", refs: ["aihub://2026-08-25/closeout"] },
+  source: { coverage: "complete", quality: "aligned", refs: ["maru://2026-08-25/closeout"] },
 };
 
 function quest(overrides = {}) {
@@ -26,7 +26,7 @@ function quest(overrides = {}) {
     remaining_units: 1,
     first_action: "실습 환경을 연다",
     done_when: "학습 결과를 기록한다",
-    source_refs: ["aihub://2026-08-25/closeout#linux"],
+    source_refs: ["maru://2026-08-25/closeout#linux"],
     ...overrides,
   };
 }

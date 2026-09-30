@@ -15,7 +15,7 @@ test("toTaskCandidate converts a Quest without exposing source details", () => {
     estimateMinutes: 55,
     dependsOn: ["quest-auth"],
     sourcePath: "C:\\private\\note.md",
-    sourceRefs: ["aihub://2026-08-23/quest-plan"],
+    sourceRefs: ["maru://2026-08-23/quest-plan"],
   });
 
   assert.deepEqual(candidate, {
@@ -29,7 +29,7 @@ test("toTaskCandidate converts a Quest without exposing source details", () => {
     execution: "independent",
     sourceKind: "briefing",
     category: null,
-    sourceRefs: ["aihub://2026-08-23/quest-plan"],
+    sourceRefs: ["maru://2026-08-23/quest-plan"],
   });
   assert.equal("sourcePath" in candidate, false);
 });

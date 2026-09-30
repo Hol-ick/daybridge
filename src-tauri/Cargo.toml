@@ -1,7 +1,7 @@
 [package]
 name = "daybridge"
 version = "0.1.0"
-description = "A floating daily quest board generated from AIHUB closeout."
+description = "A floating daily quest board generated from MARU closeout."
 authors = ["Daybridge contributors"]
 edition = "2021"
 rust-version = "1.77.2"

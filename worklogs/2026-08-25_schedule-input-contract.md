@@ -1,11 +1,11 @@
-# AIHUB 일정 입력 계약과 50분 슬롯 정규화
+# MARU 일정 입력 계약과 50분 슬롯 정규화
 
 - 날짜: 2026-08-25 KST
-- 범위: AIHUB Quest Plan 수신 경계, 검증·정규화, 스케줄 배치 규칙
+- 범위: MARU Quest Plan 수신 경계, 검증·정규화, 스케줄 배치 규칙
 
 ## 검토 결과
 
-- AIHUB Quest Plan → compiler → local bridge → `toTaskCandidate` → 50분 스케줄러로 이어지는 경로를 대조했다.
+- MARU Quest Plan → compiler → local bridge → `toTaskCandidate` → 50분 스케줄러로 이어지는 경로를 대조했다.
 - 기존 입력은 `estimate_minutes`를 작업 분량으로 받지만 실제 스케줄러는 모든 focus block을 `HH:00–HH:50`으로 만들고 있어, 입력 분량과 실제 배치 단위가 분리돼 있었다.
 - legacy closeout의 `confirmation_questions`가 자동 `decision` Quest로 바뀔 수 있었다.
 - Quest에 고정 시각을 전달하는 정식 경로가 없으므로, 캘린더 busy block과 작업 후보를 섞으면 잘못된 시간표를 만들 수 있었다.
@@ -36,5 +36,5 @@
 
 ## 남은 확인
 
-- 실제 다음 AIHUB closeout이 `schema_version=1.1`, `focus_units`, `source_date/schedule_date`를 생성하는지 첫 실데이터에서 확인해야 한다.
+- 실제 다음 MARU closeout이 `schema_version=1.1`, `focus_units`, `source_date/schedule_date`를 생성하는지 첫 실데이터에서 확인해야 한다.
 - `reviewQueue`를 위젯에서 별도 확인할 UI는 아직 계약 메타데이터만 보존한다. 자동 실행하지 않는 현재 동작이 우선이다.

@@ -14,7 +14,7 @@
 - Duplicate detection and policy-statement rejection
 - Ranking with transparent evidence
 - Schema validation and failure fallback
-- AIHUB handoff collector and morning/closeout synthesis
+- MARU handoff collector and morning/closeout synthesis
 
 ## M2 — Local widget behavior ✅ (browser surface)
 

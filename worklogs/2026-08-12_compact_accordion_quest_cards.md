@@ -36,7 +36,7 @@ Make the card interaction unmistakable: collapsed parent quests stay compact, an
 
 ## Decisions and boundaries
 
-- Only presentation changed. The closeout compiler, AIHUB source boundary, and automatic receipt contract remain unchanged.
+- Only presentation changed. The closeout compiler, MARU source boundary, and automatic receipt contract remain unchanged.
 - A completion click is still a user acknowledgement, not independent verification.
 - Native Tauri packaging remains blocked by the existing Rust/MSVC/Windows SDK prerequisite.
 

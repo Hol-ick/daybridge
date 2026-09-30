@@ -2,7 +2,7 @@
 
 ## Development loop
 
-1. Keep diary and AIHUB source records outside the repository.
+1. Keep diary and MARU source records outside the repository.
 2. Run `pnpm check` and `pnpm build` before committing.
 3. Use `pnpm compile -- --print` to inspect extraction changes without changing source notes.
 4. Keep status reports sanitized and preserve the distinction between user-reported completion and independently verified work.
@@ -10,7 +10,7 @@
 
 ## Privacy boundary
 
-Do not commit diary content, customer data, credentials, `.env` files, local absolute paths, generated Daybridge boards, or AIHUB reports. The repository stores only safe source identifiers such as `diary://YYYY-MM-DD`.
+Do not commit diary content, customer data, credentials, `.env` files, local absolute paths, generated Daybridge boards, or MARU reports. The repository stores only safe source identifiers such as `diary://YYYY-MM-DD`.
 
 ## Commit scope
 

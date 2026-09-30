@@ -1,6 +1,6 @@
 # Debugging Daybridge
 
-Daybridge is easiest to debug one layer at a time: direct Skill/inbox or optional closeout synthesis, compiler, local bridge, widget UI, then AIHUB handoff.
+Daybridge is easiest to debug one layer at a time: direct Skill/inbox or optional closeout synthesis, compiler, local bridge, widget UI, then MARU handoff.
 
 ## 0. Directly add one task from any Codex session
 
@@ -21,13 +21,13 @@ From the repository root:
 pnpm compile:closeout -- --target-date 2026-08-11 --source-date 2026-08-10 --print
 ```
 
-The compiler reads the sanitized closeout without editing it. Check the quest count, parent titles, checklist items, statuses, and `aihub://` source references. If the board is empty, inspect the matching `*_briefing_synthesis.json` first: it must be a `closeout` packet for the requested date, not a future/test artifact, and its action-first fields must contain safe next actions.
+The compiler reads the sanitized closeout without editing it. Check the quest count, parent titles, checklist items, statuses, and `maru://` source references. If the board is empty, inspect the matching `*_briefing_synthesis.json` first: it must be a `closeout` packet for the requested date, not a future/test artifact, and its action-first fields must contain safe next actions.
 
-The scheduled closeout uses the same path through `daybridge_board.py`. It reads the machine-local `daybridge_root` and `daybridge_node` profile fields, creates the local board, and stores a redacted AIHUB receipt. Neither absolute path belongs in shared AIHUB documents.
+The scheduled closeout uses the same path through `daybridge_board.py`. It reads the machine-local `daybridge_root` and `daybridge_node` profile fields, creates the local board, and stores a redacted MARU receipt. Neither absolute path belongs in shared MARU documents.
 
 ### 입력 계약을 먼저 확인하기
 
-새로운 AIHUB 전달물은 `daybridge_quest_plan` 1.1을 사용한다. `source_date`와 `schedule_date`가 맞는지, 각 후보에 `focus_units`가 있는지, `start_at`/`end_at`이 섞이지 않았는지 먼저 확인한다. 검증 결과에서 `accepted`만 스케줄러로 넘어가며, `review_queue`·`excluded`·`warnings`는 보드 메타데이터에 남는다.
+새로운 MARU 전달물은 `daybridge_quest_plan` 1.1을 사용한다. `source_date`와 `schedule_date`가 맞는지, 각 후보에 `focus_units`가 있는지, `start_at`/`end_at`이 섞이지 않았는지 먼저 확인한다. 검증 결과에서 `accepted`만 스케줄러로 넘어가며, `review_queue`·`excluded`·`warnings`는 보드 메타데이터에 남는다.
 
 ```powershell
 node --test src/schedule/input-contract.test.mjs scripts/compile-quests.test.mjs
@@ -50,7 +50,7 @@ Invoke-RestMethod http://127.0.0.1:39393/api/health
 Invoke-RestMethod "http://127.0.0.1:39393/api/board?date=2026-08-11"
 ```
 
-`connected: true` means the machine-local AIHUB profile resolved a handoff sink. A local-only response is still usable, but it will not reach AIHUB until the bridge is restarted with a valid profile or explicit `DAYBRIDGE_DATA_DIR`/config.
+`connected: true` means the machine-local MARU profile resolved a handoff sink. A local-only response is still usable, but it will not reach MARU until the bridge is restarted with a valid profile or explicit `DAYBRIDGE_DATA_DIR`/config.
 
 ### 실행이 사라졌을 때 런타임 이벤트 확인
 
@@ -72,7 +72,7 @@ Get-Content "$env:LOCALAPPDATA\Daybridge\logs\bridge-events.ndjson" -Tail 100
 
 ## 3. Check a status report
 
-Use the UI to change a quest status or submit a progress note. The bridge should return `eventRecorded: true`. The event is stored locally and mirrored to the AIHUB automation-owned `reports/daily/_system/daybridge_handoff/YYYY-MM-DD/` folder. The original diary is never edited.
+Use the UI to change a quest status or submit a progress note. The bridge should return `eventRecorded: true`. The event is stored locally and mirrored to the MARU automation-owned `reports/daily/_system/daybridge_handoff/YYYY-MM-DD/` folder. The original diary is never edited.
 
 ## 4. Check the floating widget
 
@@ -84,7 +84,7 @@ pnpm dev:all
 
 - 화면 확인: `http://127.0.0.1:5173`
 - 브라우저 개발자 도구: React 화면·네트워크·콘솔 오류 확인
-- bridge 로그: 같은 터미널에서 API·AIHUB handoff·Calendar relay 오류 확인
+- bridge 로그: 같은 터미널에서 API·MARU handoff·Calendar relay 오류 확인
 - 종료: 해당 터미널에서 `Ctrl+C`
 
 ### VS Code에서 바로 시작하기
@@ -104,7 +104,7 @@ UI만 빠르게 만질 때는 다음처럼 실행해도 된다.
 pnpm dev
 ```
 
-브라우저에서 `http://127.0.0.1:5173`을 열어 UI를 확인한다. 저장할 때마다 화면이 갱신되므로 카드 간격, 확장 애니메이션, 상태 클릭을 즉시 반복해서 확인할 수 있다. AIHUB 연결과 상태 영수증까지 확인할 때만 두 번째 터미널을 추가한다.
+브라우저에서 `http://127.0.0.1:5173`을 열어 UI를 확인한다. 저장할 때마다 화면이 갱신되므로 카드 간격, 확장 애니메이션, 상태 클릭을 즉시 반복해서 확인할 수 있다. MARU 연결과 상태 영수증까지 확인할 때만 두 번째 터미널을 추가한다.
 
 ```powershell
 # 터미널 2 — 브리핑 보드·Calendar·상태 기록까지 확인할 때
@@ -148,7 +148,7 @@ pnpm build:widget
 
 Windows needs WebView2, Rust with the MSVC target, and Microsoft C++ Build Tools with the Windows SDK. A missing compiler/toolchain is a local setup blocker, not a successful native build.
 
-## 5. Check the AIHUB handoff
+## 5. Check the MARU handoff
 
 At closeout, run the collector for the work date:
 
@@ -165,7 +165,7 @@ Inspect the generated JSON/Markdown for `status`, `event_count`, `completed`, `o
 | Demo board remains visible | Start `pnpm bridge`, compile today's board, and reload the browser. |
 | Board is empty | First inspect `/api/schedule/inbox` and its `valid`, `tasks`, and `errors`; only if using the optional closeout path, run the closeout compiler with `--print`. |
 | Status changes disappear after reload | Check that the bridge is running; browser storage is only a local fallback. |
-| `connected: false` | Check `%LOCALAPPDATA%\AIHUB\environment.json` and the `aihub_root` value. |
+| `connected: false` | Check `%LOCALAPPDATA%\MARU\environment.json` and the `maru_root` value. |
 | Handoff has zero events | Confirm `eventRecorded: true`, the activity date, and that closeout collected the same date. |
 | A quest looks too broad | Check the closeout's workstream/evidence metadata. The compiler groups it into a parent quest but must not invent ungrounded subtasks. |
 

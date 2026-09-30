@@ -2,17 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Generate the next working day's Daybridge board from the sanitized AIHUB closeout packet and present it as a compact Windows always-on-top quest widget.
+**Goal:** Generate the next working day's Daybridge board from the sanitized MARU closeout packet and present it as a compact Windows always-on-top quest widget.
 
-**Architecture:** The Daybridge compiler reads `*_briefing_synthesis.json` as the primary source, combines it with the matching unified packet for project metadata, and writes a local board without modifying AIHUB source records. The AIHUB closeout calls a small machine-profile-aware runner after briefing synthesis. The Vite interface stays browser-testable while a Tauri shell owns the always-on-top, tray, hide, and quit behavior.
+**Architecture:** The Daybridge compiler reads `*_briefing_synthesis.json` as the primary source, combines it with the matching unified packet for project metadata, and writes a local board without modifying MARU source records. The MARU closeout calls a small machine-profile-aware runner after briefing synthesis. The Vite interface stays browser-testable while a Tauri shell owns the always-on-top, tray, hide, and quit behavior.
 
 **Tech Stack:** Node.js ESM, Vite, strict TypeScript, CSS, Python standard library, Tauri 2, Rust.
 
 ## Global Constraints
 
-- Never edit original diaries, worklogs, or canonical AIHUB indexes from Daybridge.
-- Use the sanitized AIHUB closeout JSON; do not parse the human-facing Markdown report for normal operation.
-- Keep computer-specific paths out of repository fixtures and AIHUB shared documents.
+- Never edit original diaries, worklogs, or canonical MARU indexes from Daybridge.
+- Use the sanitized MARU closeout JSON; do not parse the human-facing Markdown report for normal operation.
+- Keep computer-specific paths out of repository fixtures and MARU shared documents.
 - Preserve Daybridge user status receipts when a board is regenerated.
 - Do not turn `candidate_only`, unavailable coverage, `needs_review`, `not_evaluated`, or future/test artifacts into verified work.
 - Show 3–5 parent quests first; keep lower-priority groups as support/backlog.
@@ -27,7 +27,7 @@
 - Modify: `package.json`
 
 **Interfaces:**
-- Consumes: sanitized `aihub_briefing_synthesis` and `aihub_unified_daily_report` JSON.
+- Consumes: sanitized `maru_briefing_synthesis` and `maru_unified_daily_report` JSON.
 - Produces: `compile({ sourceDate, targetDate, source: "closeout" })` board with grouped parent quests.
 
 - [ ] Write a node:test fixture with duplicate SWIFT actions, a blocked item, an unconfirmed item, and an invalid future-date packet.
@@ -35,7 +35,7 @@
 - [ ] Export compiler helpers, group candidates by project/workstream, map conservative statuses, preserve existing receipts, and reject synthetic packets.
 - [ ] Run `node --test scripts/compile-quests.test.mjs` and `node scripts/compile-quests.mjs --self-test`.
 
-### Task 2: Connect compiler execution to AIHUB closeout safely
+### Task 2: Connect compiler execution to MARU closeout safely
 
 **Files:**
 - Create: `04_Operations_And_Automation/Memory_System/conversation_bridge/daybridge_board.py`
@@ -46,7 +46,7 @@
 
 **Interfaces:**
 - Consumes: machine-local optional `daybridge_root`, closeout date, and Daybridge compiler CLI.
-- Produces: AIHUB-owned `YYYY-MM-DD_daybridge_board.json` receipt plus local Daybridge board for the next working day.
+- Produces: MARU-owned `YYYY-MM-DD_daybridge_board.json` receipt plus local Daybridge board for the next working day.
 
 - [ ] Add a self-tested runner that validates the optional local path, calculates the next weekday, invokes `pnpm compile:closeout`, and writes a sanitized receipt.
 - [ ] Extend the local profile validator and template with an optional `daybridge_root` field; never place a real absolute path in a shared document.

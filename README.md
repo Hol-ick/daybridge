@@ -9,10 +9,10 @@ Daybridge is a local-first desktop companion. It reduces a detailed daily note t
 - A compact Windows floating widget that stays above other windows and lives in the system tray
 - A concrete first step and a completion condition for every action
 - One-click complete, defer-to-tomorrow, resume, and blocked states
-- Local status reports mirrored to an AIHUB handoff when the machine profile is available
+- Local status reports mirrored to an MARU handoff when the machine profile is available
 - A link back to the evidence that produced each action
 - Direct session handoff: whenever the user decides a task belongs on the timetable, the `daybridge-schedule-writer` Skill records it without waiting for a closeout or briefing
-- Stable mission and quest IDs for multi-day carryover, with explicit sequential dependencies only when AIHUB declares them
+- Stable mission and quest IDs for multi-day carryover, with explicit sequential dependencies only when MARU declares them
 - A validated `daybridge_quest_plan` input contract: 50-minute `focus_units`, no fixed quest times, and a separate confirmation queue
 - A cross-session `daybridge-schedule-writer` Skill: another Codex session can upsert normalized work into a date-scoped Markdown inbox, and the bridge automatically re-plans when its fingerprint changes
 - Optional time planning: leave the work window blank to use a lightweight untimed “오늘 할 일” list, or set both start and end times to enable the `HH:00–HH:50` timetable
@@ -27,9 +27,9 @@ pnpm install
 pnpm dev
 ```
 
-개발 중에는 설치 파일을 만들 필요가 없다. `pnpm dev`는 Vite 개발 서버를 실행하며 코드와 스타일을 저장할 때 브라우저 위젯에 변경 사항을 즉시 반영한다. 이 브라우저 미리보기가 가장 빠른 디버깅 경로다. AIHUB 연결과 상태 영수증까지 확인할 때만 별도 터미널에서 `pnpm bridge`를 함께 실행한다.
+개발 중에는 설치 파일을 만들 필요가 없다. `pnpm dev`는 Vite 개발 서버를 실행하며 코드와 스타일을 저장할 때 브라우저 위젯에 변경 사항을 즉시 반영한다. 이 브라우저 미리보기가 가장 빠른 디버깅 경로다. MARU 연결과 상태 영수증까지 확인할 때만 별도 터미널에서 `pnpm bridge`를 함께 실행한다.
 
-`pnpm build` runs the strict TypeScript check and creates a production web bundle. The direct session inbox is the normal input path; the optional AIHUB Quest Extractor can still write a derived `*_daybridge_quest_plan.json`, which `pnpm compile:closeout -- --source-date YYYY-MM-DD` can consume for legacy or closeout-driven workflows. `pnpm bridge` starts the local bridge; each status report is written locally and mirrored to AIHUB when the machine profile is available. The packaged Tauri widget also checks the bridge at launch and starts the checkout's `scripts/local-bridge.mjs` without opening a console when it is not already running.
+`pnpm build` runs the strict TypeScript check and creates a production web bundle. The direct session inbox is the normal input path; the optional MARU Quest Extractor can still write a derived `*_daybridge_quest_plan.json`, which `pnpm compile:closeout -- --source-date YYYY-MM-DD` can consume for legacy or closeout-driven workflows. `pnpm bridge` starts the local bridge; each status report is written locally and mirrored to MARU when the machine profile is available. The packaged Tauri widget also checks the bridge at launch and starts the checkout's `scripts/local-bridge.mjs` without opening a console when it is not already running.
 
 To run the always-on-top shell after the Windows prerequisites are installed:
 
@@ -49,7 +49,7 @@ pnpm dev:widget
 
 ## Data boundary
 
-Daybridge does not edit the original daily note. A direct session writes only a validated, date-scoped inbox; the optional compiler creates a sanitized quest-board JSON artifact; the app writes status receipts only. AIHUB's `conversation_bridge/daybridge_handoff.py` may collect those receipts during a later closeout, but that closeout is not required for scheduling. See:
+Daybridge does not edit the original daily note. A direct session writes only a validated, date-scoped inbox; the optional compiler creates a sanitized quest-board JSON artifact; the app writes status receipts only. MARU's `conversation_bridge/daybridge_handoff.py` may collect those receipts during a later closeout, but that closeout is not required for scheduling. See:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Action-list contract](docs/INTEGRATION_CONTRACT.md)
@@ -62,7 +62,7 @@ Daybridge does not edit the original daily note. A direct session writes only a 
 
 ## Status
 
-The direct session inbox, deterministic 50-minute scheduler, progress bridge, optional AIHUB handoff, and Tauri widget shell are implemented. The native installer build is blocked on this computer until Rust and the Microsoft C++ Build Tools are installed. Licensing and public release remain separate decisions.
+The direct session inbox, deterministic 50-minute scheduler, progress bridge, optional MARU handoff, and Tauri widget shell are implemented. The native installer build is blocked on this computer until Rust and the Microsoft C++ Build Tools are installed. Licensing and public release remain separate decisions.
 
 ## License
 

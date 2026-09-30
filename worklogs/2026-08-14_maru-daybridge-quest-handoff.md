@@ -1,4 +1,4 @@
-# 2026-08-14 AIHUB → Daybridge 퀘스트 품질 인수인계
+# 2026-08-14 MARU → Daybridge 퀘스트 품질 인수인계
 
 ## 목적
 
@@ -13,15 +13,15 @@
 
 ## 산출물
 
-- `docs/superpowers/plans/2026-08-14-aihub-daybridge-quest-quality.md`
-- `docs/handoff-2026-08-14-aihub-daybridge-quest-directive.md`
+- `docs/superpowers/plans/2026-08-14-maru-daybridge-quest-quality.md`
+- `docs/handoff-2026-08-14-maru-daybridge-quest-directive.md`
 
 ## 검증
 
 - Daybridge compiler tests: 5/5 통과
 - `scripts/local-bridge.mjs` syntax check 통과
 - 실제 `http://127.0.0.1:39393/api/board?date=2026-08-14`에서 3개 카드와 상태·단계를 확인
-- 원본 AIHUB 보고서, unified JSON, Quest Plan, board receipt, continuation receipt, latest handoff를 대조
+- 원본 MARU 보고서, unified JSON, Quest Plan, board receipt, continuation receipt, latest handoff를 대조
 
 ## 다음 세션의 완료 기준
 

@@ -68,7 +68,7 @@ function reviewItem(raw, index, reason = "needs_user_confirmation") {
 }
 
 /**
- * Validate and normalize the AIHUB -> Daybridge boundary.
+ * Validate and normalize the MARU -> Daybridge boundary.
  *
  * The scheduler receives only `accepted`; review questions and excluded
  * records are deliberately kept out of the executable queue. Fixed clock
