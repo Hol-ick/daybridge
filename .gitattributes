@@ -1,0 +1,2 @@
+# Preserve the byte-checked upstream license, including its original indentation.
+scripts/packaging/node-v24.19.0-LICENSE.txt text eol=lf -whitespace

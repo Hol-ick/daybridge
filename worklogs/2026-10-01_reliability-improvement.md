@@ -122,3 +122,12 @@
 - CI 실행 경로는 checkout→고정 Node 24.19.0/pnpm 11.16.0→frozen install→check→test→build→Rust 1.98.1로 구성했다. GitHub actions 참조는 확인한 commit SHA로 고정했다. CI 정의와 로컬 검증을 원격 CI 성공으로 표현하지 않는다.
 - 타입 적용 0565e81, 전체 runner/CI 16fd103에 이어 좌표·smoke·기록을 별도 커밋으로 전달한다. 웹 빌드의 기존 Tauri 동적/정적 import 경고는 남아 있고 빌드는 성공했다. 실제 Windows 앱의 모니터·포커스·taskbar를 이번 browser 결과로 승격하지 않는다.
 - 작업 8 및 A07은 이 검증 범위에서 verified다. 실제 앱 재시작·설치·운영 자료 이동·Calendar 승인은 수행하지 않았다. 작업 9–10과 전체 목표는 active로 유지한다.
+
+## 작업 9 진행: 독립 브리지 런타임
+
+- 기존 bridge 진입 파일만 임시 폴더에 복사하면 checkout의 상대 모듈 부재로 ERR_MODULE_NOT_FOUND가 발생하는 것을 재현했다. 설치형 앱의 네 단계 상위 폴더 탐색과 시스템 node 의존은 아직 native 연결 작업의 대상이다.
+- prepareBridgeRuntime은 명시적인 새 출력 폴더에 Node v24.19.0 Windows x64 실행 파일, googleapis 170.0.0을 포함한 단일 ESM bridge, 최소 package 정보, 고지 파일 및 runtime manifest를 만든다. 기존 출력은 덮어쓰지 않는다. Node 버전·플랫폼·PE 형식, 고정 rolldown 1.2.1과 Node 라이선스 checksum을 확인한다.
+- manifest는 실제 포함 npm package의 이름·버전·license와 runtime 파일의 바이트 수·SHA-256을 기록한다. Node의 tagged upstream 고지 원문과 포함 dependency의 실제 고지 파일을 함께 제공한다. data-uri-to-buffer의 MIT 원문은 package README에서 가져온다. 고지 원문이 없으면 실패한다. node_modules 전체, 환경 파일, OAuth 자료와 사용자 데이터는 복사하지 않는다.
+- 임시 독립 폴더에서 빈 PATH와 격리 app/data/profile, 임의 포트만 사용해 bundled node 기동·health identity·수동 항목 durable 저장·자기 child 종료·재기동 후 동일 항목과 새 instance 확인을 통과했다. sourceRoot는 패키지 폴더이며 bundle에 개발 저장소 절대 경로가 없음을 확인했다. 실제 운영 브리지와 app은 사용하지 않았다.
+- 이 결과는 bridge runtime의 격리 실행 근거다. native resource 선택, 배포 exe 검증 모드, release/NSIS 생성과 실제 설치·로그인 검증은 아직 완료되지 않았다. 작업 9 전체와 A08, 작업 10, 전체 목표는 active로 유지한다.
+- 검증: 전체 Node 161개/32 suite, frozen install, pnpm check, pnpm build와 diff 검사 통과. 기존 Tauri 정적/동적 import 경고는 유지된다. 이 변경은 UI와 native 창 동작을 바꾸지 않는다.

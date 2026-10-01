@@ -1,5 +1,24 @@
 # Third-party notices
 
+## Packaged bridge runtime
+
+The bridge packaging command uses Node.js v24.19.0 for Windows x64 and rolldown
+1.2.1. Node's unmodified license text is retained in
+`scripts/packaging/node-v24.19.0-LICENSE.txt`, from the tagged upstream
+[Node.js license](https://github.com/nodejs/node/blob/v24.19.0/LICENSE).
+Its SHA-256 is checked before packaging.
+
+Each runtime includes `THIRD_PARTY_NOTICES.txt` with the complete Node notices
+and the license/notice files of the npm packages included in the bridge bundle,
+including googleapis 170.0.0. The generated `runtime-manifest.json` records
+dependency versions and SHA-256 hashes of the runtime files. Packaging fails
+when an included dependency has no available license text; the MIT license of
+data-uri-to-buffer 4.0.1 is included from its upstream package README.
+
+The build tool is a development dependency and is not shipped as part of the
+runtime. No environment files, OAuth material, user data or complete
+`node_modules` tree are copied into the runtime.
+
 ## todometer renderer and assets
 
 Daybridge vendors and adapts the React renderer structure, CSS modules, SVG controls, and visual
