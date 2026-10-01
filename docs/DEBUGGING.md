@@ -50,7 +50,44 @@ Invoke-RestMethod http://127.0.0.1:39393/api/health
 Invoke-RestMethod "http://127.0.0.1:39393/api/board?date=2026-08-11"
 ```
 
-`connected: true` means the machine-local MARU profile resolved a handoff sink. A local-only response is still usable, but it will not reach MARU until the bridge is restarted with a valid profile or explicit `DAYBRIDGE_DATA_DIR`/config.
+`connected: true`는 전달 위치가 구성됐다는 호환 필드다. 실제 전달 성공은 `handoffState.deliveryVerified`와 `state`를 확인한다. 설정된 위치가 있다는 사실만으로 MARU에 자료가 도착했다고 판단하지 않는다.
+
+### 실행 위치와 브리지 식별 진단
+
+일정 조회·재배치 전에 읽기 전용 진단을 실행한다.
+
+```powershell
+pnpm diagnose:runtime
+```
+
+현재 로컬 프로필도 함께 비교하려면 다음을 사용한다.
+
+```powershell
+$runtimeProfilePath = if ($env:MARU_ENV_PROFILE) { $env:MARU_ENV_PROFILE } else { Join-Path $env:LOCALAPPDATA 'MARU/environment.json' }
+node scripts/inspect-runtime.mjs --profile $runtimeProfilePath
+```
+
+이 명령은 루프백 TCP 연결 후 제한 시간 안에 `/api/health`의 HTTP 응답을 검증한다. 외부 URL·리디렉션은 허용하지 않고 응답 크기를 제한한다. 공유할 수 있는 출력에는 절대 경로·프로필 원문·일정·인증값을 넣지 않는다. 진단은 파일을 복구하거나 저장 위치를 바꾸지 않으며 전달 재시도를 실행하지 않는다.
+
+| 상태 | 의미와 확인할 사항 |
+|---|---|
+| `unavailable` | 루프백 연결을 확인하지 못했다. 실행 상태와 포트를 확인한다. |
+| `foreign_listener` | 포트가 열렸지만 호환되는 Daybridge HTTP 식별을 확인하지 못했다. 그 포트의 프로그램을 자동 종료하지 않는다. |
+| `legacy_bridge` | 이전 health 응답 모양이다. 서비스 정체·실행 버전은 아직 검증되지 않았다. |
+| `incompatible_bridge` | Daybridge 식별을 주장하지만 현재 schema/필수 필드와 맞지 않는다. |
+| `configuration_mismatch` | 실행 데이터와 현재 pointer 또는 실행 코드와 프로필의 `daybridge_root`가 다르다. |
+| `configuration_attention` | pointer/config/명시한 프로필을 읽거나 검증하지 못했다. 원본을 보존한 상태에서 오류를 확인한다. |
+| `profile_unconfirmed` | MARU 프로필이나 루트 표식을 확인하지 못했고 별도 전달 위치도 없다. |
+| `sink_unconfigured` | 전달 위치가 비활성 상태다. 로컬 저장과 외부 전달을 구분한다. |
+| `ready` | 전달 위치는 구성돼 있지만 이 실행에서 성공한 전달 증거는 없다. |
+| `pending` / `delivery_failed` | 로컬 저장 뒤 전달 대기 또는 실제 전달 시도 실패가 있다. |
+| `connected` | 현재 데이터·전달 위치에서 성공한 전달을 이 실행이 관측했고 실패·대기가 없다. |
+
+새 health는 `service`, `schemaVersion`, `bridgeVersion`, `instanceId`, `startedAt`, `dataLocationSource`, `configurationMismatch`, `profile`, `handoffState`를 기존 필드에 추가한다. `bridgeVersion`은 package 버전과 브리지 진입 파일의 해시이며 전체 저장소 commit 검증을 대신하지 않는다. `instanceId`는 프로세스가 다시 시작하면 바뀐다. 식별 응답은 서비스를 구분하기 위한 계약이며 사용자 인증은 아니다.
+
+저장 위치 선택은 pointer → `DAYBRIDGE_DATA_DIR` → 기본 AppData 순서다. 실행 도중 pointer만 바뀌면 실행 중 데이터는 그대로 유지하고 mismatch를 표시한다. 프로필의 `daybridge_root`는 코드 실행 위치이며 데이터 저장 위치와 비교하지 않는다. `MARU_ENV_PROFILE`을 지정하면 그 파일을 먼저 사용하고, 없으면 로컬 AppData의 MARU 프로필을 읽는다. 자동 발견 전달 위치는 프로필 루트 표식이 확인될 때만 사용하며 config의 명시적인 null/빈 값은 발견 경로를 비활성화한다.
+
+현재 네이티브 코드는 단순 TCP 연결 대신 최대 500ms·16KiB 안의 HTTP 식별을 확인한다. 확인되지 않은 listener는 복구 기동에서 오류로 표시하고 자동 교체하지 않는다. 진단·소스 수정과 실제 운영 앱 교체·재시작은 별도 단계다. 운영 자료를 옮기거나 실제 앱을 다시 시작하기 전 정본 위치·백업·복구 조건을 확인한다.
 
 ### 실행이 사라졌을 때 런타임 이벤트 확인
 

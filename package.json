@@ -13,6 +13,7 @@
     "dev:all": "node scripts/dev-all.mjs",
     "bridge": "node scripts/compile-quests.mjs && node scripts/local-bridge.mjs",
     "bridge:inspect": "node --inspect scripts/local-bridge.mjs",
+    "diagnose:runtime": "node scripts/inspect-runtime.mjs",
     "compile": "node scripts/compile-quests.mjs",
     "compile:closeout": "node scripts/compile-quests.mjs --source closeout",
     "test:compiler": "node --test scripts/compile-quests.test.mjs",

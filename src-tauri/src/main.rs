@@ -1,9 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde_json::json;
+mod bridge_health;
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::net::{SocketAddr, TcpStream};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -226,7 +227,7 @@ fn bridge_endpoint() -> SocketAddr {
 }
 
 fn bridge_is_reachable() -> bool {
-    TcpStream::connect_timeout(&bridge_endpoint(), Duration::from_millis(200)).is_ok()
+    bridge_health::bridge_is_reachable_at(bridge_endpoint())
 }
 
 fn bridge_project_root() -> Option<PathBuf> {
@@ -251,8 +252,9 @@ fn stop_existing_local_bridge(app: &tauri::AppHandle, script: &std::path::Path) 
     let command_text = r#"
 $ErrorActionPreference = 'Stop'
 $target = $env:DAYBRIDGE_LOCAL_BRIDGE_SCRIPT
+$listenerPids = @(Get-NetTCPConnection -LocalPort $env:DAYBRIDGE_LOCAL_BRIDGE_PORT -State Listen -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique)
 $matches = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object {
-  $_.CommandLine -and $_.CommandLine.IndexOf($target, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+  $listenerPids -contains $_.ProcessId -and $_.CommandLine -and $_.CommandLine.IndexOf($target, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
 })
 foreach ($match in $matches) { Stop-Process -Id $match.ProcessId -Force }
 $matches.Count
@@ -264,6 +266,7 @@ $matches.Count
         .arg("-Command")
         .arg(command_text)
         .env("DAYBRIDGE_LOCAL_BRIDGE_SCRIPT", script)
+        .env("DAYBRIDGE_LOCAL_BRIDGE_PORT", LOCAL_BRIDGE_PORT.to_string())
         .stdin(Stdio::null())
         .stderr(Stdio::null());
     use std::os::windows::process::CommandExt;
@@ -292,6 +295,9 @@ fn stop_existing_local_bridge(_app: &tauri::AppHandle, _script: &std::path::Path
 }
 
 fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
+    if bridge_health::probe_bridge(bridge_endpoint()) == bridge_health::BridgeProbe::ForeignListener {
+        return Err("브리지 포트의 서비스가 호환되는 Daybridge인지 확인하지 못했습니다. 실행 진단을 확인해 주세요.".to_string());
+    }
     let project_root = bridge_project_root()
         .ok_or_else(|| "Daybridge 프로젝트 경로를 확인할 수 없습니다.".to_string())?;
     let script = project_root.join(LOCAL_BRIDGE_SCRIPT);
@@ -322,12 +328,12 @@ fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
         // the exact bridge process to release it before starting the current
         // script, otherwise the new child would silently lose the bind race.
         for _ in 0..20 {
-            if !bridge_is_reachable() {
+            if bridge_health::probe_bridge(bridge_endpoint()) == bridge_health::BridgeProbe::Unavailable {
                 break;
             }
             thread::sleep(Duration::from_millis(50));
         }
-        if bridge_is_reachable() {
+        if bridge_health::probe_bridge(bridge_endpoint()) != bridge_health::BridgeProbe::Unavailable {
             let error = format!("기존 로컬 브리지가 {LOCAL_BRIDGE_PORT} 포트를 해제하지 않았습니다.");
             let _ = append_runtime_event(
                 app,

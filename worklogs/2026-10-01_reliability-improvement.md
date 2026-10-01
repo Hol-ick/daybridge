@@ -96,3 +96,16 @@
 - 검증: Node 관련 59개 전체 통과(설정/store/scheduler/manual/inbox/move/storage transaction). 앞선 이월·요청 중복 포함 관련 실행 44개도 통과. 최종 browser smoke 12개 전체 통과: 31분 입력 차단·한쪽 시간 거부·서버 오류와 입력 보존·0/30분 payload·꺼진 식사 유지·구형 오류 GET 후 사용자 교정 저장을 포함한다. 미등록 브리지 요청·pageerror 없음. 새 오류·저장 캡처를 직접 검토했고 닫기 버튼·저녁시간·저장 버튼의 접근을 확인했다.
 - 최종 웹 build와 diff 검사 통과. 기존 Tauri 동적/정적 import 묶음 경고는 남아 있으며 전체 JS/JSX 검사 범위 개선은 작업 8에서 수행한다.
 - 실제 운영 앱 재시작·설치·자료 이동은 수행하지 않았다. 시험은 fixture와 완전 mock 브라우저만 사용했다. A05/A06은 관련 검증 범위에서 verified다. 작업 7–10 및 전체 목표는 active로 유지한다.
+
+
+## 작업 7 완료: 실행 식별과 경로 진단
+
+- health에 service/schemaVersion/bridgeVersion/instanceId/startedAt/dataLocationSource/configurationMismatch/profile/handoffState를 추가했다. 버전은 package 버전과 진입 파일 해시이며 전체 저장소 commit 식별을 대신하지 않는다. 재시작 시 instanceId만 새로 생성한다.
+- 수정 전 Node fixture health의 식별 필드 부재와 Rust의 임의 TCP listener 승인 실패를 실제 테스트로 확인했다. native 확인은 최대 500ms·16KiB HTTP identity 계약으로 바꿨다. 일반 HTTP·chunked 응답을 검사하며 알 수 없는 listener는 복구 기동에서 오류로 반환하고 자동 종료하지 않는다. 기존 관리 대상 교체도 해당 포트 소유 PID와 같은 스크립트 경로를 함께 확인하도록 제한했다.
+- read-only inspectRuntime와 `pnpm diagnose:runtime`를 추가했다. 외부 URL·redirect·oversized 응답을 거부하고 공유 출력은 경로·프로필 원문·일정·인증값을 제외한다. 응답하지 않는 TCP listener, foreign/legacy/incompatible HTTP, 기동되지 않은 상태를 분리한다.
+- pointer 우선순위는 유지한다. 실행 중 pointer 변화는 active dataDir을 그대로 둔 채 mismatch로 표시한다. 프로필의 daybridge_root는 코드 실행 경로와 비교하며 저장 경로와 혼동하지 않는다. MARU_ENV_PROFILE 우선 선택 및 루트 표식 확인을 config 발견에 적용했다. 명시적 null/빈 sink는 발견 경로를 비활성화한다.
+- profile 미확인, sink 미설정, ready, pending, 실제 delivery_failed/connected를 구분한다. ready와 connected:true 호환 필드는 실제 전달 완료 증거가 아니다. 최근 전달 성공 확인은 현재 데이터·sink에 귀속되고 경로 변경·실패 뒤 승격하지 않는다. 진단은 전달 재시도·잠금 복구·설정 변경을 호출하지 않는다.
+- 검증: 최종 Node 관련 26개 통과(진단 8, fixture 3, outbox 7, 요청 영수증 3, 설정 5), Rust 7개 통과, 웹 build·diff 검사 통과. 실제 Windows sink 공유 접근 거부와 새 프로세스 outbox 회귀를 포함한다. 진단은 pointer/profile/config/장애 sink 원본 바이트 보존 및 출력 비노출을 확인했다.
+- 실제 운영은 GET health와 포트 소유자·로컬 pointer 비교만 수행했다. 출력은 legacy_bridge/identityVerified=false였고 pointer와 active data 위치 불일치가 현재도 확인됐다. 실제 listener의 실행 명령은 현재 checkout 및 프로필 checkout과 일치했다. 옛 메모의 다른 source 위치를 현재 사실로 재사용하지 않았다. 앱 재시작·실제 설치·자료 이동은 하지 않았다.
+- A09는 불일치를 관측·설명하는 진단 범위에서 verified다. 운영 정본 선택과 연결 복구는 operational_path_unresolved로 유지한다. DEBUGGING의 상태 해석과 실행 조건을 갱신했다. UI 구조 변경이 없으므로 화면 검사는 추가하지 않았다.
+- 다음은 작업 8: JS/JSX 검사 범위·전체 회귀·좌표 기대값·CI. 작업 8–10 및 전체 목표는 active다.

@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+import { createRuntimeIdentity, readRuntimeConfiguration, runtimeHealth } from "./bridge/runtime-info.mjs";
 import { createServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
@@ -30,18 +32,25 @@ import { allowedOrigin, RequestError, validateRequest } from "./bridge/request-p
 import { enqueueHandoff, flushHandoffOutbox } from "./bridge/handoff-outbox.mjs";
 import { findCarryoverSource } from "./storage/carryover-source.mjs";
 
+const SOURCE_ROOT = resolve(fileURLToPath(new URL("../", import.meta.url)));
+const packageInfo = await readJsonStrict(new URL("../package.json", import.meta.url));
+const entryHash = createHash("sha256").update(await readFile(fileURLToPath(import.meta.url))).digest("hex").slice(0, 12);
+const RUNTIME_IDENTITY = createRuntimeIdentity(`${packageInfo.version}+${entryHash}`);
+let lastDelivery = null;
 const PORT = Number(process.env.DAYBRIDGE_BRIDGE_PORT || 39393);
 const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
 const DEFAULT_DATA_DIR = resolve(join(APP_DATA, "Daybridge"));
 const LOCATION_PATH = join(DEFAULT_DATA_DIR, "storage-location.json");
+const PROFILE_PATH = process.env.MARU_ENV_PROFILE || join(APP_DATA, "MARU", "environment.json");
+let DATA_LOCATION_SOURCE;
 function configuredDataDir() {
   const stored = readJsonStrictSync(LOCATION_PATH);
-  if (typeof stored?.dataDirectory === "string" && stored.dataDirectory.trim()) return resolve(stored.dataDirectory);
-  if (process.env.DAYBRIDGE_DATA_DIR) return resolve(process.env.DAYBRIDGE_DATA_DIR);
+  if (typeof stored?.dataDirectory === "string" && stored.dataDirectory.trim()) { DATA_LOCATION_SOURCE = "pointer"; return resolve(stored.dataDirectory); }
+  if (process.env.DAYBRIDGE_DATA_DIR) { DATA_LOCATION_SOURCE = "environment"; return resolve(process.env.DAYBRIDGE_DATA_DIR); }
+  DATA_LOCATION_SOURCE = "default";
   return DEFAULT_DATA_DIR;
 }
 let DATA_DIR = configuredDataDir();
-let CONFIG_PATH = join(DATA_DIR, "config.json");
 async function readJson(path) {
   const value = await readJsonStrict(path);
   if (value && dirname(path) === join(DATA_DIR, "boards") && !Array.isArray(value.quests)) {
@@ -247,18 +256,13 @@ async function setDataDirectory(nextPath) {
   await mkdir(join(next, "logs"), { recursive: true });
   await atomicWrite(LOCATION_PATH, { schemaVersion: 1, dataDirectory: next, updatedAt: now() });
   DATA_DIR = next;
-  CONFIG_PATH = join(DATA_DIR, "config.json");
+  DATA_LOCATION_SOURCE = "pointer";
   RUNTIME_LOG_PATH = join(DATA_DIR, "logs", "bridge-events.ndjson");
   TEXT_LOG_DIRECTORY = join(DATA_DIR, "logs");
   return DATA_DIR;
 }
 async function loadConfig() {
-  const configured = await readJson(CONFIG_PATH);
-  const profile = await readJson(join(APP_DATA, "MARU", "environment.json"));
-  const discoveredSink = profile && typeof profile.maru_root === "string" && profile.maru_root.trim()
-    ? join(profile.maru_root, "04_Operations_And_Automation", "Memory_System", "reports", "daily", "_system", "daybridge_handoff")
-    : null;
-  return { schemaVersion: 1, handoffSinkDir: discoveredSink, ...(configured && typeof configured === "object" ? configured : {}) };
+  return (await readRuntimeConfiguration({ dataDir: DATA_DIR, profilePath: PROFILE_PATH })).config;
 }
 async function handleStorageLocationUpdate(body) {
   const dataDirectory = await setDataDirectory(body?.dataDirectory);
@@ -833,7 +837,7 @@ async function handleCalendarCallback(url, response) {
   sendHtml(response, 400, "<strong>연결을 완료하지 못했어요</strong><p>OAuth 설정과 권한을 확인한 뒤 Daybridge에서 다시 시도해 주세요.</p>");
 }
 async function dispatch(request, response, url, origin, body) {
-    if (request.method === "GET" && url.pathname === "/api/health") { const config = await loadConfig(); send(response, 200, { status: "ok", dataDir: DATA_DIR, logDirectory: join(DATA_DIR, "logs"), handoffSinkDir: config.handoffSinkDir || null, connected: Boolean(config.handoffSinkDir) }, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/health") { send(response, 200, await runtimeHealth({ identity: RUNTIME_IDENTITY, dataDir: DATA_DIR, sourceRoot: SOURCE_ROOT, locationPath: LOCATION_PATH, defaultDataDir: DEFAULT_DATA_DIR, envDataDir: process.env.DAYBRIDGE_DATA_DIR, profilePath: PROFILE_PATH, dataLocationSource: DATA_LOCATION_SOURCE, lastDelivery }), origin); return; }
     if (request.method === "GET" && url.pathname === "/api/calendar/oauth/callback") { await handleCalendarCallback(url, response); return; }
     if (request.method === "GET" && url.pathname === "/api/calendar/status") { const result = await handleCalendarStatus(); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/calendar/connect") { const result = await handleCalendarConnect(); send(response, result.status, result.body, origin); return; }
@@ -937,13 +941,20 @@ process.on("unhandledRejection", (reason) => {
   console.error(reason);
 });
 async function deliverPendingHandoffs() {
+  const deliveryDataDir = DATA_DIR;
+  let deliverySink = null;
   try {
-    const config = await loadConfig();
-    const delivery = await flushHandoffOutbox({ dataDir: DATA_DIR, sinkDir: config.handoffSinkDir });
-    await repairActivityProjections(DATA_DIR).catch(error => logRuntimeEvent("activity_projection_pending", { error: error.code || "projection_failed" }));
-    return { ...delivery, state: !config.handoffSinkDir ? "unconfigured" : delivery.pending ? "pending" : "sent" };
+    const config = (await readRuntimeConfiguration({ dataDir: deliveryDataDir, profilePath: PROFILE_PATH })).config;
+    deliverySink = config.handoffSinkDir;
+    const delivery = await flushHandoffOutbox({ dataDir: deliveryDataDir, sinkDir: deliverySink });
+    await repairActivityProjections(deliveryDataDir).catch(error => logRuntimeEvent("activity_projection_pending", { error: error.code || "projection_failed" }));
+    const result = { ...delivery, state: !config.handoffSinkDir ? "unconfigured" : delivery.pending ? "pending" : "sent" };
+    const verifiedAt = delivery.sent > 0 ? now() : lastDelivery?.dataDir === deliveryDataDir && lastDelivery?.sinkDir === deliverySink && !delivery.failed ? lastDelivery.verifiedAt : null;
+    lastDelivery = { ...result, dataDir: deliveryDataDir, sinkDir: deliverySink, checkedAt: now(), verifiedAt };
+    return result;
   } catch (error) {
     logRuntimeEvent("handoff_delivery_error", { error: error.code || "handoff_failed" });
+    lastDelivery = { state: "pending", sent: 0, pending: null, failed: 1, dataDir: deliveryDataDir, sinkDir: deliverySink, checkedAt: now(), verifiedAt: null };
     return { state: "pending", sent: 0, pending: null, failed: 1 };
   }
 }
