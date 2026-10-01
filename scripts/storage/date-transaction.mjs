@@ -35,7 +35,16 @@ async function acquire(path, date) {
   while (true) {
     let handle;
     try {
-      handle = await open(path, "wx");
+      try { handle = await open(path, "wx"); }
+      catch (error) {
+        // Windows can deny CREATE_NEW briefly while another process releases
+        // the previous file. Retry only creation; never remove an unreadable lock.
+        if (process.platform === "win32" && ["EPERM", "EACCES", "EBUSY"].includes(error.code) && Date.now() < deadline) {
+          await delay(20);
+          continue;
+        }
+        throw error;
+      }
       await handle.writeFile(JSON.stringify({ schemaVersion: 1, pid: process.pid, token, date, createdAt: new Date().toISOString() }));
       await handle.sync();
       await handle.close();

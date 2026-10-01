@@ -91,25 +91,25 @@ node scripts/inspect-runtime.mjs --profile $runtimeProfilePath
 
 ### 실행이 사라졌을 때 런타임 이벤트 확인
 
-패키지 위젯과 local bridge는 서로 다른 프로세스이므로 로그도 분리한다. 다음 두 파일은 민감한 원문 대신 이벤트명·날짜·상태·오류·블록 수 같은 진단 정보만 NDJSON으로 기록한다. 패키지 위젯은 시작할 때 `127.0.0.1:39393`을 확인하고, 연결되지 않았으면 현재 Daybridge 체크아웃의 `scripts/local-bridge.mjs`를 콘솔 없이 자동 실행한다. `bridge_autostart_spawned` 뒤 `bridge_autostart_ready`가 남으면 브리지 기동까지 확인된 상태다. `bridge_autostart_unavailable`, `bridge_autostart_error`, `bridge_autostart_timeout`이 남으면 실행 파일이 참조하는 체크아웃·Node 경로·의존성을 확인한다.
+패키지 위젯과 local bridge는 서로 다른 프로세스이므로 로그도 분리한다. 다음 두 파일은 민감한 원문 대신 이벤트명·날짜·상태·오류·블록 수 같은 진단 정보만 NDJSON으로 기록한다. 패키지 위젯은 시작할 때 `127.0.0.1:39393`의 HTTP 서비스 식별을 확인한다. 브리지가 없으면 해시를 검증한 `bridge-runtime`의 Node와 스크립트를 콘솔 없이 실행한다. 체크아웃 fallback은 debug 빌드에서만 허용한다. `bridge_autostart_spawned` 뒤 `bridge_autostart_ready`가 남으면 브리지 기동까지 확인된 상태다. 시작 오류가 있으면 번들 리소스·manifest와 listener 식별 결과를 확인한다.
 
 ```powershell
-# 네이티브 위젯: 시작·자동 종료·창 종료·WebView 오류
+# 네이티브 위젯: 시작·명시적 종료·창 종료·WebView 오류
 Get-Content "$env:APPDATA\com.daybridge.widget\logs\runtime-events.ndjson" -Tail 100
 
 # local bridge: inbox/보드/시간표 조회와 API 오류
 Get-Content "$env:LOCALAPPDATA\Daybridge\logs\bridge-events.ndjson" -Tail 100
 ```
 
-원인 판별 순서는 `workday_auto_exit_triggered` → `app_exit_requested`가 있는지 먼저 보고, 그 뒤 `tray_quit_requested`, `schedule_load_error`, `board_refresh_error`, `window_destroyed`, `window_error`를 시간순으로 대조한다. 전자의 두 이벤트가 같이 있으면 18:00 이후 자동 종료 경로이고, `tray_quit_requested`가 있으면 사용자가 트레이에서 종료한 경로다. WebView/창 오류만 있으면 충돌·렌더링 경로다. 로그 파일이 없으면 새 패키지 위젯 또는 새 bridge가 아직 실행되지 않은 상태다.
+`app_exit_requested`, `tray_quit_requested`, `window_close_requested_exit`, `schedule_load_error`, `board_refresh_error`, `window_destroyed`, `window_error`를 시간순으로 대조한다. 현재 앱에는 18:00 자동 종료가 없다. `workday_auto_exit_triggered`는 이전 버전의 기록일 수 있으므로 발생 시각과 실제 실행 파일을 확인한다. WebView/창 오류만 있으면 충돌·렌더링 경로를 조사한다. 로그 파일이 없다는 사실만으로 미실행을 단정하지 말고 실행 프로세스와 실제 AppData 경로도 확인한다.
 
 패키지 위젯은 실행될 때 별도의 프로세스 감시자를 자동으로 시작한다. 위젯 프로세스가 예기치 않게 사라지면 감시자가 3초 주기로 확인해 다시 실행한다. `process_watchdog_started`, `process_relaunch_requested`, `process_relaunch_error`를 같은 네이티브 로그에서 확인한다. 트레이의 **종료**는 `explicit-exit.flag`를 남겨 감시자를 정상 중지하므로, 해당 종료는 자동 재실행되지 않는다. 다음 번 Daybridge 실행 또는 Windows 로그인 시에는 이 표식이 자동으로 해제된다.
 
-시간 설정을 비워 둔 경우에는 정상적으로 `schedule.mode=todo`, `timeConfigured=false`가 반환된다. 이 모드에서는 `startAt`·`endAt`가 없는 오늘 할 일 목록만 만들고, 시간 슬롯 이동·점심시간 배치는 사용하지 않는다. 위젯의 근무일 카운트다운과 18:00 자동 종료는 작업 카드 시각과 독립적으로 계속 동작한다. `schedule_read`에 `mode=todo`가 찍히면 오류가 아니라 의도된 가벼운 목록 모드다.
+시간 설정을 비워 둔 경우에는 정상적으로 `schedule.mode=todo`, `timeConfigured=false`가 반환된다. 이 모드에서는 `startAt`·`endAt`가 없는 오늘 할 일 목록만 만들고, 시간 슬롯 이동·점심시간 배치는 사용하지 않는다. 근무일 카운트다운은 작업 카드 시각과 독립적으로 동작하며 앱을 자동 종료하지 않는다. `schedule_read`에 `mode=todo`가 찍히면 오류가 아니라 의도된 가벼운 목록 모드다.
 
 ## 3. Check a status report
 
-Use the UI to change a quest status or submit a progress note. The bridge should return `eventRecorded: true`. The event is stored locally and mirrored to the MARU automation-owned `reports/daily/_system/daybridge_handoff/YYYY-MM-DD/` folder. The original diary is never edited.
+Use the UI to change a quest status or submit a progress note. `eventRecorded: true` confirms the local event record. Check `local_saved`, the outbox pending state and delivery evidence separately: a saved event does not prove delivery to the MARU automation-owned `reports/daily/_system/daybridge_handoff/YYYY-MM-DD/` folder. The original diary is never edited.
 
 ## 4. Check the floating widget
 

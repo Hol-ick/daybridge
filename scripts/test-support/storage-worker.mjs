@@ -17,6 +17,24 @@ if (mode === "reports") {
     { path: `boards/${date}.json`, value: { activityDate: date, quests: [], marker: "recovered" } },
     { path: `schedules/${date}.json`, value: { date, mode: "todo", blocks: [], marker: "recovered" } },
   ] }));
+} else if (mode === "lock-race") {
+  let acquired = 0;
+  let conflicts = 0;
+  const deadline = Date.now() + 25000;
+  while (acquired < Number(extra)) {
+    try {
+      const result = await withDateTransaction({ dataDir, date }, async () => ({ result: "acquired" }));
+      if (result !== "acquired") throw new Error("Unexpected transaction result");
+      acquired += 1;
+    } catch (error) {
+      // Busy conflicts are the bounded lock contract; creation failures must surface.
+      if (error.code !== "storage_conflict" || !error.message.startsWith("Storage is busy") || Date.now() >= deadline) throw error;
+      conflicts += 1;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    if (acquired < Number(extra) && Date.now() >= deadline) throw new Error("Lock handover stress deadline exceeded");
+  }
+  console.log(JSON.stringify({ acquired, conflicts }));
 } else if (mode === "read") {
   console.log(JSON.stringify(await loadSchedule(dataDir, date)));
 } else if (mode === "compile" || mode === "compile-default") {

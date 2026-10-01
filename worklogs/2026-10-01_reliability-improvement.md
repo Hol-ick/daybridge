@@ -180,3 +180,16 @@ README·ARCHITECTURE·DEBUGGING·PROJECT_STATUS의 현재 checkpoint를 코드�
 - GitHub Actions 36819102465, 36820546687, 36822352837, 36826004950의 job/log를 직접 확인했다. 웹 검사와 전체 Node 회귀는 성공했고 native regression에서 실패했다. 공통으로 Tauri 2.12.1/windows 0.62.2의 HWND를 앱 windows 0.61.3 함수에 전달해 E0308 9개가 발생했다. 최신 실행에는 Job Object의 Threading feature 누락 E0433도 있었다.
 - 로컬 Cargo.lock은 Tauri 2.11.5/tauri-build 2.6.3/windows 0.61.3이며 Git ignore라 clean CI에 전달되지 않았다. 광범위 version=2가 CI에서 새 graph를 선택해 로컬 결과와 달랐다. 잠금 파일을 추적하고 직접 세 버전을 정확히 고정했다. native regression 및 release wrapper는 --locked로 잠금 변경을 거부한다. JobObjects의 Threading feature도 직접 선언해 다른 dependency feature에 기대지 않는다.
 - locked Rust 16개와 --locked release build가 통과했다. 원격 수정본 실행 결과는 별도 확인하며 로컬 성공을 원격 성공으로 대체하지 않는다. 실제 NSIS 설치·로그인 미검증 범위는 유지한다.
+
+## 현재 Windows 설치 검증과 잠금 경합 재현
+
+- 사용자가 VM 제거와 현재 Windows에서의 시험을 승인했다. VMware 등록을 해제했고, 영구 삭제가 자동 승인 정책에 차단된 뒤 검증 VM 폴더를 휴지통으로 이동했다. VM은 실행하지 않았으며 Windows를 설치하지 않았다.
+- 기존 위젯을 잠시 종료하고 NSIS를 새 테스트 폴더에 실제 설치했다. 설치 등록 경로가 fixture 내부임을 확인했다. 설치/삭제 종료 코드는 모두 0이다. 설치된 payload의 10개 격리 실행 검사도 통과했다. 설치 파일 SHA256: E71AB1AE25CFDAFF219EE3AD8DA2F9D50ED808670AE22BC36D96572B07808192. 설치 payload exe SHA256: 25b034515baf981efc3b4479013ce87153a033222a2d3a21e606ce67604ea375.
+- `/NS`로 바로가기를 만들지 않았고 삭제에 `/UPDATE`를 사용해 기존 자동 실행 값을 보존했다. own fixture로 확인한 잔여 product registry만 정리했다. 원래 exe hash와 Run 값은 동일하며 원래 위젯 실행을 다시 확인했다. native 검증 모드의 bridge 재기동은 정상 UI/tray 또는 실제 Windows 로그인 시험을 대신하지 않는다. 로컬 영수증: ignored `test-artifacts/host-installer-execution.json`, `package-execution.json`.
+- 위젯 복구 시 기존 앱이 bridge를 다시 시작했다. 재시작 전 legacy bridge의 dataDir와 기존 저장 pointer가 달랐다. 재시작 후 schemaVersion=1 식별과 pointer 선택을 확인했다. pointer를 수정하거나 데이터를 이동하지 않았다. 이전 실행 경로의 자료도 삭제하지 않았다.
+- exclusive lock creation의 Windows EPERM을 실제 transaction stress에서 수정 전 재현했다. wx 생성만 기존 2초 범위에서 EPERM/EACCES/EBUSY를 재시도한다. write/sync/owner 오류는 숨기지 않는다. 실제 지속 접근 거부는 약 2010ms에 실패하고 원본을 보존했다.
+- 새 3-process/450-acquisition 시험을 포함한 첫 전체 실행은 163개 중 162개 통과, 1개 실패였다. 실패는 EPERM이 아닌 정상적인 2초 `storage_conflict`다. stress worker는 그 busy conflict만 전체 25초 한도 내에서 다시 요청한다. lock ownership 변경·접근 실패 등 다른 오류는 그대로 실패한다. 제품의 잠금 대기 한도는 늘리지 않았다.
+- 원격 HWND 수정 실행 36826782515는 native/배포/패키지 검사를 포함해 success다. 이번 변경의 원격 실행과 전체 재검사 결과는 별도로 확인한다.
+- A02: wx 생성 실패 보완 및 반복 경합 검증 진행. A07: fixture startup timeout은 미재현 관찰로 유지. A08: 실제 설치/삭제와 payload 실행 확인, 정상 설치 UI/tray·Windows 로그인은 open. A12: DEBUGGING의 잔여 18:00 종료·checkout 의존·전달 완료 오인 설명을 바로잡았다. 전체 목표는 active다.
+
+- 최종 전체 재검사: Node 163개/33 files, pass163/fail0/skip0, 177323ms. 수정된 경합 worker로 450건 전체 획득을 확인했다. 현재 Windows 설치·삭제·원래 위젯 실행·시작 설정 보존·fixture registry 제거와 VM 원래 폴더/목록 제거를 재확인했다.

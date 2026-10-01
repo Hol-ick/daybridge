@@ -12,13 +12,13 @@ import { withDateTransaction } from "./storage/date-transaction.mjs";
 import { readJsonStrict } from "./storage/json-store.mjs";
 
 const DATE = "2099-01-02";
-async function worker(mode, root, extra = "", expectedCode = 0, env = {}) {
+async function worker(mode, root, extra = "", expectedCode = 0, env = {}, timeoutMs = 15000) {
   const child = spawn(process.execPath, [fileURLToPath(new URL("./test-support/storage-worker.mjs", import.meta.url)), mode, root, DATE, extra], { env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
   let output = "";
   child.stdout.on("data", (chunk) => { output += chunk; });
   child.stderr.on("data", (chunk) => { output += chunk; });
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { child.kill(); reject(new Error("Fixture worker timeout")); }, 15000);
+    const timer = setTimeout(() => { child.kill(); reject(new Error("Fixture worker timeout")); }, timeoutMs);
     child.once("error", (error) => { clearTimeout(timer); reject(error); });
     child.once("exit", (code) => { clearTimeout(timer); code === expectedCode ? resolve() : reject(new Error(`Worker exited ${code}: ${output}`)); });
   });
@@ -72,6 +72,12 @@ test("separate processes preserve all reports and shared board increments", asyn
   assert.equal((await loadSchedule(root, DATE)).blocks.filter((block) => block.status === "completed").length, 20);
   await Promise.all([worker("increment", root, "10"), worker("increment", root, "10")]);
   assert.equal((await readJsonStrict(join(root, "boards", `${DATE}.json`))).counter, 20);
+}));
+
+test("rapid cross-process lock handovers preserve every acquisition", async () => fixture(async (root) => {
+  const results = await Promise.allSettled(Array.from({ length: 3 }, () => worker("lock-race", root, "150", 0, {}, 30000)));
+  for (const result of results) assert.equal(result.status, "fulfilled", result.reason?.message);
+  assert.deepEqual(results.map(result => JSON.parse(result.value).acquired), [150, 150, 150]);
 }));
 
 test("a process killed after its first write is recovered by a new process before reading", async () => fixture(async (root) => {
