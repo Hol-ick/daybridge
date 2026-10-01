@@ -20,6 +20,8 @@ Current source behavior: window close requests exit the app through explicit shu
 
 Tasks 9–10 and the overall Codex goal remain active. Operational data paths, the user's running app, installation and Calendar authorization have not been changed. The older sections below describe prior implementation history; use the latest [reliability worklog](worklogs/2026-10-01_reliability-improvement.md) for the current checkpoint.
 
+Remote CI correction: four push runs failed at native regression with Tauri 2.12.1/windows 0.62.2 HWND types crossing into the app's windows 0.61.3 API. The ignored local Cargo.lock kept local tests on Tauri 2.11.5. The app now tracks that tested lockfile, pins Tauri/tauri-build/windows, uses `--locked` for native tests and distribution builds, and explicitly enables the Job Object Threading feature. Locked local Rust tests, release build and package execution pass; a new remote run must establish the CI result.
+
 ## Objective
 
 Turn MARU's evidence-linked daily work and learning candidates into a calm Windows timetable widget. It must show one actionable "do this now" focus block while respecting the user's Google Calendar availability without changing the original notes or calendar by default.

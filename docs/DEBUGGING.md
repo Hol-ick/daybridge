@@ -194,6 +194,12 @@ Development builds retain the checkout fallback when bundled resources are absen
 The distribution command builds under `src-tauri/target/package`, separate from
 the historical `target/release` executable that may still be running.
 
+The application tracks `src-tauri/Cargo.lock`; native regression uses `--locked`,
+and the distribution wrapper passes `--locked` to Cargo. Tauri, tauri-build and
+the direct windows crate are pinned to the tested compatible versions. Update
+these together and check fresh CI results; a cached local build does not prove
+that a clean runner resolves the same dependency graph.
+
 Use `pnpm build:widget --no-bundle` to compile the release executable and resource
 layout without creating an installer. Compilation does not verify an installed
 application. Standalone `tauri build` without the release configuration does not

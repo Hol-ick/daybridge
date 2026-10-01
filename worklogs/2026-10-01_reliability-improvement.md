@@ -173,3 +173,10 @@ README·ARCHITECTURE·DEBUGGING·PROJECT_STATUS의 현재 checkpoint를 코드�
 | A12 낡은 설명 | fixed | 위 4개 문서와 현재 checkpoint / 작업 10 | 소스·receipt와 대조, 과거 기록 보존 | 이번 commit/push·MARU 종료 기록 확인 |
 
 목표는 active다. 작업 0–8 완료와 작업 9/10 진행은 실제 설치 검증 완료를 대신하지 않는다. 다음은 간헐 잠금/startup 오류의 재현·관측과 격리 Windows 설치 시험 환경 확보다.
+
+## 원격 CI 연속 실패 정정: Rust 의존성 drift
+
+- 사용자가 연속 배포 실패와 HWND 충돌을 지적했다. 이전 체크포인트의 로컬 검증은 실제였지만 원격 CI를 확인하지 않은 채 다음 작업으로 진행한 판단은 불충분했다.
+- GitHub Actions 36819102465, 36820546687, 36822352837, 36826004950의 job/log를 직접 확인했다. 웹 검사와 전체 Node 회귀는 성공했고 native regression에서 실패했다. 공통으로 Tauri 2.12.1/windows 0.62.2의 HWND를 앱 windows 0.61.3 함수에 전달해 E0308 9개가 발생했다. 최신 실행에는 Job Object의 Threading feature 누락 E0433도 있었다.
+- 로컬 Cargo.lock은 Tauri 2.11.5/tauri-build 2.6.3/windows 0.61.3이며 Git ignore라 clean CI에 전달되지 않았다. 광범위 version=2가 CI에서 새 graph를 선택해 로컬 결과와 달랐다. 잠금 파일을 추적하고 직접 세 버전을 정확히 고정했다. native regression 및 release wrapper는 --locked로 잠금 변경을 거부한다. JobObjects의 Threading feature도 직접 선언해 다른 dependency feature에 기대지 않는다.
+- locked Rust 16개와 --locked release build가 통과했다. 원격 수정본 실행 결과는 별도 확인하며 로컬 성공을 원격 성공으로 대체하지 않는다. 실제 NSIS 설치·로그인 미검증 범위는 유지한다.
