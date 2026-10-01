@@ -1,8 +1,16 @@
 # Daybridge Project Status
 
 - Status: active
-- Last updated: 2026-08-25 KST
+- Last updated: 2026-10-01 KST
 - Repository: https://github.com/Hol-ick/daybridge
+
+## Reliability improvement checkpoint — 2026-10-01
+
+Tasks 0–8 of the reliability plan have implementation and local verification evidence. The browser runtime's 31 JS/JSX/TS sources are checked with strict TypeScript settings. The complete regression runner passes 159 tests across 31 suites; Rust passes 7 tests, and the isolated browser smoke passes 13 scenarios. Windows CI now has pinned actions, Node/pnpm versions, frozen installation, type checks, the full regression runner, web build and native tests. Remote CI execution is a separate result from these local checks.
+
+Task 8 also fixes metadata loss for work that could not fit into a timed schedule: task titles, prerequisites and safe provenance survive normalization, serialization and carryover. The test reproduced the loss before the fix.
+
+Tasks 9–10 remain open: bundle an independent bridge runtime, verify the release package in an isolated environment, then reconcile documentation and the final audit handoff. The overall Codex goal remains active. Operational data paths, the user's running app, installation and Calendar authorization have not been changed. The older sections below describe prior implementation history; use the latest [reliability worklog](worklogs/2026-10-01_reliability-improvement.md) for the current checkpoint.
 
 ## Objective
 

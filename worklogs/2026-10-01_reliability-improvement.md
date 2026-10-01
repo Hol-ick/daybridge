@@ -109,3 +109,16 @@
 - 실제 운영은 GET health와 포트 소유자·로컬 pointer 비교만 수행했다. 출력은 legacy_bridge/identityVerified=false였고 pointer와 active data 위치 불일치가 현재도 확인됐다. 실제 listener의 실행 명령은 현재 checkout 및 프로필 checkout과 일치했다. 옛 메모의 다른 source 위치를 현재 사실로 재사용하지 않았다. 앱 재시작·실제 설치·자료 이동은 하지 않았다.
 - A09는 불일치를 관측·설명하는 진단 범위에서 verified다. 운영 정본 선택과 연결 복구는 operational_path_unresolved로 유지한다. DEBUGGING의 상태 해석과 실행 조건을 갱신했다. UI 구조 변경이 없으므로 화면 검사는 추가하지 않았다.
 - 다음은 작업 8: JS/JSX 검사 범위·전체 회귀·좌표 기대값·CI. 작업 8–10 및 전체 목표는 active다.
+
+## 작업 8 완료: 전체 타입·회귀·화면 검사 경로
+
+- 기존 타입 검사에서 실행 JS/JSX가 빠지는 상태를 coverage 회귀로 재현했다. allowJs/checkJs/react-jsx를 적용한 뒤 579줄의 진단을 정리했다. 실제 실행 소스 31개가 검사 대상이며 src의 Node 테스트 파일만 별도 전체 회귀에서 실행한다. 전체 파일 @ts-nocheck나 실행 모듈 제외를 사용하지 않았다.
+- 일정·입력·통신·화면 속성·상태·DOM 참조의 계약을 JSDoc와 공통 타입으로 연결했다. 설정 draft의 문자열 입력과 저장된 숫자, 시간 없는 목록과 시간표, nullable 상태를 구분했다. Provider 밖 사용과 누락된 root는 명확한 오류를 낸다.
+- 시간 부족으로 unscheduled에 들어간 작업의 metadata가 normalizeSchedule에서 지워지는 추가 결함을 재현했다. 안전한 candidate로 정규화하여 제목·선행 조건·완료한 선행 조건·논리 출처를 보존한다. 일정 생성→JSON 저장/읽기→이월→다음 날짜 배치의 75분 회귀가 수정 후 통과했다. 기존 작업 5의 unscheduled 보존 주장은 이 경로에서 불완전했고 이번에 보완했다.
+- scripts/test-all.mjs는 src/scripts의 모든 .test.mjs를 재귀 발견해 순차 실행하고 실패 종료값을 반환한다. 임시 하위 검사에서 실제 실패를 만들어 반환값을 검사했다. Node의 NODE_TEST_CONTEXT 상속 때문에 하위 runner가 실행을 생략하는 문제를 재현·수정했다. 계획상의 run-tests.mjs 대신 역할이 분명한 test-all.mjs를 사용한다.
+- Windows 전체 실행에서 20건 동시 durable 저장 검사가 5초 fixture 요청 제한에 걸렸다. 일반 요청과 실제 client의 5초 계약은 유지하고 해당 부하 검사에만 15초 deadline을 지정했다. 수정 후 전체 최종 실행에서 모든 board/schedule/latest 값 보존을 검사했으며 실패를 skip하지 않았다. 첫 실행 중 browser와 겹친 fixture startup 시간 초과는 추가 단독 검사와 최종 순차 실행에서 재발하지 않았다.
+- 오래된 좌표 기대값 두 개는 실제 760×720 브라우저 canvas에서 접힘 (472,656,288,64), 3개 카드 펼침 (472,397,288,323)을 확인한 뒤 갱신했다. 설정 720×680과 닫기·저장 접근을 확인했다. native source 추출 검사는 다른 command 추가와 CRLF에도 해당 함수만 읽도록 보완했다.
+- 최종 검증: frozen install, pnpm check, 전체 Node 159개/31 suite, pnpm build, offline Rust 7개, 완전 mock browser 13개, diff 검사 통과. 타입 coverage를 포함하며 브라우저 pageerror와 미등록 브리지 요청은 없다. 접힘/펼침 및 설정 저장 캡처를 직접 검토했다. 관련 client와 이월 10개도 마지막 변경 후 통과했다.
+- CI 실행 경로는 checkout→고정 Node 24.19.0/pnpm 11.16.0→frozen install→check→test→build→Rust 1.98.1로 구성했다. GitHub actions 참조는 확인한 commit SHA로 고정했다. CI 정의와 로컬 검증을 원격 CI 성공으로 표현하지 않는다.
+- 타입 적용 0565e81, 전체 runner/CI 16fd103에 이어 좌표·smoke·기록을 별도 커밋으로 전달한다. 웹 빌드의 기존 Tauri 동적/정적 import 경고는 남아 있고 빌드는 성공했다. 실제 Windows 앱의 모니터·포커스·taskbar를 이번 browser 결과로 승격하지 않는다.
+- 작업 8 및 A07은 이 검증 범위에서 verified다. 실제 앱 재시작·설치·운영 자료 이동·Calendar 승인은 수행하지 않았다. 작업 9–10과 전체 목표는 active로 유지한다.

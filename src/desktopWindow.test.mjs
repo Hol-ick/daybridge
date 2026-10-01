@@ -24,14 +24,14 @@ test("nearestOverlayCorner keeps a deliberately central position free", () => {
 
 test("overlay interaction region keeps the native canvas fixed while the compact card owns only its visible pixels", () => {
   assert.deepEqual(overlayInteractionRegion({ height: 64 }), {
-    x: 232,
-    y: 556,
+    x: 472,
+    y: 656,
     width: 288,
     height: 64,
   });
   assert.deepEqual(overlayInteractionRegion({ height: 364 }), {
-    x: 232,
-    y: 256,
+    x: 472,
+    y: 356,
     width: 288,
     height: 364,
   });
@@ -41,8 +41,8 @@ test("overlay interaction region gives the centered settings modal its compact v
   assert.deepEqual(overlayInteractionRegion({ settingsOpen: true }), {
     x: 0,
     y: 0,
-    width: 456,
-    height: 500,
+    width: 720,
+    height: 680,
   });
 });
 

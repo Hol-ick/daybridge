@@ -210,8 +210,15 @@ Inspect the generated JSON/Markdown for `status`, `event_count`, `completed`, `o
 
 ```powershell
 pnpm check
+pnpm test
 pnpm build
-pnpm test:compiler
+cargo test --offline --manifest-path src-tauri/Cargo.toml
 node scripts/compile-quests.mjs --self-test
 python -B .\04_Operations_And_Automation\Memory_System\conversation_bridge\daybridge_handoff.py --self-test
 ```
+
+`pnpm test`는 중첩된 Calendar·일정 모듈을 포함해 전체 `.test.mjs`를 순차 실행한다. 모든 브리지 API 검사는 임시 데이터와 독립 포트에서 실행된다. 검사 실패를 건너뛰지 않으며, 반환된 실패 종료값을 CI도 사용한다. 타입 범위 검사는 실행 JS·JSX 파일이 `tsconfig`에서 빠지거나 `@ts-nocheck`로 숨겨지면 실패한다.
+
+화면 검사는 `pnpm exec vite --host 127.0.0.1 --port 5173 --strictPort`로 개발 화면을 연 뒤 `python scripts/widget-smoke.py`를 실행한다. Python Playwright와 Chromium이 준비되어 있어야 한다. 스크립트는 실제 39393 브리지로 향하는 요청을 차단하고 시나리오별 mock 응답만 사용한다. 미등록 요청·화면 오류가 있으면 실패하며 캡처는 Git에서 제외된 `test-artifacts`에 남는다. 운영 브리지를 띄울 필요는 없다.
+
+760×720 캔버스에서 접힌 카드 영역은 `(472,656,288,64)`이고, 펼쳐진 카드의 아래쪽은 항상 720에 맞는다. 설정 창의 화면 검증 크기는 720×680이다. 이 검사는 브라우저 DOM과 클릭 동작을 확인하며 실제 Windows 앱의 포커스·작업표시줄 동작 검증과 구분한다.

@@ -1048,6 +1048,31 @@ def check_settings_contract(browser) -> None:
     close_fixture_context(context)
 
 
+def check_native_canvas_coordinates(browser) -> None:
+    context = fixture_context(browser, viewport={"width": 760, "height": 720}, device_scale_factor=1)
+    context.route(re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+                  lambda route: route.fulfill(status=200, content_type="application/json", body=DRAG_SCHEDULE))
+    context.route("http://127.0.0.1:39393/api/calendar/status",
+                  lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED))
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    surface = page.get_by_test_id("now-focus-overlay-surface")
+    box = surface.bounding_box()
+    assert box and [round(box[key]) for key in ["x", "y", "width", "height"]] == [472, 656, 288, 64], box
+    page.screenshot(path="test-artifacts/daybridge-native-canvas-collapsed.png", full_page=True)
+    page.get_by_test_id("now-focus-overlay-open").click()
+    page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().height) === Number(surface.dataset.expandedHeight); })()")
+    box = surface.bounding_box()
+    expected_height = int(surface.get_attribute("data-expanded-height"))
+    assert box and [round(box[key]) for key in ["x", "y", "width", "height"]] == [472, 720 - expected_height, 288, expected_height], box
+    page.screenshot(path="test-artifacts/daybridge-native-canvas-expanded.png", full_page=True)
+    print(f"Native canvas coordinates: collapsed=(472,656,288,64), expanded=(472,{720 - expected_height},288,{expected_height})", flush=True)
+    assert_no_page_errors(errors)
+    close_fixture_context(context)
+
+
 def main() -> None:
     with sync_playwright() as playwright:
         launch_options = {"headless": True}
@@ -1061,7 +1086,7 @@ def main() -> None:
                           check_overlay_todo_items, check_overlay_auto_starts_next_todo,
                           check_overlay_shows_empty_summary_after_completion, check_overlay_long_title,
                           check_overlay_reorder, check_overlay_stale_card_is_not_reported_to_today,
-                          check_settings_contract]:
+                          check_settings_contract, check_native_canvas_coordinates]:
                 print(f"Running {check.__name__}", flush=True)
                 check(browser)
                 print(f"Passed {check.__name__}", flush=True)

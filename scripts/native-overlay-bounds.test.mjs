@@ -5,8 +5,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const nativeMain = fs.readFileSync(path.join(root, "src-tauri", "src", "main.rs"), "utf8");
-const regionCommand = nativeMain.match(/fn set_overlay_interaction_region\([\s\S]*?\n}\n\n#\[tauri::command\]\nfn record_runtime_event/);
+const nativeMain = fs.readFileSync(path.join(root, "src-tauri", "src", "main.rs"), "utf8").replaceAll("\r\n", "\n");
+const regionCommand = nativeMain.match(/fn set_overlay_interaction_region\([\s\S]*?\n}(?=\n\n#\[tauri::command\])/);
 const overlaySurface = fs.readFileSync(path.join(root, "src", "schedule", "NowFocusOverlay.jsx"), "utf8");
 const overlayStyles = fs.readFileSync(path.join(root, "src", "schedule", "NowFocusOverlay.module.css"), "utf8");
 const tauriConfig = JSON.parse(fs.readFileSync(path.join(root, "src-tauri", "tauri.conf.json"), "utf8"));
