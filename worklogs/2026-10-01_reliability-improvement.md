@@ -212,3 +212,12 @@ README·ARCHITECTURE·DEBUGGING·PROJECT_STATUS의 현재 checkpoint를 코드�
 | A07 검사 공백 | verified | Node167·Rust16·browser14 및 실제 일반 기동 순서 검증 | 과거 fixture startup timeout 원인은 미재현 |
 | A08 독립 설치 | open | 실제 NSIS 설치/삭제·payload10·일반 bridge 기동/복구·startup 등록·실제 WebView 초기화 | 정상 창/tray 조작 및 실제 Windows 로그인 |
 | A12 낡은 설명 | fixed | 초기화 대기와 HTTP 제한 구별 및 문서 갱신 | 이번 main 전달·원격 CI 및 MARU 기록 확인 |
+
+## 로그인 대기와 설치 구성물 식별 정정
+
+- main/c15957b의 원격 Actions36838125323은 completed/success다. run의 head SHA와 job 결과를 재확인했고 Node167·Rust16·release 빌드·독립 package 검증이 통과했다. URL https://github.com/Hol-ick/daybridge/actions/runs/36838125323 . 앞선 체크포인트의 원격 결과 대기 조건은 해소됐다.
+- 앞선 SHA 표기의 실행 파일은 `target/package/release/daybridge.exe` 빌드 결과다. 실제 NSIS payload의 실행 파일 SHA256은 `F4285DC665BF0F032F52EF8D9F546CC9717257BFE645322B0C9A07AEF7F839EB`이며, installer-payload.json의 packageExecution.executableSha256 및 다음 로그인 후보 파일과 일치한다. 빌드 결과의 `1ACEEF31FBFCDF6FF0DC01D779A2CF649C969B0C19EDCE58A76640B3DA98C95E`를 설치 payload 식별값으로 사용하지 않는다. NSIS 자체 SHA256은 `2DC74A4B4215FE3F2E7CBE710882C6A7197823EEDA8AECA5AB698570A4A38930`으로 동일하다. 이전 증거는 보존하고 식별 대상만 명확히 구분한다.
+- 사용자는 다음 평소 Windows 로그인 때 검증하기로 결정했다. 검증 NSIS 구성물을 별도 소유 폴더에 준비하고 다음 로그인 Run을 해당 후보로 등록했다. 실제 NSIS 설치·삭제 검증과 이 추출 준비는 별도다. 현재 원래 앱은 유지했으며 데이터 pointer 수정이나 운영 데이터 이동은 없다. 원래 Run과 실행 파일 식별값을 복구용 private state에 보관했다.
+- 새 사용자 대화형 로그인 세션과 후보 실행이 실제로 관찰된 뒤 검증하는 read-only checker 및 소유권을 확인하는 복구 절차를 준비했다. 현재 WindowsLoginVerified=false, waiting_for_normal_login이다. Codex 후속 확인은 로그인 전 알림 없이 대기하며 강제 로그아웃·재부팅·인증 조작을 하지 않는다.
+- 현재 창 목록에서 Daybridge의 조작 가능한 창은 반환되지 않았다. 정상 UI/tray 조작은 미검증을 유지한다. 작업9의 실제 Windows 로그인/UI/tray 조건과 작업10의 최종 목표 종료는 여전히 open이다. 작업0–8을 다시 구현하거나 성공 기준을 축소해 목표를 완료하지 않는다.
+- 이번 보완은 문서의 식별값·원격 결과·로그인 대기 상태를 정리한다. 제품 코드와 c15957b 설치 구성물은 변경하지 않았다. MARU 정본과 대화 기록은 queued 및 현재 thread JSON 저장으로 확인했다.
