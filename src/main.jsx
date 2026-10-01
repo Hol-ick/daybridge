@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import { recordRuntimeEvent } from "./runtime-log.js";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { mountAfterBridgeReady } from "./desktop-bootstrap.js";
 import "./todometer/styles/variables.css";
 import "./todometer/index.css";
 
@@ -15,8 +17,14 @@ recordRuntimeEvent("webview_boot", { mode: import.meta.env.MODE });
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Daybridge root element is missing");
-ReactDOM.createRoot(root).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+const renderer = ReactDOM.createRoot(root);
+void mountAfterBridgeReady({
+  desktop: isTauri(),
+  ensureBridge: () => invoke("wait_for_initial_bridge"),
+  report: recordRuntimeEvent,
+  mount: () => renderer.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  ),
+});

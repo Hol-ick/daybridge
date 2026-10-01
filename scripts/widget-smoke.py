@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -1073,6 +1074,35 @@ def check_native_canvas_coordinates(browser) -> None:
     close_fixture_context(context)
 
 
+def check_slow_initial_board(browser) -> None:
+    context = fixture_context(browser, viewport={"width": 1100, "height": 900})
+    events = []
+
+    def slow_board(route):
+        time.sleep(2.2)
+        route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_BOARD)
+
+    context.route(re.compile(r"http://127\.0\.0\.1:39393/api/board(?:\?|$)"), slow_board)
+    context.route(re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
+                  lambda route: route.fulfill(status=200, content_type="application/json", body=EMPTY_SCHEDULE))
+    context.route("http://127.0.0.1:39393/api/calendar/status",
+                  lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED))
+
+    def runtime_event(route):
+        events.append(route.request.post_data_json)
+        route.fulfill(status=200, content_type="application/json", body="{}")
+
+    context.route("http://127.0.0.1:39393/api/runtime-events", runtime_event)
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/", wait_until="domcontentloaded")
+    page.wait_for_function("JSON.parse(localStorage.getItem('daybridge.quest-board.v4') || '{}').activityDate === '2026-08-24'", timeout=10000)
+    assert not [event for event in events if event.get("event") == "board_refresh_error"], events
+    assert_no_page_errors(errors)
+    close_fixture_context(context)
+
+
 def main() -> None:
     with sync_playwright() as playwright:
         launch_options = {"headless": True}
@@ -1086,7 +1116,7 @@ def main() -> None:
                           check_overlay_todo_items, check_overlay_auto_starts_next_todo,
                           check_overlay_shows_empty_summary_after_completion, check_overlay_long_title,
                           check_overlay_reorder, check_overlay_stale_card_is_not_reported_to_today,
-                          check_settings_contract, check_native_canvas_coordinates]:
+                          check_settings_contract, check_native_canvas_coordinates, check_slow_initial_board]:
                 print(f"Running {check.__name__}", flush=True)
                 check(browser)
                 print(f"Passed {check.__name__}", flush=True)

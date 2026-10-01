@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuItem},
@@ -30,6 +30,7 @@ const OVERLAY_CANVAS_HEIGHT: i32 = 720;
 const OVERLAY_CARD_WIDTH: i32 = 288;
 const OVERLAY_COLLAPSED_HEIGHT: i32 = 64;
 static SETTINGS_MODAL_OPEN: AtomicBool = AtomicBool::new(false);
+static BRIDGE_INITIALIZATION_FINISHED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(windows)]
 fn configure_windows_startup() -> Result<(), String> {
@@ -369,6 +370,28 @@ fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
         &json!({ "error": error, "port": LOCAL_BRIDGE_PORT }).to_string(),
     );
     Err(error)
+}
+
+#[tauri::command]
+async fn wait_for_initial_bridge() -> Result<(), String> {
+    // Observe setup without launching/replacing a bridge from an early WebView
+    // invocation. The blocking wait must not occupy the native setup thread.
+    tauri::async_runtime::spawn_blocking(|| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !BRIDGE_INITIALIZATION_FINISHED.load(Ordering::Acquire) {
+            if Instant::now() >= deadline {
+                return Err("로컬 브리지 초기화 대기 시간이 초과됐습니다.".to_string());
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        if bridge_is_reachable() {
+            Ok(())
+        } else {
+            Err("로컬 브리지 초기화를 확인하지 못했습니다. 실행 진단을 확인해 주세요.".to_string())
+        }
+    })
+    .await
+    .map_err(|error| format!("로컬 브리지 초기화 확인에 실패했습니다: {error}"))?
 }
 
 #[tauri::command]
@@ -1006,6 +1029,7 @@ fn main() {
                     &json!({ "error": error }).to_string(),
                 );
             }
+            BRIDGE_INITIALIZATION_FINISHED.store(true, Ordering::Release);
             start_local_bridge_watchdog(app.handle().clone());
             if let Some(window) = app.get_webview_window("overlay") {
                 let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
@@ -1095,6 +1119,7 @@ fn main() {
             set_overlay_interaction_region,
             set_overlay_settings_mode,
             record_runtime_event,
+            wait_for_initial_bridge,
             ensure_local_bridge,
             exit_app
         ])

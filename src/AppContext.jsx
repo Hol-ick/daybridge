@@ -91,10 +91,8 @@ export function AppStateProvider({ children }) {
     setLoading(true);
     const requestDate = currentKstDate();
     if (announce) recordRuntimeEvent("board_refresh_start", { date: requestDate, announce });
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 1800);
     try {
-      const response = await fetchBridge(`${BRIDGE_URL}/api/board?date=${requestDate}`, { signal: controller.signal });
+      const response = await fetchBridge(`${BRIDGE_URL}/api/board?date=${requestDate}`);
       if (!response.ok) {
         recordRuntimeEvent("board_refresh_http_error", { date: requestDate, status: response.status });
         if (announce) showNotice("브리핑을 불러오지 못했어요");
@@ -112,7 +110,6 @@ export function AppStateProvider({ children }) {
       if (announce) showNotice("브리지를 확인할 수 없어요");
       return false;
     } finally {
-      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   }, [showNotice]);

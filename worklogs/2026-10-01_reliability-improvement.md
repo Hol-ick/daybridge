@@ -193,3 +193,22 @@ README·ARCHITECTURE·DEBUGGING·PROJECT_STATUS의 현재 checkpoint를 코드�
 - A02: wx 생성 실패 보완 및 반복 경합 검증 진행. A07: fixture startup timeout은 미재현 관찰로 유지. A08: 실제 설치/삭제와 payload 실행 확인, 정상 설치 UI/tray·Windows 로그인은 open. A12: DEBUGGING의 잔여 18:00 종료·checkout 의존·전달 완료 오인 설명을 바로잡았다. 전체 목표는 active다.
 
 - 최종 전체 재검사: Node 163개/33 files, pass163/fail0/skip0, 177323ms. 수정된 경합 worker로 450건 전체 획득을 확인했다. 현재 Windows 설치·삭제·원래 위젯 실행·시작 설정 보존·fixture registry 제거와 VM 원래 폴더/목록 제거를 재확인했다.
+
+## 일반 설치본의 초기 요청 경합 재현과 보완
+
+- main/6d0637d의 원격 실행 36832771668은 Node163·Rust16·release·package 실행 검사를 포함해 success였다. 이 체크포인트는 그 뒤 실제 일반 기동에서 발견한 문제를 다룬다.
+- 사용자 승인된 현재 Windows에서 NSIS를 다시 설치하고 검증 모드 없이 실행했다. bundled bridge의 실제 부모/실행 경로, fixture data 및 외부 sink 비활성, 설치 실행 파일을 가리키는 HKCU Run 등록을 확인했다. 자기 bridge만 종료한 뒤 약 7245ms에 새 instance로 복구했고, 직전에 저장한 fixture 항목은 정확히 하나 유지됐다.
+- 첫 일반 기동에서 client mount 08:12:23.731Z와 native bridge ready 08:12:28.930Z를 대조했다. 그 사이 board의 1800ms 취소 및 schedule/calendar recovery timeout을 관찰했다. 과거 Node fixture startup timeout과 동일한 원인이라고 단정하지 않는다.
+- native setup 완료를 기다리는 read-only `wait_for_initial_bridge`를 추가했다. 대기 자체가 native setup thread를 막거나 새 bridge를 만들지 않는다. desktop 첫 mount는 준비 응답 뒤이며, browser는 native 호출 없이 즉시 시작한다. 별도 bootstrap 10초 한도와 실패 fallback을 유지하고 일반 HTTP의 5초 제한을 늘리지 않았다. board의 별도 1800ms abort도 제거했다.
+- 준비 전 mount 금지·browser bypass·native 오류·timeout 후 늦은 응답의 중복 mount 방지 4개와 기존 client 4개가 통과했다. 전체 Node167/34 files fail0/skip0(176658ms), locked Rust16, strict check, browser14(2200ms 지연 board 포함) 및 웹/release/NSIS build가 통과했다. dashboard/overlay 캡처를 직접 확인했다.
+- 새 NSIS의 payload 실행10개가 통과했다. 설치 파일 SHA256 `2DC74A4B4215FE3F2E7CBE710882C6A7197823EEDA8AECA5AB698570A4A38930`, 실행 파일 SHA256 `1ACEEF31FBFCDF6FF0DC01D779A2CF649C969B0C19EDCE58A76640B3DA98C95E`.
+- 새 설치본의 실제 일반 실행에서 두 WebView가 bridge ready 뒤 mount됐고 관찰 구간의 startup/board/schedule/calendar 요청 오류는 0이었다. readiness 대기는 overlay4091ms/dashboard58ms다. native/client 시각 비교에서 PowerShell의 JSON 날짜 자동 변환을 보존하는 DateTimeOffset 비교를 사용했다.
+- 시험 정리의 첫 스크립트가 혼합 슬래시의 child 경로를 놓쳐 복구 확인이 실패했다. exact owned exe/parent/script 경로를 다시 확인한 뒤 남은 시험 node만 종료하고 원래 bridge를 복구했다. 다음 시험의 정리는 경로 정규화를 적용해 성공했다. 최종 원래 widget/bridge·exe hash·Run 보존, 시험 exe/registry/owned node 제거 및 기존 보호 파일987개 변경0을 확인했다. 자료 이동·pointer 수정·Calendar 승인·Windows 로그아웃은 없었다.
+- 로컬 근거는 ignored `test-artifacts/host-normal-before-bootstrap.json`, `host-normal-execution.json`, `native-bootstrap-execution.json`, `regression-native-bootstrap.log`, `browser-native-bootstrap.log`, `build-native-bootstrap.log`, `installer-native-bootstrap.log`다. startup event는 UI의 실제 표시·tray 클릭·Windows 로그인 증거가 아니며 이 조건은 open이다. 이번 수정의 원격 CI는 별도 확인한다.
+
+| 감사 ID | 현재 상태 | 추가 검증 | 남은 경계 |
+|---|---|---|---|
+| A02 동시 저장 | verified | 생성 접근 오류 및 제한된 경합 회귀 유지 | 운영 손상 자료 자동 교정 없음 |
+| A07 검사 공백 | verified | Node167·Rust16·browser14 및 실제 일반 기동 순서 검증 | 과거 fixture startup timeout 원인은 미재현 |
+| A08 독립 설치 | open | 실제 NSIS 설치/삭제·payload10·일반 bridge 기동/복구·startup 등록·실제 WebView 초기화 | 정상 창/tray 조작 및 실제 Windows 로그인 |
+| A12 낡은 설명 | fixed | 초기화 대기와 HTTP 제한 구별 및 문서 갱신 | 이번 main 전달·원격 CI 및 MARU 기록 확인 |
