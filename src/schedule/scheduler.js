@@ -1,5 +1,7 @@
 import { createScheduleShell, isKstIso, normalizeSchedule, toTaskCandidate } from "./model.js";
 
+import { normalizeScheduleSettings } from "./settings-contract.js";
+
 const PRIORITY_WEIGHT = { must: 0, should: 1, could: 2 };
 const DEFAULT_BREAKS = Object.freeze([
   { start: "11:30", end: "13:00", label: "점심시간" },
@@ -11,28 +13,11 @@ function atKst(date, time) {
 }
 
 function normalizedSettings(date, supplied = {}) {
-  // The user-facing grid is intentionally one fixed unit: HH:00–HH:50.
-  // Older settings may still contain 25-minute values; they are migrated here.
-  const focusDurations = [50];
-  const bufferMinutes = supplied.bufferMinutes == null ? 10 : Number(supplied.bufferMinutes);
-  if (!Number.isInteger(bufferMinutes) || bufferMinutes < 0 || bufferMinutes > 30) throw new TypeError("bufferMinutes must be between 0 and 30");
-  const rawStart = typeof supplied.dayStart === "string" ? supplied.dayStart.trim() : "";
-  const rawEnd = typeof supplied.dayEnd === "string" ? supplied.dayEnd.trim() : "";
-  const timeConfigured = supplied.timeConfigured === true || supplied.timeConfigured !== false && /^\d{2}:\d{2}$/.test(rawStart) && /^\d{2}:\d{2}$/.test(rawEnd);
-  if (!timeConfigured) return { dayStart: "", dayEnd: "", dayStartAt: null, dayEndAt: null, focusDurations, bufferMinutes, breaks: [], timeConfigured: false };
-  const dayStart = rawStart;
-  const dayEnd = rawEnd;
-  const dayStartAt = atKst(date, dayStart);
-  const dayEndAt = atKst(date, dayEnd);
-  if (Date.parse(dayEndAt) <= Date.parse(dayStartAt)) throw new RangeError("dayEnd must be after dayStart");
-  const suppliedBreaks = Array.isArray(supplied.breaks) && supplied.breaks.length ? supplied.breaks : DEFAULT_BREAKS;
-  const breaks = suppliedBreaks.map((item, index) => {
-    const start = typeof item?.start === "string" ? item.start : "";
-    const end = typeof item?.end === "string" ? item.end : "";
-    if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || start >= end) throw new TypeError(`break ${index + 1} needs valid start/end times`);
-    return { start, end, label: String(item?.label || "휴식 시간") };
-  });
-  return { dayStart, dayEnd, dayStartAt, dayEndAt, focusDurations, bufferMinutes, breaks, timeConfigured: true };
+  const normalized = normalizeScheduleSettings(supplied);
+  return { ...normalized,
+    dayStartAt: normalized.timeConfigured ? atKst(date, normalized.dayStart) : null,
+    dayEndAt: normalized.timeConfigured ? atKst(date, normalized.dayEnd) : null,
+  };
 }
 
 function toBusyBlock(raw, index) {

@@ -3,9 +3,9 @@ import { readJsonStrict as readJson, atomicWriteJson as atomicWrite, StoreError 
 import { join, resolve } from "node:path";
 import { runStoreOperation } from "./storage/date-transaction.mjs";
 import { getAvailableFocusSlots } from "../src/schedule/scheduler.js";
+import { DEFAULT_SCHEDULE_SETTINGS, normalizeScheduleSettings } from "../src/schedule/settings-contract.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const SCHEDULE_STATUSES = new Set(["planned", "in_progress", "completed", "skipped", "deferred"]);
 const CALENDAR_COVERAGE = new Set(["connected", "attention", "stale", "unavailable"]);
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
@@ -13,22 +13,7 @@ const phonePattern = /(?<!\d)01[016789][ -]?\d{3,4}[ -]?\d{4}(?!\d)/g;
 const secretPattern = /(\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|password|passwd|client[_ -]?secret|cookie|session[_ -]?token|private[_ -]?key)\b\s*[:=]\s*)(['"]?)[^\s'"]{8,}/gi;
 const localPathPattern = /\b[A-Z]:\\[^\s|]+/gi;
 
-export const DEFAULT_SCHEDULE_SETTINGS = Object.freeze({
-  schemaVersion: 1,
-  timeZone: "Asia/Seoul",
-  dayStart: "",
-  dayEnd: "",
-  timeConfigured: false,
-  focusDurations: [50],
-  defaultFocusMinutes: 50,
-  bufferMinutes: 10,
-  breaks: Object.freeze([]),
-  meals: Object.freeze({
-    breakfast: Object.freeze({ enabled: false, start: "08:00", end: "09:00", label: "아침시간" }),
-    lunch: Object.freeze({ enabled: true, start: "11:30", end: "13:00", label: "점심시간" }),
-    dinner: Object.freeze({ enabled: false, start: "18:00", end: "19:00", label: "저녁시간" }),
-  }),
-});
+export { DEFAULT_SCHEDULE_SETTINGS };
 
 export const DEFAULT_DAILY_DEFAULTS = Object.freeze({
   schemaVersion: 1,
@@ -38,7 +23,6 @@ export const DEFAULT_DAILY_DEFAULTS = Object.freeze({
 });
 
 function isDate(value) { return DATE.test(value || ""); }
-function minutes(value) { const [hour, minute] = String(value).split(":").map(Number); return (hour * 60) + minute; }
 function now() { return new Date().toISOString(); }
 function sanitizeText(value, limit = 600) {
   const text = String(value || "")
@@ -54,73 +38,11 @@ function assertDate(value) {
   if (!isDate(value)) throw new TypeError("date must use YYYY-MM-DD format.");
   return value;
 }
-function arrayOfPositiveIntegers(value, fallback) {
-  if (!Array.isArray(value)) return fallback;
-  const parsed = [...new Set(value.map(Number).filter((item) => Number.isInteger(item) && item >= 5 && item <= 180))].sort((left, right) => left - right);
-  return parsed.length ? parsed : fallback;
-}
-function normalizeBreaks(value) {
-  if (!Array.isArray(value)) return [];
-  return value.map((item, index) => {
-    const start = typeof item?.start === "string" ? item.start.trim() : "";
-    const end = typeof item?.end === "string" ? item.end.trim() : "";
-    if (!TIME.test(start) || !TIME.test(end) || minutes(start) >= minutes(end)) throw new TypeError(`break ${index + 1} needs valid start/end times.`);
-    return { start, end, label: sanitizeText(item?.label || "점심시간", 80) || "점심시간" };
-  });
-}
-const DEFAULT_MEALS = {
-  breakfast: { enabled: false, start: "08:00", end: "09:00", label: "아침시간" },
-  lunch: { enabled: true, start: "11:30", end: "13:00", label: "점심시간" },
-  dinner: { enabled: false, start: "18:00", end: "19:00", label: "저녁시간" },
-};
-function normalizeMeals(value, legacyBreaks) {
-  const source = value && typeof value === "object" ? value : {};
-  const fallbackLunch = Array.isArray(legacyBreaks) && legacyBreaks[0] ? legacyBreaks[0] : {};
-  const result = {};
-  for (const [key, fallback] of Object.entries(DEFAULT_MEALS)) {
-    const item = source[key] && typeof source[key] === "object" ? source[key] : {};
-    const legacy = key === "lunch" ? fallbackLunch : {};
-    const start = typeof item.start === "string" && TIME.test(item.start) ? item.start : (TIME.test(legacy.start) ? legacy.start : fallback.start);
-    const end = typeof item.end === "string" && TIME.test(item.end) ? item.end : (TIME.test(legacy.end) ? legacy.end : fallback.end);
-    if (minutes(start) >= minutes(end)) throw new TypeError(`${key} meal end must be after start.`);
-    result[key] = { enabled: item.enabled == null ? (key === "lunch" ? Boolean(legacy.start || fallback.enabled) : fallback.enabled) : item.enabled === true, start, end, label: sanitizeText(item.label || legacy.label || fallback.label, 80) || fallback.label };
-  }
-  return result;
-}
 function normalizeSettings(input = {}) {
-  const candidate = input && typeof input === "object" ? input : {};
-  const rawStart = typeof candidate.dayStart === "string" ? candidate.dayStart.trim() : "";
-  const rawEnd = typeof candidate.dayEnd === "string" ? candidate.dayEnd.trim() : "";
-  // Settings written by versions before the optional-time mode used 09:00–18:00
-  // as an implicit default. Treat that exact legacy shape as unconfigured; a
-  // user can still explicitly opt into those hours by saving timeConfigured.
-  const legacyImplicitDefault = !Object.hasOwn(candidate, "timeConfigured") && rawStart === "09:00" && rawEnd === "18:00";
-  const timeConfigured = candidate.timeConfigured === true || (!Object.hasOwn(candidate, "timeConfigured") && !legacyImplicitDefault && TIME.test(rawStart) && TIME.test(rawEnd));
-  const dayStart = timeConfigured && TIME.test(rawStart) ? rawStart : "";
-  const dayEnd = timeConfigured && TIME.test(rawEnd) ? rawEnd : "";
-  if (timeConfigured && (!TIME.test(dayStart) || !TIME.test(dayEnd))) throw new TypeError("dayStart and dayEnd must both be set, or both be empty.");
-  if (timeConfigured && minutes(dayStart) >= minutes(dayEnd)) throw new TypeError("dayStart must be earlier than dayEnd.");
-  // Keep the persisted shape for compatibility, but migrate every old setting
-  // to the single user-facing HH:00–HH:50 focus unit.
-  const focusDurations = [50];
-  const defaultFocusMinutes = 50;
-  const requestedBuffer = Number(candidate.bufferMinutes);
-  const bufferMinutes = Number.isInteger(requestedBuffer) && requestedBuffer >= 0 && requestedBuffer <= 60 ? requestedBuffer : DEFAULT_SCHEDULE_SETTINGS.bufferMinutes;
-  const legacyBreaks = normalizeBreaks(candidate.breaks);
-  const meals = normalizeMeals(candidate.meals, legacyBreaks);
-  const breaks = timeConfigured ? Object.values(meals).filter((item) => item.enabled).map(({ start, end, label }) => ({ start, end, label })) : [];
-  return {
-    schemaVersion: 1,
-    timeZone: candidate.timeZone === "Asia/Seoul" ? candidate.timeZone : DEFAULT_SCHEDULE_SETTINGS.timeZone,
-    dayStart,
-    dayEnd,
-    timeConfigured,
-    focusDurations,
-    defaultFocusMinutes,
-    bufferMinutes,
-    breaks,
-    meals,
-  };
+  const candidate = sanitizeValue(input, 600);
+  // Preserve the pre-optional-time migration at the storage boundary only.
+  const legacyImplicitDefault = !Object.hasOwn(candidate, "timeConfigured") && candidate.dayStart === "09:00" && candidate.dayEnd === "18:00";
+  return normalizeScheduleSettings(legacyImplicitDefault ? { ...candidate, timeConfigured: false } : candidate);
 }
 
 function sanitizeValue(value, limit = 600) {
@@ -256,7 +178,7 @@ async function loadScheduleSettingsUnlocked(dataDir) {
   try {
     const normalized = normalizeSettings(stored || DEFAULT_SCHEDULE_SETTINGS);
     return normalized;
-  } catch { return { ...DEFAULT_SCHEDULE_SETTINGS, focusDurations: [...DEFAULT_SCHEDULE_SETTINGS.focusDurations] }; }
+  } catch (error) { throw new StoreError("invalid_settings", "저장된 시간 설정을 확인해 주세요. 기존 설정 파일은 유지했습니다.", error); }
 }
 
 async function saveScheduleSettingsUnlocked(dataDir, settings) {

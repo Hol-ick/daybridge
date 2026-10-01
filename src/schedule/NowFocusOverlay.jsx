@@ -4,6 +4,7 @@ import { getWorkdayCountdown } from "./workday-clock.js";
 import styles from "./NowFocusOverlay.module.css";
 import ManualTaskForm from "./ManualTaskForm.jsx";
 import DailyDefaultsEditor from "./DailyDefaultsEditor.jsx";
+import { DEFAULT_MEALS } from "./settings-contract.js";
 import { recordRuntimeEvent } from "../runtime-log.js";
 
 function asDate(value) {
@@ -207,16 +208,12 @@ const THEME_PRESETS = [
   { id: "amber", label: "앰버", accent: "#f4b860" },
   { id: "violet", label: "바이올렛", accent: "#dd8aff" },
 ];
-const DEFAULT_MEALS = {
-  breakfast: { enabled: false, start: "08:00", end: "09:00", label: "아침시간" },
-  lunch: { enabled: true, start: "11:30", end: "13:00", label: "점심시간" },
-  dinner: { enabled: false, start: "18:00", end: "19:00", label: "저녁시간" },
-};
+
 const MEAL_LABELS = { breakfast: "아침시간", lunch: "점심시간", dinner: "저녁시간" };
 
 export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading, scheduleSettings, onScheduleSettingsChange, scheduleSettingsLoading, appearance, onAppearanceChange, storageDirectory, onStorageDirectoryChange, storageDirectoryLoading, notice = "" }) {
   const settings = scheduleSettings || { dayStart: "", dayEnd: "", timeConfigured: false, breaks: [], meals: DEFAULT_MEALS };
-  const meals = { ...DEFAULT_MEALS, ...(settings.meals || {}) };
+  const meals = settings.meals || Object.fromEntries(Object.entries(DEFAULT_MEALS).map(([key, meal]) => [key, { ...meal, enabled: false }]));
   const [activeTab, setActiveTab] = useState("schedule");
   const [closing, setClosing] = useState(false);
   const requestClose = () => { if (closing) return; setClosing(true); window.setTimeout(() => onClose?.(), 180); };
@@ -254,16 +251,18 @@ export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefresh
                   <span className={styles.settingsToggleTrack} aria-hidden="true" />
                 </label>
                 <div className={styles.settingsRow}>
-                  <label className={styles.settingsField}><span>출근</span><input type="time" disabled={!timeConfigured} value={settings.dayStart || "09:00"} onChange={(event) => updateSettings({ dayStart: event.target.value })} /></label>
-                  <label className={styles.settingsField}><span>퇴근</span><input type="time" disabled={!timeConfigured} value={settings.dayEnd || "18:00"} onChange={(event) => updateSettings({ dayEnd: event.target.value })} /></label>
+                  <label className={styles.settingsField}><span>출근</span><input type="time" disabled={!timeConfigured} value={settings.dayStart ?? "09:00"} onChange={(event) => updateSettings({ dayStart: event.target.value })} /></label>
+                  <label className={styles.settingsField}><span>퇴근</span><input type="time" disabled={!timeConfigured} value={settings.dayEnd ?? "18:00"} onChange={(event) => updateSettings({ dayEnd: event.target.value })} /></label>
                 </div>
+                <label className={styles.settingsField}><span>완충시간 (분)</span><input type="number" min="0" max="30" step="1" value={settings.bufferMinutes ?? 10} onChange={(event) => updateSettings({ bufferMinutes: event.target.value })} disabled={scheduleSettingsLoading} /></label>
               </section>
               <section className={styles.settingsSection} aria-label="식사 시간">
                 <span className={styles.settingsSectionLabel}>식사 시간</span>
                 <small className={styles.settingsHint}>활성화된 시간은 작업 배치에서 자동으로 비워 둡니다.</small>
+                {!settings.meals && settings.breaks?.length ? <small className={styles.settingsHint}>휴식: {settings.breaks.map(item => `${item.label} ${item.start}–${item.end}`).join(", ")}</small> : null}
                 {Object.keys(DEFAULT_MEALS).map((key) => <div className={styles.mealSettingRow} key={key}>
-                  <label className={styles.settingsCheckbox}><span><strong>{MEAL_LABELS[key]}</strong><small>{key === "lunch" ? "기본 활성화" : "필요할 때 켜세요"}</small></span><input className={styles.settingsToggleInput} type="checkbox" checked={meals[key].enabled === true} onChange={(event) => updateMeal(key, { enabled: event.target.checked })} /><span className={styles.settingsToggleTrack} aria-hidden="true" /></label>
-                  <div className={styles.settingsRow}><label className={styles.settingsField}><span>시작</span><input type="time" disabled={!meals[key].enabled} value={meals[key].start || DEFAULT_MEALS[key].start} onChange={(event) => updateMeal(key, { start: event.target.value })} /></label><label className={styles.settingsField}><span>종료</span><input type="time" disabled={!meals[key].enabled} value={meals[key].end || DEFAULT_MEALS[key].end} onChange={(event) => updateMeal(key, { end: event.target.value })} /></label></div>
+                  <label className={styles.settingsCheckbox}><span><strong>{MEAL_LABELS[key]}</strong><small>필요할 때 켜세요</small></span><input className={styles.settingsToggleInput} type="checkbox" checked={meals[key].enabled === true} onChange={(event) => updateMeal(key, { enabled: event.target.checked })} /><span className={styles.settingsToggleTrack} aria-hidden="true" /></label>
+                  <div className={styles.settingsRow}><label className={styles.settingsField}><span>시작</span><input type="time" disabled={!meals[key].enabled} value={meals[key].start ?? DEFAULT_MEALS[key].start} onChange={(event) => updateMeal(key, { start: event.target.value })} /></label><label className={styles.settingsField}><span>종료</span><input type="time" disabled={!meals[key].enabled} value={meals[key].end ?? DEFAULT_MEALS[key].end} onChange={(event) => updateMeal(key, { end: event.target.value })} /></label></div>
                 </div>)}
               </section>
             </> : null}

@@ -9,6 +9,7 @@ import { parseScheduleInboxMarkdown } from "../src/schedule/inbox.js";
 import { buildRoutineCandidates } from "../src/schedule/routine-planner.js";
 import { carryoverTaskCandidates } from "../src/schedule/carryover.js";
 import {
+  DEFAULT_SCHEDULE_SETTINGS,
   loadSchedule,
   loadScheduleSettings,
   loadDailyDefaults,
@@ -536,8 +537,9 @@ async function syncQuestFromScheduleBlockReport(activityDate, schedule, reportRe
   await atomicWrite(join(DATA_DIR, "boards", "latest.json"), board);
   return board;
 }
-async function rebuildSchedule(activityDate) {
+async function rebuildSchedule(activityDate, { requireValidInbox = false } = {}) {
   const inbox = await readScheduleInbox(activityDate);
+  if (requireValidInbox && !inbox.valid) throw new RequestError(400, "invalid_inbox", "일정 입력 파일을 확인한 뒤 설정을 다시 저장해 주세요.");
   let board = await readJson(boardPath(activityDate));
   const dailyDefaults = await loadDailyDefaults(DATA_DIR);
   if (!board || !Array.isArray(board.quests)) {
@@ -644,16 +646,30 @@ async function handleScheduleRebuild(body) {
   return { status: 200, body: { schedule, nowFocus: nowFocus(schedule) } };
 }
 async function handleScheduleSettingsUpdate(body) {
-  const current = await loadScheduleSettings(DATA_DIR);
-  const settings = await saveScheduleSettings(DATA_DIR, { ...current, ...body });
+  let current;
+  try { current = await loadScheduleSettings(DATA_DIR); }
+  catch (error) {
+    if (error.code !== "invalid_settings" || !["dayStart", "dayEnd", "timeConfigured", "bufferMinutes"].every(key => Object.hasOwn(body, key))) throw error;
+    current = DEFAULT_SCHEDULE_SETTINGS;
+  }
+  const candidate = { ...current, ...body };
+  // A break-list patch replaces meal-derived constraints unless meals are explicit.
+  if (Object.hasOwn(body, "breaks") && !Object.hasOwn(body, "meals")) delete candidate.meals;
+  let settings;
+  try { settings = await saveScheduleSettings(DATA_DIR, candidate); }
+  catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    throw new RequestError(400, "invalid_settings", error.message);
+  }
   const activityDate = safeDate(body?.activityDate || body?.date) || koreaNow().slice(0, 10);
+  const schedule = await rebuildSchedule(activityDate, { requireValidInbox: true });
   await recordActivity(DATA_DIR, {
     activityDate,
     action: "schedule_settings_changed",
     subject: activitySubject({ type: "schedule", id: "settings", title: "시간표 설정" }),
     details: { timeConfigured: settings.timeConfigured, dayStart: settings.dayStart, dayEnd: settings.dayEnd, bufferMinutes: settings.bufferMinutes },
   });
-  return { status: 200, body: { settings } };
+  return { status: 200, body: { settings, schedule, nowFocus: schedule ? nowFocus(schedule) : null } };
 }
 async function handleDailyDefaultsUpdate(body) {
   const dailyDefaults = await saveDailyDefaults(DATA_DIR, body?.dailyDefaults ?? body?.routines ?? body);

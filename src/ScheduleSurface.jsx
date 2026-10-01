@@ -11,6 +11,7 @@ import { resolveActivityDate } from "./schedule/activity-date.js";
 import { recordRuntimeEvent } from "./runtime-log.js";
 import styles from "./ScheduleSurface.module.css";
 import { fetchBridge, savedNotice } from "./bridge-client.js";
+import { DEFAULT_SCHEDULE_SETTINGS, normalizeScheduleSettings } from "./schedule/settings-contract.js";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
 const OVERLAY_PRIVACY_KEY = "daybridge.overlay-private.v1";
@@ -34,8 +35,10 @@ function initialAppearance() {
 
 async function readJson(response) {
   if (!response.ok) {
-    const error = new Error(`bridge request failed (${response.status})`);
+    const result = await response.json().catch(() => ({}));
+    const error = new Error(result.error || `bridge request failed (${response.status})`);
     error.status = response.status;
+    error.code = result.code;
     throw error;
   }
   return response.json();
@@ -71,7 +74,7 @@ export default function ScheduleSurface() {
   const [dailyDefaultsDraft, setDailyDefaultsDraft] = useState([]);
   const [dailyDefaultsLoaded, setDailyDefaultsLoaded] = useState(false);
   const [dailyDefaultsLoading, setDailyDefaultsLoading] = useState(false);
-  const [scheduleSettingsDraft, setScheduleSettingsDraft] = useState({ dayStart: "", dayEnd: "", timeConfigured: false, breaks: [] });
+  const [scheduleSettingsDraft, setScheduleSettingsDraft] = useState(DEFAULT_SCHEDULE_SETTINGS);
   const [scheduleSettingsLoaded, setScheduleSettingsLoaded] = useState(false);
   const [scheduleSettingsLoading, setScheduleSettingsLoading] = useState(false);
   const [appearance, setAppearance] = useState(initialAppearance);
@@ -179,12 +182,15 @@ export default function ScheduleSurface() {
     setScheduleSettingsLoading(true);
     try {
       const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/schedule-settings`));
-      setScheduleSettingsDraft({ dayStart: result?.settings?.dayStart || "", dayEnd: result?.settings?.dayEnd || "", timeConfigured: result?.settings?.timeConfigured === true, breaks: Array.isArray(result?.settings?.breaks) ? result.settings.breaks : [] });
+      setScheduleSettingsDraft(normalizeScheduleSettings(result.settings));
       setScheduleSettingsLoaded(true);
       return true;
     } catch (error) {
       recordRuntimeEvent("schedule_settings_load_error", { error: error?.message || String(error), surface });
-      setNotice("시간 설정을 불러오지 못했어요");
+      if (error.code === "invalid_settings") {
+        setScheduleSettingsLoaded(true);
+        setNotice("저장된 시간 설정을 확인해 주세요. 올바른 값으로 저장하면 다시 사용할 수 있어요");
+      } else setNotice("시간 설정을 불러오지 못했어요");
       return false;
     } finally { setScheduleSettingsLoading(false); }
   }, [scheduleSettingsLoading, surface]);
@@ -436,6 +442,7 @@ export default function ScheduleSurface() {
       return;
     }
     try {
+      const validatedSettings = normalizeScheduleSettings(scheduleSettingsDraft);
       if (storageDirectoryDraft.trim()) {
         const storageResult = await readJson(await fetchBridge(`${BRIDGE_URL}/api/storage-location`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
@@ -445,10 +452,13 @@ export default function ScheduleSurface() {
       }
       const scheduleResult = await readJson(await fetchBridge(`${BRIDGE_URL}/api/schedule-settings`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activityDate, ...scheduleSettingsDraft }),
+        body: JSON.stringify({ activityDate, ...validatedSettings }),
       }));
       setScheduleSettingsDraft(scheduleResult.settings);
-      await loadSchedule({ rebuild: true, quiet: true });
+      if (scheduleResult.schedule) {
+        setSchedule(scheduleResult.schedule);
+        setNowFocus(scheduleResult.nowFocus);
+      } else await loadSchedule({ rebuild: true, quiet: true });
       const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/daily-defaults`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -462,7 +472,7 @@ export default function ScheduleSurface() {
       setNotice(savedNotice("설정을 저장했어요", result));
     } catch (error) {
       recordRuntimeEvent("daily_defaults_save_error", { error: error?.message || String(error), surface });
-      setNotice("설정을 저장하지 못했어요");
+      setNotice(error instanceof TypeError || error.code === "invalid_settings" ? error.message : "설정을 저장하지 못했어요");
     }
   }, [activityDate, dailyDefaultsDraft, dailyDefaultsLoaded, loadSchedule, scheduleSettingsDraft, storageDirectoryDraft, surface]);
 

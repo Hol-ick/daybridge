@@ -975,6 +975,79 @@ def check_overlay_stale_card_is_not_reported_to_today(browser) -> None:
     close_fixture_context(context)
 
 
+def check_settings_contract(browser) -> None:
+    context = fixture_context(browser, viewport={"width": 720, "height": 680}, device_scale_factor=1)
+    errors = []
+    calls = []
+    stored_invalid = False
+    stored = {"dayStart": "09:00", "dayEnd": "18:00", "timeConfigured": True, "bufferMinutes": 30, "breaks": []}
+    context.route(re.compile(r"http://127\.0\.0\.1:39393/api/board(?:\?|$)"), lambda route: route.fulfill(status=200, content_type="application/json", body=FUNCTIONAL_BOARD))
+    context.route(re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"), lambda route: route.fulfill(status=200, content_type="application/json", body=EMPTY_SCHEDULE))
+    context.route("http://127.0.0.1:39393/api/calendar/status", lambda route: route.fulfill(status=200, content_type="application/json", body=CALENDAR_UNCONFIGURED))
+
+    def settings_route(route):
+        if route.request.method == "GET":
+            if stored_invalid:
+                route.fulfill(status=500, content_type="application/json", body=json.dumps({"code": "invalid_settings", "error": "저장된 시간 설정을 확인해 주세요."}))
+                return
+            route.fulfill(status=200, content_type="application/json", body=json.dumps({"settings": stored}))
+        else:
+            calls.append(json.loads(route.request.post_data))
+            if len(calls) == 1:
+                route.fulfill(status=400, content_type="application/json", body=json.dumps({"code": "invalid_settings", "error": "완충시간은 0~30분의 정수로 입력해 주세요."}))
+            else:
+                route.fulfill(status=200, content_type="application/json", body=json.dumps({"settings": calls[-1], **json.loads(EMPTY_SCHEDULE)}))
+
+    context.route("http://127.0.0.1:39393/api/schedule-settings", settings_route)
+    page = context.new_page()
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5173/?surface=dashboard")
+    page.locator('[data-testid="schedule-settings"]').click()
+    buffer = page.get_by_label("완충시간 (분)")
+    buffer.wait_for()
+    page.wait_for_function("document.querySelector('input[type=number][max=\"30\"]').value === '30'")
+    assert page.get_by_label("점심", exact=False).is_checked() is False
+    page.get_by_label("퇴근", exact=True).fill("")
+    page.get_by_role("button", name="저장", exact=True).click()
+    page.get_by_test_id("daybridge-settings-toast").filter(has_text="시작·종료 시간을 모두 입력").wait_for()
+    assert not calls and page.get_by_label("퇴근", exact=True).input_value() == ""
+    page.get_by_label("퇴근", exact=True).fill("18:00")
+    buffer.fill("31")
+    page.get_by_role("button", name="저장", exact=True).click()
+    assert buffer.evaluate("element => !element.validity.valid")
+    assert not calls
+    buffer.fill("0")
+    page.get_by_role("button", name="저장", exact=True).click()
+    page.get_by_test_id("daybridge-settings-toast").filter(has_text="완충시간은 0~30분").wait_for()
+    assert len(calls) == 1 and calls[0]["bufferMinutes"] == 0
+    assert calls[0]["breaks"] == []
+    assert all(not meal["enabled"] for meal in calls[0]["meals"].values())
+    assert buffer.input_value() == "0"
+    toast_box = page.get_by_test_id("daybridge-settings-toast").bounding_box()
+    close_box = page.get_by_role("button", name="설정 닫기").bounding_box()
+    assert toast_box["x"] + toast_box["width"] <= close_box["x"]
+    page.screenshot(path="test-artifacts/daybridge-settings-contract-error.png", full_page=True)
+    buffer.fill("30")
+    page.get_by_role("button", name="저장", exact=True).click()
+    page.get_by_test_id("daybridge-settings-toast").filter(has_text="설정을 저장했어요").wait_for()
+    assert len(calls) == 2 and calls[-1]["bufferMinutes"] == 30 and calls[-1]["breaks"] == []
+    page.get_by_text("저녁시간", exact=True).scroll_into_view_if_needed()
+    assert page.get_by_text("저녁시간", exact=True).is_visible()
+    assert not page.get_by_label("저녁", exact=False).is_checked()
+    page.screenshot(path="test-artifacts/daybridge-settings-contract-saved.png", full_page=True)
+    stored_invalid = True
+    page.reload()
+    page.locator('[data-testid="schedule-settings"]').click()
+    page.get_by_test_id("daybridge-settings-toast").filter(has_text="올바른 값으로 저장하면").wait_for()
+    assert len(calls) == 2
+    page.get_by_label("완충시간 (분)").fill("30")
+    page.get_by_role("button", name="저장", exact=True).click()
+    page.get_by_test_id("daybridge-settings-toast").filter(has_text="설정을 저장했어요").wait_for()
+    assert len(calls) == 3 and calls[-1]["bufferMinutes"] == 30
+    assert_no_page_errors(errors)
+    close_fixture_context(context)
+
+
 def main() -> None:
     with sync_playwright() as playwright:
         launch_options = {"headless": True}
@@ -987,7 +1060,8 @@ def main() -> None:
                           check_overlay_compact_expansion, check_overlay_scrolls_only_at_maximum_height,
                           check_overlay_todo_items, check_overlay_auto_starts_next_todo,
                           check_overlay_shows_empty_summary_after_completion, check_overlay_long_title,
-                          check_overlay_reorder, check_overlay_stale_card_is_not_reported_to_today]:
+                          check_overlay_reorder, check_overlay_stale_card_is_not_reported_to_today,
+                          check_settings_contract]:
                 print(f"Running {check.__name__}", flush=True)
                 check(browser)
                 print(f"Passed {check.__name__}", flush=True)

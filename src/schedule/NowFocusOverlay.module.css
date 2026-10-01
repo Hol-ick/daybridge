@@ -269,6 +269,7 @@
 .mealSettingRow:first-of-type { border-top: 0; }
 .settingsHeader { display: flex; align-items: start; justify-content: space-between; gap: 16px; cursor: grab; user-select: none; }
 .settingsHeader:active { cursor: grabbing; }
+.settingsModal > .overlayToast { right: 64px; max-width: min(420px, calc(100vw - 96px)); }
 .settingsHeader div { display: grid; gap: 5px; }
 .settingsHeader strong { color: var(--modal-ink); font-size: 25px; font-weight: 800; letter-spacing: -.055em; line-height: 1.08; }
 .settingsHeader p { margin: 0; color: var(--modal-muted); font-size: 12px; font-weight: 620; letter-spacing: -.025em; line-height: 1.45; }
