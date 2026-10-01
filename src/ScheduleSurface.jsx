@@ -10,6 +10,7 @@ import DailyDefaultsEditor from "./schedule/DailyDefaultsEditor.jsx";
 import { resolveActivityDate } from "./schedule/activity-date.js";
 import { recordRuntimeEvent } from "./runtime-log.js";
 import styles from "./ScheduleSurface.module.css";
+import { fetchBridge, savedNotice } from "./bridge-client.js";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
 const OVERLAY_PRIVACY_KEY = "daybridge.overlay-private.v1";
@@ -38,26 +39,6 @@ async function readJson(response) {
     throw error;
   }
   return response.json();
-}
-
-async function fetchBridge(resource, options) {
-  try {
-    return await fetch(resource, options);
-  } catch (initialError) {
-    // The Tauri shell and the local data bridge are intentionally separate
-    // processes. If the bridge was terminated after the widget had started,
-    // revive it and replay this one user action instead of making the card
-    // appear unresponsive until the next full app restart.
-    if (!isTauri()) throw initialError;
-    try {
-      await invoke("ensure_local_bridge");
-      return await fetch(resource, options);
-    } catch (recoveryError) {
-      const error = new Error(`bridge recovery failed: ${recoveryError?.message || String(recoveryError)}`);
-      error.cause = initialError;
-      throw error;
-    }
-  }
 }
 
 function emptyTodoSchedule(date) {
@@ -120,7 +101,7 @@ export default function ScheduleSurface() {
       setNowFocus(result.nowFocus);
       setCalendarCoverage(result.schedule?.calendar?.coverage || "attention");
       if (!quiet || rebuild) recordRuntimeEvent("schedule_load_success", { date: requestDate, rebuild, blocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.length : 0, focusBlocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.filter((block) => block?.type === "focus").length : 0, nowFocus: result.nowFocus?.state || "none" });
-      if (!quiet) setNotice(rebuild ? "오늘 남은 시간을 다시 배치했어요" : "");
+      if (!quiet) setNotice(rebuild ? savedNotice("오늘 남은 시간을 다시 배치했어요", result) : "");
       return result;
     } catch (error) {
       recordRuntimeEvent("schedule_load_error", { date: requestDate, rebuild, error: error?.message || String(error) });
@@ -151,7 +132,7 @@ export default function ScheduleSurface() {
       setNowFocus(result.nowFocus);
       await refresh();
       recordRuntimeEvent("manual_task_added", { date: activityDate, title });
-      setNotice(`${title}을 오늘 할 일에 추가했어요`);
+      setNotice(savedNotice(`${title}을 오늘 할 일에 추가했어요`, result));
       return true;
     } catch (error) {
       recordRuntimeEvent("manual_task_add_error", { date: activityDate, title, error: error?.message || String(error) });
@@ -336,9 +317,9 @@ export default function ScheduleSurface() {
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       const autoStartedTitle = typeof result?.autoStarted?.title === "string" ? result.autoStarted.title : "";
-      setNotice(status === "completed"
+      setNotice(savedNotice(status === "completed"
         ? (autoStartedTitle ? `${autoStartedTitle}을 진행 중으로 바꿨어요` : "집중 시간을 완료했어요")
-        : "이 작업은 다음 계획으로 넘겼어요");
+        : "이 작업은 다음 계획으로 넘겼어요", result));
       recordRuntimeEvent("schedule_block_reported", { date: activityDate, blockId, status, autoStartedBlockId: result?.autoStarted?.id || null });
       void refresh();
       return true;
@@ -358,7 +339,7 @@ export default function ScheduleSurface() {
       }));
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
-      setNotice("시간표 위치를 바꿨어요");
+      setNotice(savedNotice("시간표 위치를 바꿨어요", result));
       recordRuntimeEvent("schedule_block_moved", { date: activityDate, blockId, targetBlockId, position });
       void refresh();
       return true;
@@ -380,7 +361,7 @@ export default function ScheduleSurface() {
       }));
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
-      setNotice("작업을 오늘 시간표에서 폐기했어요");
+      setNotice(savedNotice("작업을 오늘 시간표에서 폐기했어요", result));
       recordRuntimeEvent("schedule_block_discarded", { date: activityDate, title });
       void refresh();
       return true;
@@ -476,7 +457,7 @@ export default function ScheduleSurface() {
         setSchedule(result.schedule);
         setNowFocus(result.nowFocus);
       }
-      setNotice("설정을 저장했어요");
+      setNotice(savedNotice("설정을 저장했어요", result));
     } catch (error) {
       recordRuntimeEvent("daily_defaults_save_error", { error: error?.message || String(error), surface });
       setNotice("설정을 저장하지 못했어요");

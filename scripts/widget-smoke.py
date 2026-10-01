@@ -335,7 +335,11 @@ def check_dashboard_actions(browser) -> None:
 
     def handle_manual(route) -> None:
         manual_calls.append(json.loads(route.request.post_data or "{}"))
-        route.fulfill(status=201, content_type="application/json", body=MANUAL_CREATED)
+        assert route.request.headers.get("x-request-id")
+        result = json.loads(MANUAL_CREATED)
+        result["saveState"] = "local_saved"
+        result["handoff"] = {"state": "pending", "sent": 0, "pending": 1, "failed": 1}
+        route.fulfill(status=201, content_type="application/json", body=json.dumps(result))
 
     context.route("http://127.0.0.1:39393/api/quests/manual", handle_manual)
 
@@ -363,6 +367,9 @@ def check_dashboard_actions(browser) -> None:
     page.wait_for_function("document.querySelector('[role=status]').textContent.includes('오늘 할 일에 추가했어요')")
     assert manual_calls and manual_calls[0]["title"] == "리눅스 학습" and "durationMinutes" not in manual_calls[0]
     page.wait_for_function("document.querySelector('[data-testid=manual-task-form]') === null")
+    assert "로컬 저장 완료" in page.locator('[role="status"]').inner_text()
+    assert "전달 대기 중" in page.locator('[role="status"]').inner_text()
+    page.screenshot(path="test-artifacts/daybridge-handoff-pending.png", full_page=True)
 
     assert_no_page_errors(errors)
     close_fixture_context(context)
@@ -549,7 +556,10 @@ def check_overlay_todo_items(browser) -> None:
 
     def handle_discard(route) -> None:
         discard_calls.append(json.loads(route.request.post_data or "{}"))
-        route.fulfill(status=200, content_type="application/json", body=TODO_DISCARDED_SCHEDULE)
+        assert route.request.headers.get("x-request-id")
+        result = json.loads(TODO_DISCARDED_SCHEDULE)
+        result["handoff"] = {"state": "pending"}
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(result))
 
     context.route("http://127.0.0.1:39393/api/schedule/block-discard", handle_discard)
     page = context.new_page()
@@ -606,6 +616,7 @@ def check_overlay_todo_items(browser) -> None:
         first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": trash_box["x"] + trash_box["width"] / 2, "clientY": trash_box["y"] + trash_box["height"] / 2})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-linux]') === null")
     assert discard_calls and discard_calls[0]["blockId"] == "todo-linux"
+    page.wait_for_function("document.querySelector('[role=status]')?.textContent.includes('전달 대기 중')")
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-todo-items.png", full_page=True)
     assert_no_page_errors(errors)
     close_fixture_context(context)

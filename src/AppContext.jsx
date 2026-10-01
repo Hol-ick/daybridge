@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { demoQuestBoard } from "./demo-data";
 import { recordRuntimeEvent } from "./runtime-log.js";
+import { fetchBridge, savedNotice } from "./bridge-client.js";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
 const STORAGE_KEY = "daybridge.quest-board.v4";
@@ -80,7 +81,7 @@ export function AppStateProvider({ children }) {
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 1800);
     try {
-      const response = await fetch(`${BRIDGE_URL}/api/board?date=${requestDate}`, { signal: controller.signal });
+      const response = await fetchBridge(`${BRIDGE_URL}/api/board?date=${requestDate}`, { signal: controller.signal });
       if (!response.ok) {
         recordRuntimeEvent("board_refresh_http_error", { date: requestDate, status: response.status });
         if (announce) showNotice("브리핑을 불러오지 못했어요");
@@ -120,15 +121,18 @@ export function AppStateProvider({ children }) {
     reportQueueRef.current = reportQueueRef.current.then(async () => {
       const quest = nextBoard.quests.find((item) => item.id === questId);
       try {
-        const response = await fetch(`${BRIDGE_URL}/api/report`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: nextBoard.activityDate, questId, status, note, nextAction, steps: quest?.steps ?? [], missionId: quest?.missionId, state: quest?.state }) });
-        if (!response.ok) return;
+        const response = await fetchBridge(`${BRIDGE_URL}/api/report`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: nextBoard.activityDate, questId, status, note, nextAction, steps: quest?.steps ?? [], missionId: quest?.missionId, state: quest?.state }) });
+        if (!response.ok) throw new Error(`Report save failed (${response.status})`);
         const result = await response.json();
         if (reportVersion === reportVersionRef.current) {
           boardRef.current = result.board;
           dispatch({ type: "SYNC", board: result.board });
           persistBoard(result.board);
+          showNotice(savedNotice(`진행 상태를 저장했어요 · ${questTitle}`, result));
         }
-      } catch { /* receipt remains local */ }
+      } catch {
+        showNotice("진행 상태의 저장을 확인하지 못했어요. 연결을 확인한 뒤 새로고침해 주세요");
+      }
     });
     return reportQueueRef.current;
   }, [showNotice]);
