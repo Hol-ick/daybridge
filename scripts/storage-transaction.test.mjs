@@ -130,7 +130,7 @@ test("damaged and escaping journals are preserved without recovery writes", asyn
   }
 }));
 
-test("HTTP concurrent reports commit both board and schedule before success", async () => {
+test("HTTP concurrent reports commit both board and schedule before success", async (t) => {
   const quests = Array.from({ length: 20 }, (_, i) => ({ id: `q-${i}`, title: `Fixture ${i}`, state: "ready", status: "ready", estimateMinutes: 50, remainingMinutes: 50, steps: [{ id: `s-${i}`, label: "Fixture action", completed: false }], progress: { completed: 0, total: 1 } }));
   const schedule = { date: DATE, generatedAt: `${DATE}T09:00:00+09:00`, mode: "todo", timeConfigured: false, blocks: quests.map((quest, i) => ({ id: `card-${i}`, questId: quest.id, type: "focus", title: quest.title, status: "planned" })) };
   const f = await startFixtureBridge({ initialFiles: {
@@ -138,7 +138,11 @@ test("HTTP concurrent reports commit both board and schedule before success", as
     [`schedules/${DATE}.json`]: JSON.stringify(schedule),
   } });
   try {
-    const responses = await Promise.all(quests.map((_, i) => f.request("POST", "/api/schedule/block-report", { activityDate: DATE, blockId: `card-${i}`, status: "completed" })));
+    // Twenty durable commits are a burst-load test, with their own deadline.
+    // Interactive client timeout/replay is covered by mutation-retry tests.
+    const started = performance.now();
+    const responses = await Promise.all(quests.map((_, i) => f.request("POST", "/api/schedule/block-report", { activityDate: DATE, blockId: `card-${i}`, status: "completed" }, {timeoutMs: 15000})));
+    t.diagnostic(`20 concurrent durable reports completed in ${Math.round(performance.now() - started)}ms`);
     assert(responses.every((response) => response.status === 200), JSON.stringify(responses.map(({ status, body }) => ({ status, body }))));
     const board = await readJsonStrict(join(f.dataDir, "boards", `${DATE}.json`));
     const saved = await readJsonStrict(join(f.dataDir, "schedules", `${DATE}.json`));

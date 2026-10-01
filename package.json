@@ -17,6 +17,7 @@
     "compile": "node scripts/compile-quests.mjs",
     "compile:closeout": "node scripts/compile-quests.mjs --source closeout",
     "test:compiler": "node --test scripts/compile-quests.test.mjs",
+    "test": "node scripts/test-all.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit",

@@ -77,14 +77,14 @@ export async function startFixtureBridge({ initialFiles = {} } = {}) {
     });
     }
     await launch();
-    async function request(method, path, body, { origin, contentType = "application/json", requestId } = {}) {
+    async function request(method, path, body, { origin, contentType = "application/json", requestId, timeoutMs = 5000 } = {}) {
       assert(path.startsWith("/api/"), "fixture requests must use API paths");
       const headers = {};
       if (body !== undefined) headers["Content-Type"] = contentType;
       if (origin !== undefined) headers.Origin = origin;
       if (requestId !== undefined) headers["X-Request-Id"] = requestId;
       const response = await fetch(baseUrl + path, {
-        method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(5000),
+        method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs),
       });
       return { status: response.status, body: await response.json(), headers: response.headers };
     }

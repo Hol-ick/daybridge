@@ -39,6 +39,20 @@ pnpm dev:widget
 
 `pnpm dev:widget`도 개발 모드라서 저장 시 프런트엔드가 갱신되지만, Rust·MSVC·Windows SDK·WebView2가 필요하다. `pnpm build:widget`은 배포용 설치 파일을 만들 때만 실행한다.
 
+### 개발 검증
+
+`pnpm check`는 `src`의 실행 JS·JSX·TS 전체를 엄격하게 검사한다. `pnpm test`는 `src`와 `scripts` 아래의 모든 `.test.mjs`를 찾아 순차 실행하며, 실패한 검사가 있으면 실패 종료값을 반환한다. 브리지 검사는 임시 데이터와 독립 포트를 사용한다. 실제 Calendar 계정이나 운영 데이터는 필요하지 않다.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm check
+pnpm test
+pnpm build
+cargo test --offline --manifest-path src-tauri/Cargo.toml
+```
+
+Windows CI도 같은 웹 검사와 전체 회귀를 실행하고 Rust 검사를 추가한다. 브라우저 mock 검사 실행법과 화면 검증 범위는 [Debugging guide](docs/DEBUGGING.md)를 따른다.
+
 ### 세션에서 일정 전달하기
 
 어떤 Codex 세션에서든 사용자가 “이 업무는 시간표에 넣자”고 판단하면 `daybridge-schedule-writer` Skill을 즉시 호출한다. closeout·브리핑 생성은 필요하지 않다. Skill이 업무를 정규화한 뒤 `write_schedule_inbox.py upsert` 명령을 실행하면 파일은 `%LOCALAPPDATA%\Daybridge\inbox\schedule-YYYY-MM-DD.md`에 날짜별로 생성된다. 고정 시각은 전달하지 않으며, Daybridge가 근무시간·점심시간·Google Calendar busy를 합쳐 `HH:00–HH:50` 단위로 배치한다.
