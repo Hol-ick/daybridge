@@ -830,6 +830,7 @@ async function dispatch(request, response, url, origin, body) {
     if (request.method === "POST" && url.pathname === "/api/schedule/block-discard") { const result = await handleScheduleBlockDiscard(body); send(response, result.status, result.body, origin); return; }
     send(response, 404, { error: "Not found." }, origin);
 }
+const { applyMutation } = await import("./bridge/mutation-service.mjs");
 const server = createServer(async (request, response) => {
   const origin = request.headers.origin;
   const policy = validateRequest({ method: request.method, host: request.headers.host, origin, contentType: request.headers["content-type"], port: server.address().port });
@@ -859,7 +860,18 @@ const server = createServer(async (request, response) => {
     else {
       const date = safeDate(body?.activityDate || body?.date || url.searchParams.get("date"))
         || (["/api/schedule", "/api/board", "/api/schedule/inbox", "/api/activity"].includes(url.pathname) ? koreaNow().slice(0, 10) : "global");
-      await runStoreOperation(DATA_DIR, date, operation);
+      await runStoreOperation(DATA_DIR, date, async () => {
+        if (["POST", "PUT"].includes(request.method)) {
+          const answer = await applyMutation({ dataDir: DATA_DIR, date, requestId: request.headers["x-request-id"], kind: `${request.method} ${url.pathname}`, payload: body }, async () => {
+            await operation();
+            return { status: buffered.status, body: JSON.parse(buffered.payload) };
+          });
+          if (answer.replayed) {
+            send(pendingResponse, answer.result.status, answer.result.body, origin);
+            buffered.headers["X-Request-Replayed"] = "true";
+          }
+        } else await operation();
+      });
     }
     response.writeHead(buffered.status, buffered.headers);
     response.end(buffered.payload);
