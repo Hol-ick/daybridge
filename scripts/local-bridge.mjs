@@ -22,10 +22,11 @@ import {
 import { calendarEventsToBusyBlocks, inspectGoogleCalendarConnection, readGoogleCalendarBusyBlocks } from "./calendar/google-calendar-reader.mjs";
 import { createGoogleCalendarAdapter } from "./calendar/googleapis-adapter.mjs";
 import { beginGoogleCalendarAuthorization, finishGoogleCalendarAuthorization, unprotectTokenWithDpapi } from "./calendar/google-oauth.mjs";
-import { readActivityLog, recordActivity } from "./activity-log.mjs";
+import { readActivityLog, recordActivity, projectActivityLog, repairActivityProjections } from "./activity-log.mjs";
 import { readJsonStrict, readJsonStrictSync, atomicWriteJson as atomicWrite, StoreError } from "./storage/json-store.mjs";
 import { runStoreOperation } from "./storage/date-transaction.mjs";
 import { allowedOrigin, RequestError, validateRequest } from "./bridge/request-policy.mjs";
+import { enqueueHandoff, flushHandoffOutbox } from "./bridge/handoff-outbox.mjs";
 
 const PORT = Number(process.env.DAYBRIDGE_BRIDGE_PORT || 39393);
 const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
@@ -288,9 +289,8 @@ function sendHtml(response, status, markup) {
 }
 async function writeEvent(config, event) {
   await atomicWrite(join(DATA_DIR, "events", event.activityDate, event.id + ".json"), event);
-  if (typeof config.handoffSinkDir !== "string" || !config.handoffSinkDir.trim()) return false;
-  await atomicWrite(join(resolve(config.handoffSinkDir), event.activityDate, event.id + ".json"), event);
-  return true;
+  await enqueueHandoff({ dataDir: DATA_DIR, event });
+  return false; // Delivery is acknowledged only after local commit.
 }
 function activitySubject({ type = "task", id, questId, title }) {
   return { type, id: sanitizeText(id, 120), questId: sanitizeText(questId, 120), title: sanitizeText(title, 180) };
@@ -873,6 +873,19 @@ const server = createServer(async (request, response) => {
         } else await operation();
       });
     }
+    if (!diagnostic && ["POST", "PUT"].includes(request.method)) {
+      const activityDate = safeDate(body?.activityDate || body?.date) || koreaNow().slice(0, 10);
+      await projectActivityLog(DATA_DIR, activityDate).catch(error => logRuntimeEvent("activity_projection_pending", { error: error.code || "projection_failed" }));
+      const handoff = await deliverPendingHandoffs();
+      const result = JSON.parse(buffered.payload);
+      result.saveState = "local_saved";
+      result.handoff = handoff;
+      if ("eventRecorded" in result) {
+        result.eventRecorded = handoff.state === "sent";
+        result.connection = result.eventRecorded ? "connected" : "local";
+      }
+      buffered.payload = JSON.stringify(result);
+    }
     response.writeHead(buffered.status, buffered.headers);
     response.end(buffered.payload);
   } catch (error) {
@@ -896,4 +909,19 @@ process.on("unhandledRejection", (reason) => {
   logRuntimeEvent("bridge_unhandled_rejection", { error: reason?.message || String(reason) });
   console.error(reason);
 });
-server.listen(PORT, "127.0.0.1", () => console.log("Daybridge local bridge listening on http://127.0.0.1:" + server.address().port));
+async function deliverPendingHandoffs() {
+  try {
+    const config = await loadConfig();
+    const delivery = await flushHandoffOutbox({ dataDir: DATA_DIR, sinkDir: config.handoffSinkDir });
+    await repairActivityProjections(DATA_DIR).catch(error => logRuntimeEvent("activity_projection_pending", { error: error.code || "projection_failed" }));
+    return { ...delivery, state: !config.handoffSinkDir ? "unconfigured" : delivery.pending ? "pending" : "sent" };
+  } catch (error) {
+    logRuntimeEvent("handoff_delivery_error", { error: error.code || "handoff_failed" });
+    return { state: "pending", sent: 0, pending: null, failed: 1 };
+  }
+}
+server.listen(PORT, "127.0.0.1", () => {
+  console.log("Daybridge local bridge listening on http://127.0.0.1:" + server.address().port);
+  void deliverPendingHandoffs();
+});
+setInterval(() => { void deliverPendingHandoffs(); }, 30_000).unref();
