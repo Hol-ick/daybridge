@@ -183,6 +183,7 @@ function normalizeDiscardedBlocks(value) {
     questId: typeof item?.questId === "string" ? sanitizeText(item.questId, 120) : "",
     title: typeof item?.title === "string" ? sanitizeText(item.title, 180) : "",
     units: Number.isInteger(item?.units) && item.units > 0 ? Math.min(item.units, 10) : 1,
+    ...(Number.isFinite(item?.workMinutes) && item.workMinutes > 0 ? { workMinutes: item.workMinutes } : {}),
     discardedAt: typeof item?.discardedAt === "string" && !Number.isNaN(Date.parse(item.discardedAt)) ? item.discardedAt : now(),
   })).filter((item) => item.blockId && item.questId).slice(-200);
 }
@@ -437,6 +438,7 @@ async function discardScheduleBlockUnlocked(dataDir, date, input = {}) {
     questId: sanitizeText(source.questId, 120),
     title: sanitizeText(source.title, 180),
     units: 1,
+    ...(Number.isFinite(source.workMinutes) && source.workMinutes > 0 ? { workMinutes: source.workMinutes } : {}),
     discardedAt,
   };
   const updated = await saveSchedule(dataDir, requestedDate, {

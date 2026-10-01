@@ -104,10 +104,11 @@ export function toTaskCandidate(quest) {
   if (!id || !title || state === "completed" || !STATES.has(state) || !positiveInteger(estimateMinutes)) return null;
 
   const remainingUnits = Number(quest.remainingUnits ?? quest.remaining_units);
-  const remaining = Number.isInteger(remainingUnits) && remainingUnits > 0
-    ? remainingUnits * 50
-    : (quest.remainingMinutes == null ? estimateMinutes : Number(quest.remainingMinutes));
+  const remaining = quest.remainingMinutes != null ? Number(quest.remainingMinutes)
+    : Number.isInteger(remainingUnits) && remainingUnits > 0 ? remainingUnits * 50 : estimateMinutes;
   if (!positiveInteger(remaining)) return null;
+  const dependencies = [...new Set((Array.isArray(quest.dependsOn) ? quest.dependsOn : []).filter(dependency => typeof dependency === "string" && dependency.trim()).map(dependency => dependency.trim()))];
+  const completedDependencies = [...new Set((Array.isArray(quest.completedDependencies) ? quest.completedDependencies : []).filter(dependency => typeof dependency === "string").map(dependency => dependency.trim()).filter(dependency => dependencies.includes(dependency)))];
   return {
     id,
     title,
@@ -115,11 +116,16 @@ export function toTaskCandidate(quest) {
     state,
     estimateMinutes,
     remainingMinutes: Math.min(remaining, estimateMinutes),
-    dependsOn: [...new Set((Array.isArray(quest.dependsOn) ? quest.dependsOn : []).filter((dependency) => typeof dependency === "string" && dependency.trim()).map((dependency) => dependency.trim()))],
+    dependsOn: dependencies,
+    ...(completedDependencies.length ? { completedDependencies } : {}),
     execution: quest.execution === "sequential" ? "sequential" : "independent",
     sourceKind: quest.sourceKind === "routine" ? "routine" : quest.sourceKind === "session" ? "session" : "briefing",
     category: typeof quest.category === "string" ? quest.category.slice(0, 40) : null,
     sourceRefs: safeSourceRefs(quest.sourceRefs),
+    ...(safeSourceRefs([quest.sourcePath])[0] ? { sourcePath: safeSourceRefs([quest.sourcePath])[0] } : {}),
+    ...(typeof quest.sourceLabel === "string" ? { sourceLabel: quest.sourceLabel.slice(0, 80) } : {}),
+    ...(Number.isInteger(quest.carryoverCount) && quest.carryoverCount >= 0 ? { carryoverCount: quest.carryoverCount } : {}),
+    ...(DATE_PATTERN.test(quest.carryoverSourceDate || "") ? { carryoverSourceDate: quest.carryoverSourceDate } : {}),
   };
 }
 

@@ -138,7 +138,7 @@ function orderedCandidates(candidates, completedQuestIds, randomSeed = "") {
 
 function scheduledFocusMinutes(blocks, questId) {
   return blocks.filter((block) => block.type === "focus" && block.questId === questId)
-    .reduce((total, block) => total + Math.round((Date.parse(block.endAt) - Date.parse(block.startAt)) / 60_000), 0);
+    .reduce((total, block) => total + (Number.isFinite(block.workMinutes) && block.workMinutes > 0 ? block.workMinutes : Math.round((Date.parse(block.endAt) - Date.parse(block.startAt)) / 60_000)), 0);
 }
 
 export function buildDailySchedule({ date, settings, taskCandidates = [], busyBlocks = [], lockedBlocks = [], completedQuestIds = [], startAt, generatedAt } = {}) {
@@ -146,11 +146,12 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
   const config = normalizedSettings(date, settings);
   const candidates = taskCandidates.map(toTaskCandidate).filter(Boolean).filter((candidate) => candidate.state !== "blocked");
   const candidateIds = new Set(candidates.map((candidate) => candidate.id));
+  const satisfiedFromReports = [...new Set([...completedQuestIds, ...candidates.flatMap(candidate => candidate.completedDependencies || []).filter(id => !candidateIds.has(id))])];
   // Untimed days are still a deliberate daily queue. Shuffle only the
   // currently eligible cards with a date seed so independent work feels fresh
   // while the same day remains stable across reloads and dependency chains
   // still stay in A → B → C order.
-  const ordering = orderedCandidates(candidates, completedQuestIds, config.timeConfigured ? "" : date);
+  const ordering = orderedCandidates(candidates, satisfiedFromReports, config.timeConfigured ? "" : date);
   if (!config.timeConfigured) {
     // Without a configured work window, keep the product useful as a small
     // daily todo list. Items remain actionable/status-reportable, but no
@@ -159,6 +160,8 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
       id: `todo-${candidate.id}`,
       type: "focus",
       questId: candidate.id,
+      workMinutes: candidate.remainingMinutes,
+      taskMetadata: { ...candidate },
       title: candidate.title,
       priority: candidate.priority,
       sourceKind: candidate.sourceKind,
@@ -172,21 +175,21 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
   }
   const dayStartMs = Math.max(Date.parse(config.dayStartAt), startAt && isKstIso(startAt) ? Date.parse(startAt) : -Infinity);
   const dayEndMs = Date.parse(config.dayEndAt);
-  if (dayStartMs >= dayEndMs) return normalizeSchedule({ ...shell, timeConfigured: true, unscheduled: taskCandidates.map((quest) => ({ questId: quest.id, reason: "outside_schedule_window", remainingMinutes: quest.remainingMinutes || quest.estimateMinutes })).filter((item) => item.questId && item.remainingMinutes) });
+  if (dayStartMs >= dayEndMs) return normalizeSchedule({ ...shell, timeConfigured: true, unscheduled: taskCandidates.map(toTaskCandidate).filter(Boolean).map((candidate) => ({ questId: candidate.id, taskMetadata: { ...candidate }, reason: "outside_schedule_window", remainingMinutes: candidate.remainingMinutes })) });
 
   const constraints = makeConstraints({ date, busyBlocks, lockedBlocks, breaks: config.breaks });
   const blocks = [...constraints];
   const unscheduled = [];
-  const satisfiedDependencies = new Set(completedQuestIds);
+  const satisfiedDependencies = new Set(satisfiedFromReports);
 
   for (const blocked of ordering.blocked) {
-    unscheduled.push({ questId: blocked.id, reason: blocked.dependsOn.some((dependency) => candidateIds.has(dependency)) ? "dependency_unmet" : "dependency_missing", remainingMinutes: blocked.remainingMinutes });
+    unscheduled.push({ questId: blocked.id, taskMetadata: { ...blocked }, reason: blocked.dependsOn.some((dependency) => candidateIds.has(dependency)) ? "dependency_unmet" : "dependency_missing", remainingMinutes: blocked.remainingMinutes });
   }
 
   for (let candidateIndex = 0; candidateIndex < ordering.ordered.length; candidateIndex += 1) {
     const candidate = ordering.ordered[candidateIndex];
     if (!candidate.dependsOn.every((dependency) => satisfiedDependencies.has(dependency))) {
-      unscheduled.push({ questId: candidate.id, reason: "dependency_unmet", remainingMinutes: candidate.remainingMinutes });
+      unscheduled.push({ questId: candidate.id, taskMetadata: { ...candidate }, reason: "dependency_unmet", remainingMinutes: candidate.remainingMinutes });
       continue;
     }
     const existingMinutes = scheduledFocusMinutes(blocks, candidate.id);
@@ -198,7 +201,7 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
       if (!slot) break;
       focusIndex += 1;
       const [start, end] = slot;
-      blocks.push({ id: `focus-${candidate.id}-${focusIndex}`, type: "focus", questId: candidate.id, title: candidate.title, priority: candidate.priority, sourceKind: candidate.sourceKind, category: candidate.category, status: candidate.state === "in_progress" ? "in_progress" : candidate.state === "deferred" ? "deferred" : "planned", startAt: asKstIso(start), endAt: asKstIso(end), locked: false });
+      blocks.push({ id: `focus-${candidate.id}-${focusIndex}`, type: "focus", questId: candidate.id, workMinutes: Math.min(remaining, duration), taskMetadata: { ...candidate }, title: candidate.title, priority: candidate.priority, sourceKind: candidate.sourceKind, category: candidate.category, status: candidate.state === "in_progress" ? "in_progress" : candidate.state === "deferred" ? "deferred" : "planned", startAt: asKstIso(start), endAt: asKstIso(end), locked: false });
       blocks.sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt) || left.id.localeCompare(right.id));
       remaining = Math.max(0, remaining - duration);
       const laterWorkExists = remaining > 0 || candidateIndex < ordering.ordered.length - 1;
@@ -211,7 +214,7 @@ export function buildDailySchedule({ date, settings, taskCandidates = [], busyBl
         }
       }
     }
-    if (remaining > 0) unscheduled.push({ questId: candidate.id, reason: "insufficient_time", remainingMinutes: remaining });
+    if (remaining > 0) unscheduled.push({ questId: candidate.id, taskMetadata: { ...candidate }, reason: "insufficient_time", remainingMinutes: remaining });
     else satisfiedDependencies.add(candidate.id);
   }
   return normalizeSchedule({ ...shell, timeConfigured: true, blocks, unscheduled });

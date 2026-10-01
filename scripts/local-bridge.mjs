@@ -485,11 +485,12 @@ function applyDiscardedUnits(tasks, schedule) {
   const discardedUnits = new Map();
   for (const item of schedule?.discardedBlocks || []) {
     if (!item?.questId) continue;
-    discardedUnits.set(item.questId, (discardedUnits.get(item.questId) || 0) + (Number.isInteger(item.units) ? item.units : 1));
+    const minutes = Number.isFinite(item.workMinutes) && item.workMinutes > 0 ? item.workMinutes : (Number.isInteger(item.units) ? item.units : 1) * 50;
+    discardedUnits.set(item.questId, (discardedUnits.get(item.questId) || 0) + minutes);
   }
   return tasks.map((task) => {
     const units = discardedUnits.get(task.id) || 0;
-    return units ? { ...task, remainingMinutes: Math.max(0, task.remainingMinutes - (units * 50)) } : task;
+    return units ? { ...task, remainingMinutes: Math.max(0, task.remainingMinutes - units) } : task;
   }).filter((task) => task.remainingMinutes > 0);
 }
 async function syncQuestFromScheduleBlockReport(activityDate, schedule, reportResult) {
@@ -557,17 +558,31 @@ async function rebuildSchedule(activityDate) {
   const taskMap = new Map();
   for (const task of [...briefingTasks, ...inboxTasks, ...routineTasks]) taskMap.set(task.id, task);
   let carryoverCount = 0;
+  const carriedIds = new Set();
   for (const task of carryoverCandidates) {
-    if (taskMap.has(task.id)) continue;
+    if (task.sourceKind === "routine" || taskMap.has(task.id)) continue;
     taskMap.set(task.id, task);
     carryoverCount += 1;
+    carriedIds.add(task.id);
   }
   const tasks = applyDiscardedUnits([...taskMap.values()], existingSchedule);
   const completedQuestIds = board.quests.filter((quest) => (quest?.state || quest?.status) === "completed").map((quest) => quest.id).filter((id) => typeof id === "string");
+  const existingByQuest = new Map();
+  for (const block of existingSchedule?.blocks || []) {
+    if (block.type !== "focus" || !block.questId) continue;
+    const blocks = existingByQuest.get(block.questId) || [];
+    blocks.push(block);
+    existingByQuest.set(block.questId, blocks);
+  }
+  for (const [id, blocks] of existingByQuest) {
+    if (blocks.every(block => TERMINAL_BLOCK_STATUSES.has(block.status)) && !(existingSchedule.unscheduled || []).some(item => item.questId === id && item.remainingMinutes > 0)) completedQuestIds.push(id);
+  }
+  const activeTaskIds = new Set(tasks.map(task => task.id));
+  carryoverCount = [...carriedIds].filter(id => activeTaskIds.has(id) && !completedQuestIds.includes(id)).length;
   const calendarResult = await readCalendarBusyBlocks(activityDate);
   const coverage = calendarResult.calendar.state === "connected" ? "connected" : "attention";
   const generated = buildDailySchedule({ date: activityDate, settings, taskCandidates: tasks, busyBlocks: calendarResult.busyBlocks, lockedBlocks: retainedScheduleBlocks(existingSchedule, generatedAt), completedQuestIds, startAt: generatedAt, generatedAt });
-  const boardQuestIds = new Set(board.quests.map((quest) => quest?.id).filter((id) => typeof id === "string"));
+  const boardQuestIds = new Set([...board.quests.map((quest) => quest?.id), ...tasks.map(task => task.id), ...existingByQuest.keys()].filter((id) => typeof id === "string"));
   const scheduleWithTerminals = settings.timeConfigured ? generated : preserveTodoOrder(existingSchedule, generated, boardQuestIds);
   return saveSchedule(DATA_DIR, activityDate, {
     ...scheduleWithTerminals,

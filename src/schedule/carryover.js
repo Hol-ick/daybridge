@@ -6,6 +6,7 @@ function positiveMinutes(value, fallback = 0) {
 }
 
 function blockMinutes(block, todoMode) {
+  if (positiveMinutes(block.workMinutes)) return Number(block.workMinutes);
   if (todoMode) return 25;
   const start = Date.parse(block?.startAt || "");
   const end = Date.parse(block?.endAt || "");
@@ -34,12 +35,23 @@ export function carryoverTaskCandidates(schedule) {
   if (!schedule || !Array.isArray(schedule.blocks)) return [];
   const todoMode = schedule.mode === "todo" || schedule.timeConfigured === false;
   const entries = new Map();
+  const groups = new Map();
+  for (const block of schedule.blocks) {
+    if (block?.type !== "focus" || !taskIdFor(block)) continue;
+    const id = taskIdFor(block);
+    const group = groups.get(id) || [];
+    group.push(block);
+    groups.set(id, group);
+  }
+  const completed = new Set([...groups].filter(([id, blocks]) => blocks.every(block => block.status === "completed")
+    && !(schedule.unscheduled || []).some(item => item.questId === id && positiveMinutes(item.remainingMinutes))).map(([id]) => id));
 
   for (const block of schedule.blocks) {
     if (block?.type !== "focus" || !CARRYOVER_STATUSES.has(block.status)) continue;
     const id = taskIdFor(block);
     if (!id) continue;
     const existing = entries.get(id) || {
+      ...(block.taskMetadata || {}),
       id,
       title: typeof block.title === "string" && block.title.trim() ? block.title.trim() : id,
       priority: ["must", "should", "could"].includes(block.priority) ? block.priority : "should",
@@ -59,10 +71,11 @@ export function carryoverTaskCandidates(schedule) {
     const remainingMinutes = positiveMinutes(item?.remainingMinutes);
     if (!id || !remainingMinutes) continue;
     const existing = entries.get(id) || {
+      ...(item.taskMetadata || {}),
       id,
-      title: id,
-      priority: "should",
-      sourceKind: "briefing",
+      title: item.taskMetadata?.title || id,
+      priority: item.taskMetadata?.priority || "should",
+      sourceKind: item.taskMetadata?.sourceKind || "briefing",
       state: "ready",
       remainingMinutes: 0,
     };
@@ -81,11 +94,12 @@ export function carryoverTaskCandidates(schedule) {
     durationMinutes: Math.max(5, entry.remainingMinutes),
     currentAction: entry.title,
     steps: [],
-    dependsOn: [],
-    execution: "independent",
-    carryoverCount: 1,
-    sourceLabel: "전날 미완료 일정",
-    sourcePath: `daybridge://carryover/${schedule.date || "unknown"}`,
+    dependsOn: Array.isArray(entry.dependsOn) ? entry.dependsOn : [],
+    completedDependencies: (Array.isArray(entry.dependsOn) ? entry.dependsOn : []).filter(id => completed.has(id) || (Array.isArray(entry.completedDependencies) && entry.completedDependencies.includes(id))),
+    execution: entry.execution === "sequential" ? "sequential" : "independent",
+    carryoverCount: (Number.isInteger(entry.carryoverCount) && entry.carryoverCount >= 0 ? entry.carryoverCount : 0) + 1,
+    carryoverSourceDate: entry.carryoverSourceDate || schedule.date,
+    sourceLabel: entry.sourceLabel || "전날 미완료 일정",
+    sourcePath: entry.sourcePath || `daybridge://carryover/${schedule.date || "unknown"}`,
   }));
 }
-
