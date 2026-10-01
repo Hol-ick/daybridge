@@ -6,6 +6,9 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "moduleResolution": "Bundler",
+    "allowJs": true,
+    "checkJs": true,
+    "jsx": "react-jsx",
     "allowImportingTsExtensions": false,
     "verbatimModuleSyntax": true,
     "noEmit": true,
@@ -14,5 +17,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.mjs"]
 }

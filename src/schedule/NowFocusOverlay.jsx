@@ -7,12 +7,14 @@ import DailyDefaultsEditor from "./DailyDefaultsEditor.jsx";
 import { DEFAULT_MEALS } from "./settings-contract.js";
 import { recordRuntimeEvent } from "../runtime-log.js";
 
+/** @param {Date | string | number | undefined} value */
 function asDate(value) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/** @param {Date | string | number | undefined} value */
 function formatTime(value) {
   const date = asDate(value);
   if (!date) return "";
@@ -24,6 +26,7 @@ function formatTime(value) {
   }).format(date);
 }
 
+/** @param {import("./ui-types").NowFocus | null | undefined} nowFocus */
 function getFocusBlock(nowFocus) {
   if (!nowFocus) return null;
   if (Object.hasOwn(nowFocus, "block")) return nowFocus.block;
@@ -31,6 +34,7 @@ function getFocusBlock(nowFocus) {
   return nowFocus;
 }
 
+/** @param {import("./ui-types").UiSchedule | null | undefined} schedule */
 function getScheduleBlocks(schedule) {
   const direct = schedule?.blocks ?? schedule?.timeline ?? [];
   const focus = schedule?.focusBlocks ?? [];
@@ -46,6 +50,7 @@ function getScheduleBlocks(schedule) {
   });
 }
 
+/** @param {Partial<import("./ui-types").UiBlock> | null | undefined} block */
 function scheduleBlockKind(block) {
   const kind = block?.kind ?? block?.type ?? block?.blockType;
   if (kind === "busy" || kind === "calendar") return "busy";
@@ -53,6 +58,7 @@ function scheduleBlockKind(block) {
   return "focus";
 }
 
+/** @param {Partial<import("./ui-types").UiBlock> | null | undefined} block */
 function scheduleBlockTitle(block) {
   const kind = scheduleBlockKind(block);
   if (kind === "busy") return "일정 중";
@@ -61,6 +67,7 @@ function scheduleBlockTitle(block) {
 }
 
 const BLOCK_STATUS_CYCLE = ["planned", "in_progress", "completed", "deferred"];
+/** @type {Record<string, string>} */
 const BLOCK_STATUS_LABELS = {
   planned: "미완료",
   in_progress: "진행 중",
@@ -83,6 +90,7 @@ const OVERLAY_EMPTY_LIST_HEIGHT = 62;
 // so reserve only the additional height it needs beyond the normal toolbar.
 const OVERLAY_MANUAL_FORM_EXTRA_HEIGHT = 8;
 
+/** @param {number} blockCount @param {boolean} [trashVisible] @param {boolean} [taskOpen] */
 function expandedOverlayHeight(blockCount, trashVisible = false, taskOpen = false) {
   const listHeight = blockCount
     ? blockCount * OVERLAY_CARD_HEIGHT + Math.max(0, blockCount - 1) * OVERLAY_CARD_GAP
@@ -95,18 +103,21 @@ function expandedOverlayHeight(blockCount, trashVisible = false, taskOpen = fals
   );
 }
 
+/** @param {string | undefined} status */
 function blockStatusLabel(status) {
-  return BLOCK_STATUS_LABELS[status] || BLOCK_STATUS_LABELS.planned;
+  return BLOCK_STATUS_LABELS[status || "planned"] || BLOCK_STATUS_LABELS.planned;
 }
 
+/** @param {string | undefined} status */
 function nextBlockStatus(status) {
-  const current = BLOCK_STATUS_CYCLE.indexOf(status);
+  const current = BLOCK_STATUS_CYCLE.indexOf(status || "");
   return BLOCK_STATUS_CYCLE[(current + 1 + BLOCK_STATUS_CYCLE.length) % BLOCK_STATUS_CYCLE.length];
 }
 
+/** @param {import("react").HTMLAttributes<HTMLElement>} props */
 function OverlayTitle({ children, className = "", ...props }) {
-  const viewportRef = useRef(null);
-  const trackRef = useRef(null);
+  const viewportRef = useRef(/** @type {HTMLElement | null} */ (null));
+  const trackRef = useRef(/** @type {HTMLSpanElement | null} */ (null));
   const [marqueeDistance, setMarqueeDistance] = useState(0);
 
   useEffect(() => {
@@ -141,6 +152,7 @@ function OverlayTitle({ children, className = "", ...props }) {
   );
 }
 
+/** @param {import("./ui-types").ScheduleItemProps} props */
 function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, onStatusChange, onScheduleDragStart, onKeyboardMove, draggingBlockId, dropTargetId, dropPosition, swapRole, swapDirection, suppressClickRef }) {
   const kind = scheduleBlockKind(block);
   const status = block?.status;
@@ -152,7 +164,7 @@ function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, o
   // also send an open card to the discard target.
   const draggable = actionable && (typeof onMove === "function" || canDiscard);
   const clickable = kind === "focus" && typeof onStatusChange === "function";
-  const handleKeyDown = (event) => {
+  const handleKeyDown = (/** @type {import("react").KeyboardEvent<HTMLLIElement>} */ event) => {
     if (draggable && ["ArrowUp", "ArrowDown"].includes(event.key)) {
       event.preventDefault();
       onKeyboardMove?.(block.id, event.key);
@@ -160,17 +172,17 @@ function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, o
     }
     if (clickable && ["Enter", " "].includes(event.key)) {
       event.preventDefault();
-      onStatusChange(block.id, nextBlockStatus(status));
+      onStatusChange?.(block.id, nextBlockStatus(status));
     }
   };
-  const handleClick = (event) => {
+  const handleClick = (/** @type {import("react").MouseEvent<HTMLLIElement>} */ event) => {
     if (!clickable) return;
     if (suppressClickRef.current) {
       event.preventDefault();
       suppressClickRef.current = false;
       return;
     }
-    onStatusChange(block.id, nextBlockStatus(status));
+    onStatusChange?.(block.id, nextBlockStatus(status));
   };
 
   return (
@@ -209,16 +221,19 @@ const THEME_PRESETS = [
   { id: "violet", label: "바이올렛", accent: "#dd8aff" },
 ];
 
+/** @type {Record<import("./types").MealKey, string>} */
 const MEAL_LABELS = { breakfast: "아침시간", lunch: "점심시간", dinner: "저녁시간" };
 
+/** @param {import("./ui-types").SettingsProps} props */
 export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading, scheduleSettings, onScheduleSettingsChange, scheduleSettingsLoading, appearance, onAppearanceChange, storageDirectory, onStorageDirectoryChange, storageDirectoryLoading, notice = "" }) {
+  /** @type {import("./ui-types").SettingsDraft} */
   const settings = scheduleSettings || { dayStart: "", dayEnd: "", timeConfigured: false, breaks: [], meals: DEFAULT_MEALS };
-  const meals = settings.meals || Object.fromEntries(Object.entries(DEFAULT_MEALS).map(([key, meal]) => [key, { ...meal, enabled: false }]));
+  const meals = settings.meals || { breakfast: {...DEFAULT_MEALS.breakfast, enabled: false}, lunch: {...DEFAULT_MEALS.lunch, enabled: false}, dinner: {...DEFAULT_MEALS.dinner, enabled: false} };
   const [activeTab, setActiveTab] = useState("schedule");
   const [closing, setClosing] = useState(false);
   const requestClose = () => { if (closing) return; setClosing(true); window.setTimeout(() => onClose?.(), 180); };
-  const updateSettings = (patch) => onScheduleSettingsChange?.({ ...settings, ...patch });
-  const updateMeal = (key, patch) => {
+  const updateSettings = (/** @type {Partial<import("./ui-types").SettingsDraft>} */ patch) => onScheduleSettingsChange?.({ ...settings, ...patch });
+  const updateMeal = (/** @type {import("./types").MealKey} */ key, /** @type {Partial<import("./types").Meal>} */ patch) => {
     const nextMeals = { ...meals, [key]: { ...meals[key], ...patch } };
     updateSettings({ meals: nextMeals, breaks: Object.values(nextMeals).filter((item) => item.enabled).map(({ start, end, label }) => ({ start, end, label })) });
   };
@@ -260,7 +275,7 @@ export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefresh
                 <span className={styles.settingsSectionLabel}>식사 시간</span>
                 <small className={styles.settingsHint}>활성화된 시간은 작업 배치에서 자동으로 비워 둡니다.</small>
                 {!settings.meals && settings.breaks?.length ? <small className={styles.settingsHint}>휴식: {settings.breaks.map(item => `${item.label} ${item.start}–${item.end}`).join(", ")}</small> : null}
-                {Object.keys(DEFAULT_MEALS).map((key) => <div className={styles.mealSettingRow} key={key}>
+                {(/** @type {import("./types").MealKey[]} */ (Object.keys(DEFAULT_MEALS))).map((key) => <div className={styles.mealSettingRow} key={key}>
                   <label className={styles.settingsCheckbox}><span><strong>{MEAL_LABELS[key]}</strong><small>필요할 때 켜세요</small></span><input className={styles.settingsToggleInput} type="checkbox" checked={meals[key].enabled === true} onChange={(event) => updateMeal(key, { enabled: event.target.checked })} /><span className={styles.settingsToggleTrack} aria-hidden="true" /></label>
                   <div className={styles.settingsRow}><label className={styles.settingsField}><span>시작</span><input type="time" disabled={!meals[key].enabled} value={meals[key].start ?? DEFAULT_MEALS[key].start} onChange={(event) => updateMeal(key, { start: event.target.value })} /></label><label className={styles.settingsField}><span>종료</span><input type="time" disabled={!meals[key].enabled} value={meals[key].end ?? DEFAULT_MEALS[key].end} onChange={(event) => updateMeal(key, { end: event.target.value })} /></label></div>
                 </div>)}
@@ -303,22 +318,23 @@ export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefresh
  * A deliberately quiet, always-visible surface for the desktop corner.
  * It owns no timer or state: the host decides which block is current.
  */
+/** @param {import("./ui-types").OverlayProps} props */
 export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false, scheduleSettings = {}, onScheduleSettingsChange, scheduleSettingsLoading = false, appearance = {}, onAppearanceChange, notice = "", storageDirectory = "", onStorageDirectoryChange, storageDirectoryLoading = false, magnetPulse = false }) {
-  const dragRef = useRef({ point: null, inputType: null, cleanup: null, suppressClick: false });
-  const pointerDragRef = useRef({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null });
+  const dragRef = useRef(/** @type {{point: {x: number, y: number} | null, inputType: string | null, cleanup: (() => void) | null, suppressClick: boolean}} */ ({ point: null, inputType: null, cleanup: null, suppressClick: false }));
+  const pointerDragRef = useRef(/** @type {import("./ui-types").PointerDragState} */ ({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null }));
   const suppressCardClickRef = useRef(false);
   const collapsePendingRef = useRef(false);
   const settingsWasOpenRef = useRef(false);
-  const swapTimerRef = useRef(null);
-  const flipRectsRef = useRef(new Map());
-  const flipAnimationsRef = useRef(new Set());
+  const swapTimerRef = useRef(/** @type {number | null} */ (null));
+  const flipRectsRef = useRef(/** @type {Map<string, DOMRect>} */ (new Map()));
+  const flipAnimationsRef = useRef(/** @type {Set<Animation>} */ (new Set()));
   const flipReadyRef = useRef(false);
   const [draggingBlockId, setDraggingBlockId] = useState("");
   const [dropTargetId, setDropTargetId] = useState("");
   const [dropPosition, setDropPosition] = useState("");
-  const [dragPreview, setDragPreview] = useState(null);
+  const [dragPreview, setDragPreview] = useState(/** @type {import("./ui-types").DragPreview | null} */ (null));
   const [trashActive, setTrashActive] = useState(false);
-  const [swapState, setSwapState] = useState(null);
+  const [swapState, setSwapState] = useState(/** @type {{sourceId: string, targetId: string, direction: string} | null} */ (null));
   const [taskOpen, setTaskOpen] = useState(false);
   const [taskResetSignal, setTaskResetSignal] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -350,7 +366,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   // order. Completed history stays in the expanded list, but it must never be
   // promoted back into the compact widget as if it were the current task.
   const todoSummaryBlock = blocks.find((item) => scheduleBlockKind(item) === "focus" && item?.status === "in_progress")
-    ?? blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status));
+    ?? blocks.find((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status || ""));
   const summaryTitle = todoListMode
     ? (todoSummaryBlock ? scheduleBlockTitle(todoSummaryBlock) : "남은 일정이 없습니다.")
     : idle ? workdayCountdown.label : title;
@@ -431,8 +447,8 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     }
   }, [onCloseSettings, settingsOpen]);
 
-  const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status)), [blocks]);
-  const findDropTarget = (clientX, clientY, sourceId = "") => {
+  const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status || "")), [blocks]);
+  const findDropTarget = (/** @type {number} */ clientX, /** @type {number} */ clientY, sourceId = "") => {
     const element = document.elementFromPoint(clientX, clientY);
     const node = element instanceof Element ? element : null;
     const trash = node?.closest('[data-testid="now-focus-overlay-trash"]');
@@ -448,7 +464,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
         const card = document.querySelector(`[data-block-id="${CSS.escape(item.id)}"]`);
         return card instanceof HTMLElement ? { card, id: item.id, rect: card.getBoundingClientRect() } : null;
       })
-      .filter(Boolean);
+      .filter(item => item !== null);
     const directCard = node?.closest("[data-block-id]");
     const directId = directCard?.getAttribute("data-block-id") || "";
     if (directCard instanceof HTMLElement && directId !== sourceId && cards.some((item) => item.id === directId)) {
@@ -475,7 +491,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     setDragPreview(null);
     setTrashActive(false);
   };
-  const updateDragPreview = (event, state) => {
+  const updateDragPreview = (/** @type {import("./ui-types").NativeDragEvent} */ event, /** @type {import("./ui-types").PointerDragState} */ state) => {
     const surface = document.querySelector('[data-testid="now-focus-overlay-surface"]');
     const surfaceRect = surface?.getBoundingClientRect();
     if (!surfaceRect || !state.block) return;
@@ -487,7 +503,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       height: state.height,
     });
   };
-  const handleScheduleDragMove = (event) => {
+  const handleScheduleDragMove = (/** @type {import("./ui-types").NativeDragEvent} */ event) => {
     const state = pointerDragRef.current;
     const inputType = event.type.startsWith("pointer") ? "pointer" : "mouse";
     if (!state.blockId || state.inputType !== inputType || (inputType === "pointer" && state.pointerId !== event.pointerId)) return;
@@ -517,7 +533,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       : "";
     setDropPosition(nextPosition);
   };
-  const handleScheduleDragEnd = async (event) => {
+  const handleScheduleDragEnd = async (/** @type {import("./ui-types").NativeDragEvent} */ event) => {
     const state = pointerDragRef.current;
     const inputType = event.type.startsWith("pointer") ? "pointer" : "mouse";
     if (!state.blockId || state.inputType !== inputType || (inputType === "pointer" && state.pointerId !== event.pointerId)) return;
@@ -530,30 +546,30 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     const shouldMove = state.started && Boolean(targetItem && onMoveBlock);
     const shouldDiscard = state.started && Boolean(target.trash && onDiscardBlock);
     if (state.started) suppressCardClickRef.current = true;
-    if (shouldMove) {
+    if (shouldMove && targetItem) {
       if (swapTimerRef.current) window.clearTimeout(swapTimerRef.current);
       setSwapState({ sourceId, targetId: targetItem.id, direction: position });
       swapTimerRef.current = window.setTimeout(() => setSwapState(null), 460);
     }
     clearPointerDrag();
-    if (shouldDiscard) await onDiscardBlock(sourceId);
-    else if (shouldMove) await onMoveBlock(sourceId, targetItem.id, position);
+    if (shouldDiscard) await onDiscardBlock?.(sourceId);
+    else if (shouldMove && targetItem) await onMoveBlock?.(sourceId, targetItem.id, position);
     window.setTimeout(() => { suppressCardClickRef.current = false; }, 0);
   };
-  const handleScheduleDragStart = (event, item) => {
+  const handleScheduleDragStart = (/** @type {import("./ui-types").DragEvent} */ event, /** @type {import("./ui-types").UiBlock} */ item) => {
     if ((!onMoveBlock && !onDiscardBlock) || event.button !== 0 || pointerDragRef.current.blockId) return;
     const inputType = event.type.startsWith("pointer") ? "pointer" : "mouse";
     event.stopPropagation();
     event.preventDefault();
     suppressCardClickRef.current = false;
-    try { if (inputType === "pointer") event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* pointer capture is optional */ }
+    try { if (inputType === "pointer" && typeof event.pointerId === "number") event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* pointer capture is optional */ }
     const moveEvent = inputType === "pointer" ? "pointermove" : "mousemove";
     const endEvent = inputType === "pointer" ? "pointerup" : "mouseup";
     const cancelEvent = inputType === "pointer" ? "pointercancel" : "mouseleave";
     const element = event.currentTarget instanceof Element ? event.currentTarget : null;
     const rect = element?.getBoundingClientRect();
-    const move = (moveEventValue) => handleScheduleDragMove(moveEventValue);
-    const end = (endEventValue) => handleScheduleDragEnd(endEventValue);
+    const move = (/** @type {import("./ui-types").NativeDragEvent} */ moveEventValue) => handleScheduleDragMove(moveEventValue);
+    const end = (/** @type {import("./ui-types").NativeDragEvent} */ endEventValue) => handleScheduleDragEnd(endEventValue);
     document.addEventListener(moveEvent, move, { passive: false });
     document.addEventListener(endEvent, end, { once: true });
     document.addEventListener(cancelEvent, end, { once: true });
@@ -562,7 +578,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       block: item,
       element,
       inputType,
-      pointerId: inputType === "pointer" ? event.pointerId : null,
+      pointerId: inputType === "pointer" ? event.pointerId ?? null : null,
       startX: event.clientX,
       startY: event.clientY,
       offsetX: rect ? event.clientX - rect.left : 0,
@@ -577,7 +593,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       },
     };
   };
-  const handleKeyboardMove = async (sourceId, key) => {
+  const handleKeyboardMove = async (/** @type {string} */ sourceId, /** @type {string} */ key) => {
     const index = movableBlocks.findIndex((item) => item.id === sourceId);
     if (index < 0) return;
     const target = movableBlocks[index + (key === "ArrowUp" ? -1 : 1)];
@@ -591,7 +607,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     void setOverlayInteractionRegion({ height: OVERLAY_COLLAPSED_HEIGHT }).catch(() => false);
   };
 
-  const setExpandedMode = (next) => {
+  const setExpandedMode = (/** @type {boolean} */ next) => {
     if (settingsOpen) {
       if (!next) onCloseSettings?.();
       return;
@@ -631,7 +647,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     if (!expanded || settingsOpen) return undefined;
     const collapse = () => setExpandedMode(false);
     const handleWindowBlur = () => collapse();
-    const handleOutsidePointer = (event) => {
+    const handleOutsidePointer = (/** @type {PointerEvent} */ event) => {
       const target = event.target instanceof Element ? event.target : null;
       if (!target?.closest('[data-testid="now-focus-overlay-surface"]')) collapse();
     };
@@ -643,7 +659,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     };
   }, [expanded, settingsOpen, taskOpen]);
 
-  const handlePointerDown = (event) => {
+  const handlePointerDown = (/** @type {import("./ui-types").DragEvent} */ event) => {
     if (dragRef.current.point) return;
     window.getSelection?.()?.removeAllRanges();
     const target = event.target instanceof Element ? event.target : null;
@@ -666,7 +682,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       state.inputType = null;
       state.cleanup = null;
     };
-    const handleMove = (moveEvent) => {
+    const handleMove = (/** @type {MouseEvent} */ moveEvent) => {
       if (!state.point || Math.hypot(moveEvent.clientX - state.point.x, moveEvent.clientY - state.point.y) < 4) return;
       cleanup();
       state.suppressClick = true;
@@ -687,7 +703,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     }
   };
 
-  const handleToggleExpanded = (event) => {
+  const handleToggleExpanded = (/** @type {import("react").MouseEvent<HTMLButtonElement>} */ event) => {
     if (dragRef.current.suppressClick) {
       event.preventDefault();
       event.stopPropagation();
@@ -697,7 +713,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     setExpandedMode(!expanded);
   };
 
-  const handleSurfaceTransitionEnd = (event) => {
+  const handleSurfaceTransitionEnd = (/** @type {import("react").TransitionEvent<HTMLDivElement>} */ event) => {
     if (event.target !== event.currentTarget || event.propertyName !== "height") return;
     finishCollapse();
   };

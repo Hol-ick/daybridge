@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import styles from "./ManualTaskForm.module.css";
 
+/** @param {{onSubmit?: (input: {title: string}) => unknown | Promise<unknown>, compact?: boolean, iconOnly?: boolean, onOpenChange?: (open: boolean) => void, resetSignal?: number}} props */
 export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = false, onOpenChange, resetSignal = 0 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -19,7 +20,7 @@ export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = f
     close();
   }, [resetSignal]);
 
-  const submit = async (event) => {
+  const submit = async (/** @type {import("react").SubmitEvent<HTMLFormElement>} */ event) => {
     event.preventDefault();
     const clean = title.trim();
     if (!clean || submitting || !onSubmit) return;

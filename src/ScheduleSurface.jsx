@@ -6,7 +6,6 @@ import { bindOverlayMagnet, currentSurface, openDashboardSettings, placeOverlayI
 import Item from "./todometer/components/Item.jsx";
 import NowFocusOverlay, { OverlaySettingsModal } from "./schedule/NowFocusOverlay.jsx";
 import ScheduleDashboard from "./schedule/ScheduleDashboard.jsx";
-import DailyDefaultsEditor from "./schedule/DailyDefaultsEditor.jsx";
 import { resolveActivityDate } from "./schedule/activity-date.js";
 import { recordRuntimeEvent } from "./runtime-log.js";
 import styles from "./ScheduleSurface.module.css";
@@ -33,17 +32,24 @@ function initialAppearance() {
   } catch { return { ...DEFAULT_APPEARANCE }; }
 }
 
+/** @param {unknown} error */
+function errorMessage(error) { return error instanceof Error ? error.message : String(error); }
+/** @param {unknown} error */
+function errorStatus(error) { return error && typeof error === "object" && "status" in error ? error.status : undefined; }
+/** @param {unknown} error */
+function errorCode(error) { return error && typeof error === "object" && "code" in error ? error.code : undefined; }
+
+/** @param {Response} response */
 async function readJson(response) {
   if (!response.ok) {
     const result = await response.json().catch(() => ({}));
-    const error = new Error(result.error || `bridge request failed (${response.status})`);
-    error.status = response.status;
-    error.code = result.code;
+    const error = Object.assign(new Error(result.error || `bridge request failed (${response.status})`), {status: response.status, code: result.code});
     throw error;
   }
   return response.json();
 }
 
+/** @param {string} date @returns {import("./schedule/ui-types").UiSchedule} */
 function emptyTodoSchedule(date) {
   return {
     schemaVersion: 1,
@@ -62,8 +68,8 @@ export default function ScheduleSurface() {
   const { board, expandedQuestId } = useAppState();
   const { toggleQuest, refresh } = useAppActions();
   const [surface] = useState(currentSurface);
-  const [schedule, setSchedule] = useState(null);
-  const [nowFocus, setNowFocus] = useState(null);
+  const [schedule, setSchedule] = useState(/** @type {import("./schedule/ui-types").UiSchedule | null} */ (null));
+  const [nowFocus, setNowFocus] = useState(/** @type {import("./schedule/ui-types").NowFocus | null} */ (null));
   const [calendarCoverage, setCalendarCoverage] = useState("attention");
   const [calendarConnection, setCalendarConnection] = useState({ state: "attention", reason: "status_pending" });
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -71,10 +77,10 @@ export default function ScheduleSurface() {
   const [privateMode, setPrivateMode] = useState(initialPrivateMode);
   const [notice, setNotice] = useState("");
   const [refreshingWidget, setRefreshingWidget] = useState(false);
-  const [dailyDefaultsDraft, setDailyDefaultsDraft] = useState([]);
+  const [dailyDefaultsDraft, setDailyDefaultsDraft] = useState(/** @type {import("./schedule/types").Routine[]} */ ([]));
   const [dailyDefaultsLoaded, setDailyDefaultsLoaded] = useState(false);
   const [dailyDefaultsLoading, setDailyDefaultsLoading] = useState(false);
-  const [scheduleSettingsDraft, setScheduleSettingsDraft] = useState(DEFAULT_SCHEDULE_SETTINGS);
+  const [scheduleSettingsDraft, setScheduleSettingsDraft] = useState(/** @type {import("./schedule/ui-types").SettingsDraft} */ (DEFAULT_SCHEDULE_SETTINGS));
   const [scheduleSettingsLoaded, setScheduleSettingsLoaded] = useState(false);
   const [scheduleSettingsLoading, setScheduleSettingsLoading] = useState(false);
   const [appearance, setAppearance] = useState(initialAppearance);
@@ -103,15 +109,15 @@ export default function ScheduleSurface() {
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       setCalendarCoverage(result.schedule?.calendar?.coverage || "attention");
-      if (!quiet || rebuild) recordRuntimeEvent("schedule_load_success", { date: requestDate, rebuild, blocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.length : 0, focusBlocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.filter((block) => block?.type === "focus").length : 0, nowFocus: result.nowFocus?.state || "none" });
+      if (!quiet || rebuild) recordRuntimeEvent("schedule_load_success", { date: requestDate, rebuild, blocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.length : 0, focusBlocks: Array.isArray(result.schedule?.blocks) ? result.schedule.blocks.filter((/** @type {import("./schedule/ui-types").UiBlock} */ block) => block?.type === "focus").length : 0, nowFocus: result.nowFocus?.state || "none" });
       if (!quiet) setNotice(rebuild ? savedNotice("오늘 남은 시간을 다시 배치했어요", result) : "");
       return result;
     } catch (error) {
-      recordRuntimeEvent("schedule_load_error", { date: requestDate, rebuild, error: error?.message || String(error) });
+      recordRuntimeEvent("schedule_load_error", { date: requestDate, rebuild, error: errorMessage(error) });
       // A date with no board is a normal empty-todo state, not a reason to
       // retain yesterday's cards. Retaining them made their status requests
       // target today's missing board and appear to ignore card clicks.
-      if (error?.status === 404) {
+      if (errorStatus(error) === 404) {
         setSchedule(emptyTodoSchedule(requestDate));
         setNowFocus({ state: "todo_list", block: null, nextFocus: null });
         setCalendarCoverage("attention");
@@ -124,7 +130,7 @@ export default function ScheduleSurface() {
     }
   }, [activityDate]);
 
-  const addManualTask = useCallback(async ({ title }) => {
+  const addManualTask = useCallback(async (/** @type {{title: string}} */ { title }) => {
     try {
       const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/quests/manual`, {
         method: "POST",
@@ -138,8 +144,8 @@ export default function ScheduleSurface() {
       setNotice(savedNotice(`${title}을 오늘 할 일에 추가했어요`, result));
       return true;
     } catch (error) {
-      recordRuntimeEvent("manual_task_add_error", { date: activityDate, title, error: error?.message || String(error) });
-      setNotice(error?.status === 400
+      recordRuntimeEvent("manual_task_add_error", { date: activityDate, title, error: errorMessage(error) });
+      setNotice(errorStatus(error) === 400
         ? "작업을 추가하지 못했어요. 제목을 확인해 주세요"
         : "작업 저장을 확인하지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요");
       return false;
@@ -154,7 +160,7 @@ export default function ScheduleSurface() {
       if (!quiet) recordRuntimeEvent("calendar_status", { state: result.calendar?.state, reason: result.calendar?.reason });
       return result.calendar;
     } catch (error) {
-      recordRuntimeEvent("calendar_status_error", { error: error?.message || String(error) });
+      recordRuntimeEvent("calendar_status_error", { error: errorMessage(error) });
       if (!quiet) setNotice("캘린더 연결 상태를 확인하지 못했어요");
       return null;
     }
@@ -170,7 +176,7 @@ export default function ScheduleSurface() {
       setDailyDefaultsLoaded(true);
       return true;
     } catch (error) {
-      recordRuntimeEvent("daily_defaults_load_error", { error: error?.message || String(error), surface });
+      recordRuntimeEvent("daily_defaults_load_error", { error: errorMessage(error), surface });
       setNotice("매일 기본 일정을 불러오지 못했어요");
       return false;
     } finally {
@@ -186,8 +192,8 @@ export default function ScheduleSurface() {
       setScheduleSettingsLoaded(true);
       return true;
     } catch (error) {
-      recordRuntimeEvent("schedule_settings_load_error", { error: error?.message || String(error), surface });
-      if (error.code === "invalid_settings") {
+      recordRuntimeEvent("schedule_settings_load_error", { error: errorMessage(error), surface });
+      if (errorCode(error) === "invalid_settings") {
         setScheduleSettingsLoaded(true);
         setNotice("저장된 시간 설정을 확인해 주세요. 올바른 값으로 저장하면 다시 사용할 수 있어요");
       } else setNotice("시간 설정을 불러오지 못했어요");
@@ -203,7 +209,7 @@ export default function ScheduleSurface() {
       setStorageDirectoryLoaded(true);
       return true;
     } catch (error) {
-      recordRuntimeEvent("storage_location_load_error", { error: error?.message || String(error), surface });
+      recordRuntimeEvent("storage_location_load_error", { error: errorMessage(error), surface });
       setNotice("로컬 폴더 경로를 불러오지 못했어요");
       return false;
     } finally { setStorageDirectoryLoading(false); }
@@ -228,13 +234,14 @@ export default function ScheduleSurface() {
       if (!storageDirectoryLoaded) void loadStorageLocation();
     };
     consumeOpenRequest();
+    /** @type {(() => void) | undefined} */
     let unlisten;
     let disposed = false;
     if (isTauri()) {
       void listen("daybridge:open-settings", () => consumeOpenRequest()).then((stopListening) => {
         if (disposed) stopListening();
         else unlisten = stopListening;
-      }).catch((error) => recordRuntimeEvent("settings_listener_error", { error: error?.message || String(error) }));
+      }).catch((error) => recordRuntimeEvent("settings_listener_error", { error: errorMessage(error) }));
     }
     const timer = window.setInterval(consumeOpenRequest, 200);
     const stop = window.setTimeout(() => window.clearInterval(timer), 3_000);
@@ -245,7 +252,7 @@ export default function ScheduleSurface() {
     return () => window.clearInterval(interval);
   }, [loadSchedule]);
   useEffect(() => {
-    const syncPrivacyMode = (event) => {
+    const syncPrivacyMode = (/** @type {StorageEvent} */ event) => {
       if (event.key === OVERLAY_PRIVACY_KEY) setPrivateMode(event.newValue === "true");
     };
     window.addEventListener("storage", syncPrivacyMode);
@@ -260,7 +267,7 @@ export default function ScheduleSurface() {
         await invoke("show_overlay");
       } catch (error) {
         if (!disposed) {
-          recordRuntimeEvent("overlay_visibility_check_error", { error: error?.message || String(error) });
+          recordRuntimeEvent("overlay_visibility_check_error", { error: errorMessage(error) });
         }
       }
     };
@@ -279,7 +286,9 @@ export default function ScheduleSurface() {
   useEffect(() => {
     if (surface !== "overlay") return undefined;
     let disposed = false;
+    /** @type {(() => void) | undefined} */
     let cleanup;
+    /** @type {number | null} */
     let pulseTimer = null;
     const pulseOnSnap = () => {
       if (disposed) return;
@@ -304,7 +313,7 @@ export default function ScheduleSurface() {
     };
   }, [surface]);
 
-  const reportBlock = useCallback(async (blockId, status) => {
+  const reportBlock = useCallback(async (/** @type {string} */ blockId, /** @type {string} */ status) => {
     const displayedDate = typeof schedule?.date === "string" ? schedule.date : "";
     // The midnight refresh and the user's click can overlap. Never send an
     // action for a card rendered from a different day's schedule.
@@ -332,13 +341,13 @@ export default function ScheduleSurface() {
       void refresh();
       return true;
     } catch (error) {
-      recordRuntimeEvent("schedule_block_report_error", { date: activityDate, blockId, status, error: error?.message || String(error) });
+      recordRuntimeEvent("schedule_block_report_error", { date: activityDate, blockId, status, error: errorMessage(error) });
       setNotice("진행 상태를 저장하지 못했어요");
       return false;
     }
   }, [activityDate, loadSchedule, refresh, schedule]);
 
-  const moveBlock = useCallback(async (blockId, targetBlockId, position) => {
+  const moveBlock = useCallback(async (/** @type {string} */ blockId, /** @type {string} */ targetBlockId, /** @type {"before" | "after"} */ position) => {
     try {
       const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/schedule/block-move`, {
         method: "POST",
@@ -352,13 +361,13 @@ export default function ScheduleSurface() {
       void refresh();
       return true;
     } catch (error) {
-      recordRuntimeEvent("schedule_block_move_error", { date: activityDate, blockId, targetBlockId, position, error: error?.message || String(error) });
+      recordRuntimeEvent("schedule_block_move_error", { date: activityDate, blockId, targetBlockId, position, error: errorMessage(error) });
       setNotice("목록 안에서만 순서를 바꿀 수 있어요");
       return false;
     }
   }, [activityDate, refresh]);
 
-  const discardBlock = useCallback(async (blockId) => {
+  const discardBlock = useCallback(async (/** @type {string} */ blockId) => {
     const discardedBlock = Array.isArray(schedule?.blocks) ? schedule.blocks.find((block) => block?.id === blockId) : null;
     const title = discardedBlock?.title || discardedBlock?.scheduleTitle || discardedBlock?.displayTitle || "제목 없음";
     try {
@@ -374,7 +383,7 @@ export default function ScheduleSurface() {
       void refresh();
       return true;
     } catch (error) {
-      recordRuntimeEvent("schedule_block_discard_error", { date: activityDate, title, error: error?.message || String(error) });
+      recordRuntimeEvent("schedule_block_discard_error", { date: activityDate, title, error: errorMessage(error) });
       setNotice("이 작업을 폐기하지 못했어요");
       return false;
     }
@@ -406,7 +415,7 @@ export default function ScheduleSurface() {
       recordRuntimeEvent("overlay_manual_refresh", { source: "settings", surface });
       setNotice("위젯을 새로고침했어요");
     } catch (error) {
-      recordRuntimeEvent("overlay_manual_refresh_error", { source: "settings", surface, error: error?.message || String(error) });
+      recordRuntimeEvent("overlay_manual_refresh_error", { source: "settings", surface, error: errorMessage(error) });
       setNotice("위젯을 새로고침하지 못했어요");
     } finally {
       setRefreshingWidget(false);
@@ -431,7 +440,7 @@ export default function ScheduleSurface() {
     } catch { setNotice("캘린더 연결을 시작하지 못했어요"); }
   }, [loadCalendarStatus]);
 
-  const saveSettings = useCallback(async (event) => {
+  const saveSettings = useCallback(async (/** @type {import("react").SubmitEvent<HTMLFormElement>} */ event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const nextPrivateMode = form.get("privateOverlay") === "on";
@@ -471,8 +480,8 @@ export default function ScheduleSurface() {
       }
       setNotice(savedNotice("설정을 저장했어요", result));
     } catch (error) {
-      recordRuntimeEvent("daily_defaults_save_error", { error: error?.message || String(error), surface });
-      setNotice(error instanceof TypeError || error.code === "invalid_settings" ? error.message : "설정을 저장하지 못했어요");
+      recordRuntimeEvent("daily_defaults_save_error", { error: errorMessage(error), surface });
+      setNotice(error instanceof TypeError || errorCode(error) === "invalid_settings" ? errorMessage(error) : "설정을 저장하지 못했어요");
     }
   }, [activityDate, dailyDefaultsDraft, dailyDefaultsLoaded, loadSchedule, scheduleSettingsDraft, storageDirectoryDraft, surface]);
 

@@ -6,6 +6,7 @@ const STATES = new Set(["ready", "in_progress", "deferred", "blocked", "complete
 const BLOCK_TYPES = new Set(["focus", "busy", "buffer"]);
 
 const SCHEDULE_TITLE_LIMIT = 32;
+/** @type {Array<[RegExp, string]>} */
 const SCHEDULE_TITLE_RULES = [
   [/^\s*리눅스(?:\s|$)/i, "리눅스 학습"],
   [/(?:supabase.*(?:스키마|백업)|(?:스키마|백업).*supabase)/i, "Supabase 백업 확인"],
@@ -22,6 +23,7 @@ const SCHEDULE_TITLE_RULES = [
   [/(?:일일 보고서|closeout)/i, "일일 보고서 정리"],
 ];
 
+/** @param {unknown} value */
 function cleanScheduleText(value) {
   return String(value || "")
     .replace(/\s+/g, " ")
@@ -34,6 +36,7 @@ function cleanScheduleText(value) {
  * The original quest remains available on the board; only the schedule
  * boundary receives this compact, privacy-safe label.
  */
+/** @param {string | {scheduleTitle?: string, displayTitle?: string, title?: string} | null | undefined} questOrTitle */
 export function toScheduleTitle(questOrTitle) {
   const explicit = typeof questOrTitle === "object" && questOrTitle !== null
     ? questOrTitle.scheduleTitle || questOrTitle.displayTitle || questOrTitle.title
@@ -56,10 +59,12 @@ export function toScheduleTitle(questOrTitle) {
   return `${compact.slice(0, SCHEDULE_TITLE_LIMIT - 1).trimEnd()}…`;
 }
 
+/** @param {unknown} value @returns {value is number} */
 function positiveInteger(value) {
-  return Number.isInteger(value) && value > 0;
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
+/** @param {unknown} value @returns {string[]} */
 function safeSourceRefs(value) {
   return (Array.isArray(value) ? value : [])
     .filter((reference) => typeof reference === "string" && reference.trim())
@@ -67,6 +72,7 @@ function safeSourceRefs(value) {
     .filter((reference) => !/(?:\b[A-Z]:[\\/]|\\\\)/i.test(reference));
 }
 
+/** @param {unknown} value @param {string} field */
 function blockTime(value, field) {
   if (typeof value !== "string" || !KST_ISO_PATTERN.test(value) || Number.isNaN(Date.parse(value))) {
     throw new TypeError(`${field} must be a Korea-time ISO timestamp (+09:00)`);
@@ -74,6 +80,7 @@ function blockTime(value, field) {
   return Date.parse(value);
 }
 
+/** @param {import("./types").ScheduleBlock} raw @returns {import("./types").ScheduleBlock} */
 function cloneBlock(raw, allowUntimedFocus = false) {
   if (!raw || typeof raw !== "object" || typeof raw.id !== "string" || !raw.id.trim()) {
     throw new TypeError("Each schedule block needs a stable id");
@@ -91,12 +98,12 @@ function cloneBlock(raw, allowUntimedFocus = false) {
   return { ...raw, id: raw.id.trim(), startAt: raw.startAt, endAt: raw.endAt, locked: Boolean(raw.locked) };
 }
 
+/** @param {import("./types").TaskCandidateInput | null | undefined} quest @returns {import("./types").TaskCandidate | null} */
 export function toTaskCandidate(quest) {
   if (!quest || typeof quest !== "object") return null;
   const id = typeof quest.id === "string" ? quest.id.trim() : "";
-  const rawTitle = typeof (quest.scheduleTitle || quest.displayTitle || quest.title) === "string"
-    ? (quest.scheduleTitle || quest.displayTitle || quest.title).trim()
-    : "";
+  const titleInput = quest.scheduleTitle || quest.displayTitle || quest.title;
+  const rawTitle = typeof titleInput === "string" ? titleInput.trim() : "";
   const title = rawTitle ? toScheduleTitle(quest) : "";
   const state = quest.state || quest.status || "ready";
   const focusUnits = Number(quest.focusUnits ?? quest.focus_units);
@@ -112,8 +119,8 @@ export function toTaskCandidate(quest) {
   return {
     id,
     title,
-    priority: PRIORITIES.has(quest.priority) ? quest.priority : "should",
-    state,
+    priority: /** @type {import("../types").QuestPriority} */ (quest.priority && PRIORITIES.has(quest.priority) ? quest.priority : "should"),
+    state: /** @type {import("../types").QuestState} */ (state),
     estimateMinutes,
     remainingMinutes: Math.min(remaining, estimateMinutes),
     dependsOn: dependencies,
@@ -124,32 +131,34 @@ export function toTaskCandidate(quest) {
     sourceRefs: safeSourceRefs(quest.sourceRefs),
     ...(safeSourceRefs([quest.sourcePath])[0] ? { sourcePath: safeSourceRefs([quest.sourcePath])[0] } : {}),
     ...(typeof quest.sourceLabel === "string" ? { sourceLabel: quest.sourceLabel.slice(0, 80) } : {}),
-    ...(Number.isInteger(quest.carryoverCount) && quest.carryoverCount >= 0 ? { carryoverCount: quest.carryoverCount } : {}),
+    ...(typeof quest.carryoverCount === "number" && Number.isInteger(quest.carryoverCount) && quest.carryoverCount >= 0 ? { carryoverCount: quest.carryoverCount } : {}),
     ...(DATE_PATTERN.test(quest.carryoverSourceDate || "") ? { carryoverSourceDate: quest.carryoverSourceDate } : {}),
   };
 }
 
+/** @param {{date?: string, generatedAt?: string}} [options] @returns {import("./types").DailySchedule} */
 export function createScheduleShell({ date, generatedAt } = {}) {
-  if (!DATE_PATTERN.test(date || "")) throw new TypeError("DailySchedule needs a YYYY-MM-DD date");
+  if (typeof date !== "string" || !DATE_PATTERN.test(date)) throw new TypeError("DailySchedule needs a YYYY-MM-DD date");
   const created = generatedAt || `${date}T00:00:00+09:00`;
   blockTime(created, "generatedAt");
   return { schemaVersion: 1, date, timezone: KST, generatedAt: created, blocks: [], unscheduled: [] };
 }
 
+/** @param {import("./types").ScheduleInput | undefined} rawSchedule @returns {import("./types").DailySchedule} */
 export function normalizeSchedule(rawSchedule) {
   const shell = createScheduleShell(rawSchedule);
   if (rawSchedule?.timezone && rawSchedule.timezone !== KST) throw new TypeError("DailySchedule timezone must be Asia/Seoul");
   const allowUntimedFocus = rawSchedule?.mode === "todo" || rawSchedule?.timeConfigured === false;
   const blocks = (Array.isArray(rawSchedule?.blocks) ? rawSchedule.blocks : []).map((block) => cloneBlock(block, allowUntimedFocus));
-  const timedBlocks = blocks.filter((block) => typeof block.startAt === "string" && typeof block.endAt === "string");
+  const timedBlocks = blocks.filter(isTimedBlock);
   for (const block of timedBlocks) {
     if (!block.startAt.startsWith(`${shell.date}T`) || !block.endAt.startsWith(`${shell.date}T`)) {
       throw new RangeError("Schedule blocks must stay within the schedule date");
     }
   }
   blocks.sort((left, right) => {
-    const leftStart = Date.parse(left.startAt);
-    const rightStart = Date.parse(right.startAt);
+    const leftStart = Date.parse(left.startAt || "");
+    const rightStart = Date.parse(right.startAt || "");
     if (Number.isNaN(leftStart) && Number.isNaN(rightStart)) return (left.order ?? 0) - (right.order ?? 0);
     if (Number.isNaN(leftStart)) return 1;
     if (Number.isNaN(rightStart)) return -1;
@@ -161,14 +170,23 @@ export function normalizeSchedule(rawSchedule) {
       throw new RangeError(`DailySchedule blocks overlap: ${timedBlocks[index - 1].id} and ${timedBlocks[index].id}`);
     }
   }
-  const unscheduled = (Array.isArray(rawSchedule?.unscheduled) ? rawSchedule.unscheduled : []).map((item) => ({
-    questId: String(item?.questId || ""),
-    reason: String(item?.reason || "unknown"),
-    remainingMinutes: Number(item?.remainingMinutes || 0),
-  })).filter((item) => item.questId && positiveInteger(item.remainingMinutes));
+  const unscheduled = (Array.isArray(rawSchedule?.unscheduled) ? rawSchedule.unscheduled : []).map((item) => {
+    const taskMetadata = item.taskMetadata ? toTaskCandidate(item.taskMetadata) : null;
+    return {
+      questId: String(item?.questId || ""),
+      reason: String(item?.reason || "unknown"),
+      remainingMinutes: Number(item?.remainingMinutes || 0),
+      ...(taskMetadata ? { taskMetadata } : {}),
+    };
+  }).filter((item) => item.questId && positiveInteger(item.remainingMinutes));
   return { ...shell, ...rawSchedule, timezone: KST, blocks, unscheduled };
 }
 
+/** @param {unknown} value @returns {value is string} */
 export function isKstIso(value) {
   return typeof value === "string" && KST_ISO_PATTERN.test(value) && !Number.isNaN(Date.parse(value));
+}
+/** @param {import("./types").ScheduleBlock} block @returns {block is import("./types").TimedBlock} */
+export function isTimedBlock(block) {
+  return typeof block.startAt === "string" && typeof block.endAt === "string";
 }

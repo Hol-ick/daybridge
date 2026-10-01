@@ -1,13 +1,22 @@
 const BASE_URL = "http://127.0.0.1:39393";
 const MUTATIONS = new Set(["/api/report", "/api/quests/manual", "/api/schedule/rebuild", "/api/schedule-settings", "/api/daily-defaults", "/api/schedule/block-report", "/api/schedule/block-move", "/api/schedule/block-discard", "/api/calendar/codex-busy"]);
 
+/** @template T
+ * @param {(signal: AbortSignal) => Promise<T> | T} operation
+ * @param {AbortSignal | null | undefined} signal
+ * @param {number} timeoutMs
+ * @returns {Promise<T>}
+ */
 async function bounded(operation, signal, timeoutMs) {
   if (signal?.aborted) throw signal.reason || new DOMException("Cancelled", "AbortError");
   const controller = new AbortController();
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
   let timer;
-  let abort;
+  /** @type {() => void} */
+  let abort = () => {};
+  /** @type {Promise<never>} */
   const interrupted = new Promise((_, reject) => {
-    abort = () => { const reason = signal.reason || new DOMException("Cancelled", "AbortError"); controller.abort(reason); reject(reason); };
+    abort = () => { const reason = signal?.reason || new DOMException("Cancelled", "AbortError"); controller.abort(reason); reject(reason); };
     if (signal?.aborted) { abort(); return; }
     signal?.addEventListener("abort", abort, { once: true });
     timer = setTimeout(() => {
@@ -24,7 +33,12 @@ async function bounded(operation, signal, timeoutMs) {
   } finally { clearTimeout(timer); signal?.removeEventListener("abort", abort); }
 }
 
-export function createBridgeClient({ baseUrl = BASE_URL, fetchImpl = (...args) => fetch(...args), recoverBridge = async () => {}, timeoutMs = 5000 } = {}) {
+/** @typedef {Omit<RequestInit, "body"> & {body?: unknown, requestId?: string, retry?: boolean}} BridgeOptions */
+/** @type {typeof fetch} */
+const defaultFetch = (...args) => fetch(...args);
+/** @param {{baseUrl?: string, fetchImpl?: typeof fetch, recoverBridge?: () => Promise<unknown>, timeoutMs?: number}} [options] */
+export function createBridgeClient({ baseUrl = BASE_URL, fetchImpl = defaultFetch, recoverBridge = async () => {}, timeoutMs = 5000 } = {}) {
+  /** @param {string | URL} path @param {BridgeOptions} [options] @returns {Promise<Response>} */
   return async function request(path, { method = "GET", body, requestId, signal, headers, retry = true } = {}) {
     method = method.toUpperCase();
     const url = new URL(path, baseUrl);
@@ -44,10 +58,11 @@ export function createBridgeClient({ baseUrl = BASE_URL, fetchImpl = (...args) =
           return new Response([204, 205, 304].includes(response.status) ? null : text, { status: response.status, statusText: response.statusText, headers: response.headers });
         }, signal, timeoutMs);
       } catch (error) {
-        if (signal?.aborted || error?.name === "AbortError" || attempt + 1 >= attempts) throw error;
+        if (signal?.aborted || (error !== null && typeof error === "object" && "name" in error && error.name === "AbortError") || attempt + 1 >= attempts) throw error;
         await bounded(() => recoverBridge(), signal, timeoutMs);
       }
     }
+    throw new Error("Bridge request attempts exhausted");
   };
 }
 
@@ -56,6 +71,7 @@ export const bridgeRequest = createBridgeClient({ recoverBridge: async () => {
   if (isTauri()) await invoke("ensure_local_bridge");
 } });
 
+/** @param {string | URL} resource @param {BridgeOptions} [options] */
 export function fetchBridge(resource, options = {}) {
   const method = (options.method || "GET").toUpperCase();
   const path = new URL(resource, BASE_URL).pathname;
@@ -63,6 +79,7 @@ export function fetchBridge(resource, options = {}) {
   return bridgeRequest(resource, { ...options, method, requestId });
 }
 
+/** @param {string} message @param {{handoff?: {state?: string}} | null | undefined} result */
 export function savedNotice(message, result) {
   return result?.handoff?.state === "pending" ? `${message} · 로컬 저장 완료, 연결된 서비스로 전달 대기 중` : message;
 }

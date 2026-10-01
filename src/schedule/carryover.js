@@ -1,10 +1,12 @@
 const CARRYOVER_STATUSES = new Set(["planned", "in_progress", "deferred"]);
 
+/** @param {unknown} value @param {number} [fallback] */
 function positiveMinutes(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/** @param {import("./types").ScheduleBlock} block @param {boolean} todoMode */
 function blockMinutes(block, todoMode) {
   if (positiveMinutes(block.workMinutes)) return Number(block.workMinutes);
   if (todoMode) return 25;
@@ -15,6 +17,7 @@ function blockMinutes(block, todoMode) {
     : 50;
 }
 
+/** @param {import("./types").ScheduleBlock} block */
 function taskIdFor(block) {
   return typeof block?.questId === "string" && block.questId
     ? block.questId
@@ -23,6 +26,7 @@ function taskIdFor(block) {
       : "";
 }
 
+/** @param {string | undefined} state @returns {"ready" | "in_progress" | "deferred"} */
 function normalizedState(state) {
   return state === "in_progress" ? "in_progress" : state === "deferred" ? "deferred" : "ready";
 }
@@ -31,10 +35,13 @@ function normalizedState(state) {
  * Convert the previous day's still-open schedule units into candidates for the
  * next day's planner. Completed/skipped blocks never cross the date boundary.
  */
+/** @param {import("./types").ScheduleInput | null | undefined} schedule */
 export function carryoverTaskCandidates(schedule) {
   if (!schedule || !Array.isArray(schedule.blocks)) return [];
   const todoMode = schedule.mode === "todo" || schedule.timeConfigured === false;
+  /** @type {Map<string, import("./types").CarryoverCandidate>} */
   const entries = new Map();
+  /** @type {Map<string, import("./types").ScheduleBlock[]>} */
   const groups = new Map();
   for (const block of schedule.blocks) {
     if (block?.type !== "focus" || !taskIdFor(block)) continue;
@@ -47,14 +54,14 @@ export function carryoverTaskCandidates(schedule) {
     && !(schedule.unscheduled || []).some(item => item.questId === id && positiveMinutes(item.remainingMinutes))).map(([id]) => id));
 
   for (const block of schedule.blocks) {
-    if (block?.type !== "focus" || !CARRYOVER_STATUSES.has(block.status)) continue;
+    if (block?.type !== "focus" || !CARRYOVER_STATUSES.has(block.status || "")) continue;
     const id = taskIdFor(block);
     if (!id) continue;
     const existing = entries.get(id) || {
       ...(block.taskMetadata || {}),
       id,
       title: typeof block.title === "string" && block.title.trim() ? block.title.trim() : id,
-      priority: ["must", "should", "could"].includes(block.priority) ? block.priority : "should",
+      priority: ["must", "should", "could"].includes(block.priority || "") ? block.priority : "should",
       sourceKind: block.sourceKind === "routine" ? "routine" : block.sourceKind === "session" ? "session" : "briefing",
       state: "ready",
       remainingMinutes: 0,
@@ -97,7 +104,7 @@ export function carryoverTaskCandidates(schedule) {
     dependsOn: Array.isArray(entry.dependsOn) ? entry.dependsOn : [],
     completedDependencies: (Array.isArray(entry.dependsOn) ? entry.dependsOn : []).filter(id => completed.has(id) || (Array.isArray(entry.completedDependencies) && entry.completedDependencies.includes(id))),
     execution: entry.execution === "sequential" ? "sequential" : "independent",
-    carryoverCount: (Number.isInteger(entry.carryoverCount) && entry.carryoverCount >= 0 ? entry.carryoverCount : 0) + 1,
+    carryoverCount: (typeof entry.carryoverCount === "number" && Number.isInteger(entry.carryoverCount) && entry.carryoverCount >= 0 ? entry.carryoverCount : 0) + 1,
     carryoverSourceDate: entry.carryoverSourceDate || schedule.date,
     sourceLabel: entry.sourceLabel || "전날 미완료 일정",
     sourcePath: entry.sourcePath || `daybridge://carryover/${schedule.date || "unknown"}`,

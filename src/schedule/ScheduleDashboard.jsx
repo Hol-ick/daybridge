@@ -7,21 +7,25 @@ const TIME_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
   hour12: false,
 });
 
+/** @param {Date | string | number | undefined} value */
 function asDate(value) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/** @param {Date | string | number | undefined} value */
 function formatTime(value) {
   const date = asDate(value);
   return date ? TIME_FORMATTER.format(date) : "—";
 }
 
+/** @param {import("./ui-types").NowFocus | null | undefined} nowFocus */
 function getFocusBlock(nowFocus) {
   return nowFocus?.block ?? nowFocus?.focusBlock ?? nowFocus ?? null;
 }
 
+/** @param {import("./ui-types").UiSchedule | null | undefined} schedule */
 function normalizeBlocks(schedule) {
   const direct = schedule?.blocks ?? schedule?.timeline ?? [];
   const focus = schedule?.focusBlocks ?? [];
@@ -38,6 +42,7 @@ function normalizeBlocks(schedule) {
   });
 }
 
+/** @param {Partial<import("./ui-types").UiBlock> | null | undefined} block */
 function blockKind(block) {
   const kind = block?.kind ?? block?.type ?? block?.blockType;
   if (kind === "busy" || kind === "calendar") return "busy";
@@ -45,23 +50,27 @@ function blockKind(block) {
   return "focus";
 }
 
+/** @param {Partial<import("./ui-types").UiBlock> | null | undefined} block */
 function getBlockTitle(block) {
   if (blockKind(block) === "busy") return "일정";
   if (blockKind(block) === "buffer") return "여유 시간";
   return block?.displayTitle ?? block?.scheduleTitle ?? block?.questTitle ?? block?.taskTitle ?? block?.title ?? "집중 작업";
 }
 
+/** @param {import("./ui-types").UiSchedule | null | undefined} schedule */
 function getUnscheduledCount(schedule) {
-  if (Number.isFinite(schedule?.unscheduledCount)) return schedule.unscheduledCount;
+  if (schedule && typeof schedule.unscheduledCount === "number" && Number.isFinite(schedule.unscheduledCount)) return schedule.unscheduledCount;
   return Array.isArray(schedule?.unscheduled) ? schedule.unscheduled.length : 0;
 }
 
+/** @param {import("./ui-types").UiBlock} block @param {import("./ui-types").NowFocus | null | undefined} nowFocus */
 function isCurrentBlock(block, nowFocus) {
   const current = getFocusBlock(nowFocus);
   const currentId = current?.id ?? nowFocus?.blockId;
   return Boolean(currentId && block?.id === currentId);
 }
 
+/** @param {{block: import("./ui-types").UiBlock, nowFocus?: import("./ui-types").NowFocus | null, onOpenQuest?: (id: string) => void, onCompleteBlock?: (id: string) => void, onDeferBlock?: (id: string) => void, listMode?: boolean}} props */
 function TimelineBlock({ block, nowFocus, onOpenQuest, onCompleteBlock, onDeferBlock, listMode = false }) {
   const kind = blockKind(block);
   const current = isCurrentBlock(block, nowFocus);
@@ -76,12 +85,12 @@ function TimelineBlock({ block, nowFocus, onOpenQuest, onCompleteBlock, onDeferB
     if (kind === "focus" && onOpenQuest) onOpenQuest(questId);
   };
 
-  const handleComplete = (event) => {
+  const handleComplete = (/** @type {import("react").MouseEvent<HTMLButtonElement>} */ event) => {
     event.stopPropagation();
     if (blockId && onCompleteBlock) onCompleteBlock(blockId);
   };
 
-  const handleDefer = (event) => {
+  const handleDefer = (/** @type {import("react").MouseEvent<HTMLButtonElement>} */ event) => {
     event.stopPropagation();
     if (blockId && onDeferBlock) onDeferBlock(blockId);
   };
@@ -123,6 +132,7 @@ function TimelineBlock({ block, nowFocus, onOpenQuest, onCompleteBlock, onDeferB
  * The full management surface. The host passes already-derived schedule data
  * and retains ownership of loading, command handling and persistence.
  */
+/** @param {{schedule?: import("./ui-types").UiSchedule | null, nowFocus?: import("./ui-types").NowFocus | null, onOpenQuest?: (id: string) => void, onCompleteBlock?: (id: string) => void, onDeferBlock?: (id: string) => void, onOpenSettings?: () => void, calendarCoverage?: string | {state?: string}, calendarConnection?: {state: string, reason?: string}, onConnectCalendar?: () => void, onAddManualTask?: import("./ui-types").AddManualTask}} props */
 export default function ScheduleDashboard({
   schedule,
   nowFocus,
@@ -145,7 +155,7 @@ export default function ScheduleDashboard({
   const blocks = normalizeBlocks(schedule);
   const unscheduledCount = getUnscheduledCount(schedule);
   const scheduleLabel = listMode ? "오늘 할 일" : schedule?.label ?? schedule?.dateLabel ?? "오늘 시간표";
-  const coverageState = calendarConnection?.state ?? calendarCoverage?.state ?? calendarCoverage ?? "unknown";
+  const coverageState = calendarConnection?.state ?? (typeof calendarCoverage === "object" ? calendarCoverage.state : calendarCoverage) ?? "unknown";
   const coverageLabel = coverageState === "connected"
     ? "Google Calendar 연결됨"
     : coverageState === "needs_authorization"

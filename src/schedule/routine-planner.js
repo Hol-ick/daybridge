@@ -6,10 +6,14 @@ export const DEFAULT_ROUTINES = Object.freeze([
   Object.freeze({ id: "supplement", title: "영양제 먹기", estimateMinutes: 25, days: [0, 1, 2, 3, 4, 5, 6], category: "health" }),
 ]);
 
+/** @param {string} date */
 function weekday(date) { return new Date(`${date}T12:00:00+09:00`).getUTCDay(); }
+/** @param {unknown} value @param {number} [limit] */
 function clean(value, limit = 100) { return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit); }
+/** @param {unknown} value */
 function validMinutes(value) { const minutes = Number(value); return Number.isInteger(minutes) && (minutes === 25 || minutes === 50) ? minutes : null; }
 
+/** @param {Partial<import("./types").Routine>} raw @param {number} index @returns {(import("./types").TaskCandidate & {days: number[]}) | null} */
 function normalizeRoutine(raw, index) {
   const id = clean(raw?.id || `routine-${index + 1}`, 80).toLowerCase().replace(/[^a-z0-9가-힣]+/g, "-").replace(/^-|-$/g, "");
   const title = clean(raw?.title, 120);
@@ -20,10 +24,11 @@ function normalizeRoutine(raw, index) {
 }
 
 /** Turns the briefing board plus personal routine defaults into optional task candidates. */
+/** @param {{date?: string, board?: {quests?: Array<{title?: string}>}, routines?: readonly Partial<import("./types").Routine>[]}} [options] */
 export function buildRoutineCandidates({ date, board, routines = DEFAULT_ROUTINES } = {}) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) throw new TypeError("Routine planning needs a YYYY-MM-DD date");
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new TypeError("Routine planning needs a YYYY-MM-DD date");
   const titles = new Set((Array.isArray(board?.quests) ? board.quests : []).map((quest) => clean(quest?.title).toLowerCase()).filter(Boolean));
-  const selected = (Array.isArray(routines) ? routines : []).map(normalizeRoutine).filter(Boolean)
+  const selected = (Array.isArray(routines) ? routines : []).map(normalizeRoutine).filter(routine => routine !== null)
     .filter((routine) => routine.days.includes(weekday(date)))
     .filter((routine) => !titles.has(routine.title.toLowerCase()));
   // Keep the default list intentionally small; user-selected work always wins.

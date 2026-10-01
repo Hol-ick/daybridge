@@ -5,18 +5,20 @@ import { fetchBridge, savedNotice } from "./bridge-client.js";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
 const STORAGE_KEY = "daybridge.quest-board.v4";
-const AppContext = createContext(null);
+const AppContext = createContext(/** @type {import("./app-types").AppContextValue | null} */ (null));
 
+/** @param {import("./app-types").QuestInput} quest @returns {import("./app-types").UiQuest} */
 function normalizeQuest(quest) {
   const steps = Array.isArray(quest.steps) ? quest.steps.map((step, index) => ({ ...step, order: step.order ?? index + 1, dependsOn: step.dependsOn ?? step.depends_on ?? [] })) : [];
   const state = quest.state || (quest.status === "paused" ? "deferred" : quest.status === "not_started" ? "ready" : quest.status) || "ready";
-  return { priority: "should", kind: "execute", execution: "independent", dependsOn: [], carryoverCount: 0, reports: [], ...quest, state, status: state, steps, progress: { completed: steps.filter((step) => step.completed).length, total: steps.length } };
+  return { project: "", summary: "", firstStep: "", doneWhen: "", estimateMinutes: 15, sourceLabel: "", sourcePath: "", priority: "should", kind: "execute", execution: "independent", dependsOn: [], carryoverCount: 0, reports: [], ...quest, state, status: state, steps, progress: { completed: steps.filter((step) => step.completed).length, total: steps.length } };
 }
 
+/** @param {import("./app-types").UiBoard | null | undefined} board @returns {import("./app-types").UiBoard} */
 function normalizeBoard(board) {
   if (!board || !Array.isArray(board.quests)) return structuredClone(demoQuestBoard);
   const quests = board.quests.map(normalizeQuest);
-  return { schemaVersion: 2, ...board, missions: board.missions || [], quests };
+  return Object.assign({ schemaVersion: 2 }, board, { missions: board.missions || [], quests });
 }
 
 function loadStoredBoard() {
@@ -27,11 +29,15 @@ function loadStoredBoard() {
   return normalizeBoard(structuredClone(demoQuestBoard));
 }
 
+/** @param {import("./app-types").UiBoard} board */
 function persistBoard(board) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(board)); } catch { /* bridge remains usable */ } }
 function currentKstDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date()); }
+/** @param {import("./app-types").UiBoard} board @param {string} questId @param {(quest: import("./app-types").UiQuest) => import("./app-types").UiQuest} transform */
 function updateQuest(board, questId, transform) { return { ...board, quests: board.quests.map((quest) => quest.id === questId ? transform(normalizeQuest({ ...quest, steps: quest.steps.map((step) => ({ ...step })), reports: [...(quest.reports || [])] })) : quest) }; }
+/** @param {import("./app-types").UiStep[]} steps */
 function progressFor(steps) { return { completed: steps.filter((step) => step.completed).length, total: steps.length }; }
 
+/** @param {import("./app-types").AppState} state @param {import("./app-types").AppAction} action @returns {import("./app-types").AppState} */
 function reducer(state, action) {
   switch (action.type) {
     case "INIT": return { ...state, board: normalizeBoard(action.board), expandedQuestId: "" };
@@ -43,13 +49,19 @@ function reducer(state, action) {
   }
 }
 
-export function useAppState() { return useContext(AppContext).state; }
-export function useAppActions() { return useContext(AppContext).actions; }
-export function useAppNotice() { return useContext(AppContext).notice; }
+function useAppContext() {
+  const context = useContext(AppContext);
+  if (!context) throw new Error("Daybridge components require AppStateProvider");
+  return context;
+}
+export function useAppState() { return useAppContext().state; }
+export function useAppActions() { return useAppContext().actions; }
+export function useAppNotice() { return useAppContext().notice; }
 
 export function useQuestGroups() {
   const { board } = useAppState();
   return useMemo(() => {
+    /** @type {Record<"now" | "next" | "waiting" | "completed", import("./app-types").UiQuest[]>} */
     const groups = { now: [], next: [], waiting: [], completed: [] };
     for (const quest of board.quests) {
       if (quest.state === "completed") groups.completed.push(quest);
@@ -61,6 +73,7 @@ export function useQuestGroups() {
   }, [board]);
 }
 
+/** @param {{children: import("react").ReactNode}} props */
 export function AppStateProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, { board: loadStoredBoard(), expandedQuestId: "" });
   const [loading, setLoading] = useState(true);
@@ -68,8 +81,8 @@ export function AppStateProvider({ children }) {
   const boardRef = useRef(state.board);
   const reportQueueRef = useRef(Promise.resolve());
   const reportVersionRef = useRef(0);
-  const noticeTimerRef = useRef(null);
-  const showNotice = useCallback((message) => {
+  const noticeTimerRef = useRef(/** @type {number | null} */ (null));
+  const showNotice = useCallback((/** @type {string} */ message) => {
     setNotice(message);
     if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
     noticeTimerRef.current = window.setTimeout(() => setNotice(""), 2600);
@@ -95,7 +108,7 @@ export function AppStateProvider({ children }) {
       if (announce) showNotice("브리핑을 업데이트했어요");
       return true;
     } catch (error) {
-      recordRuntimeEvent("board_refresh_error", { date: requestDate, error: error?.message || String(error) });
+      recordRuntimeEvent("board_refresh_error", { date: requestDate, error: error instanceof Error ? error.message : String(error) });
       if (announce) showNotice("브리지를 확인할 수 없어요");
       return false;
     } finally {
@@ -105,11 +118,11 @@ export function AppStateProvider({ children }) {
   }, [showNotice]);
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const reportQuest = useCallback(({ questId, status, note, nextAction, steps }) => {
+  const reportQuest = useCallback((/** @type {import("./types").ProgressReportInput} */ { questId, status, note, nextAction, steps }) => {
     const nextBoard = updateQuest(boardRef.current, questId, (quest) => {
       const nextSteps = steps ? steps.map((step) => ({ ...step })) : quest.steps;
       const nextState = status === "not_started" ? "ready" : status === "paused" ? "deferred" : status;
-      return { ...quest, state: nextState, status, steps: nextSteps, progress: progressFor(nextSteps), currentAction: nextAction || quest.currentAction, updatedAt: new Date().toISOString(), reports: [...quest.reports, { id: crypto.randomUUID(), occurredAt: new Date().toISOString(), status, note, nextAction, source: "daybridge" }].slice(-20) };
+      return { ...quest, state: nextState, status, steps: nextSteps, progress: progressFor(nextSteps), currentAction: nextAction || quest.currentAction, updatedAt: new Date().toISOString(), reports: [...quest.reports, { id: crypto.randomUUID(), occurredAt: new Date().toISOString(), status, note, nextAction, source: /** @type {const} */ ("daybridge") }].slice(-20) };
     });
     boardRef.current = nextBoard;
     const questTitle = nextBoard.quests.find((item) => item.id === questId)?.title || "퀘스트";
@@ -137,7 +150,7 @@ export function AppStateProvider({ children }) {
     return reportQueueRef.current;
   }, [showNotice]);
 
-  const actions = useMemo(() => ({
+  const actions = useMemo(/** @returns {import("./app-types").AppActions} */ () => ({
     toggleQuest: (questId) => dispatch({ type: "TOGGLE_QUEST", questId }),
     refresh,
     addQuest: (text) => { const clean = text.trim(); if (!clean) return; const id = `manual-${crypto.randomUUID()}`; dispatch({ type: "ADD_QUEST", quest: normalizeQuest({ id, title: clean, project: "Widget capture", priority: "could", kind: "execute", execution: "independent", state: "ready", status: "ready", summary: "Captured from the Daybridge widget.", firstStep: clean, currentAction: clean, doneWhen: "The captured task is complete.", estimateMinutes: 15, missionId: `mission-${id}`, steps: [{ id: `${id}-step`, label: clean, completed: false }], sourceLabel: "Widget capture", sourcePath: "manual://widget" }) }); },

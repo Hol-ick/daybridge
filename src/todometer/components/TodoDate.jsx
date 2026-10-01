@@ -5,7 +5,7 @@ function TodoDate() {
   const { board } = useAppState();
   const date = new Date(`${board.activityDate}T00:00:00+09:00`);
   const parts = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", day: "numeric", month: "short", year: "numeric", weekday: "long" }).formatToParts(date);
-  const get = (type) => parts.find((part) => part.type === type)?.value ?? "";
+  const get = (/** @type {Intl.DateTimeFormatPartTypes} */ type) => parts.find((part) => part.type === type)?.value ?? "";
 
   return (
     <div className={styles.date}>

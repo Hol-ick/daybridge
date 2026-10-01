@@ -13,7 +13,9 @@ window.addEventListener("unhandledrejection", (event) => {
 });
 recordRuntimeEvent("webview_boot", { mode: import.meta.env.MODE });
 
-ReactDOM.createRoot(document.getElementById("root")).render(
+const root = document.getElementById("root");
+if (!root) throw new Error("Daybridge root element is missing");
+ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,

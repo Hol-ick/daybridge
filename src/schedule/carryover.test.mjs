@@ -70,6 +70,21 @@ test("a prerequisite completed on the source date remains satisfied after two ca
   }
 });
 
+test("time-constrained schedules retain unscheduled task identity and dependencies after serialization", () => {
+  const task = { id: "child", title: "fixture pending child", state: "ready", priority: "must", estimateMinutes: 75, remainingMinutes: 75, dependsOn: ["parent"], completedDependencies: ["parent"], execution: "sequential", sourceKind: "session", sourceRefs: ["daybridge://fixture/source"], sourcePath: "daybridge://fixture/task", sourceLabel: "fixture source" };
+  const first = buildDailySchedule({ date: "2099-01-02", settings: { dayStart: "09:00", dayEnd: "09:30", timeConfigured: true, bufferMinutes: 0, breaks: [] }, taskCandidates: [task] });
+  assert.equal(first.blocks.filter(block => block.type === "focus").length, 0);
+  const carried = carryoverTaskCandidates(JSON.parse(JSON.stringify(first)))[0];
+  assert.equal(carried.title, task.title);
+  assert.equal(carried.remainingMinutes, 75);
+  assert.deepEqual(carried.dependsOn, ["parent"]);
+  assert.deepEqual(carried.completedDependencies, ["parent"]);
+  assert.deepEqual(carried.sourceRefs, task.sourceRefs);
+  assert.equal(carried.sourcePath, task.sourcePath);
+  const second = buildDailySchedule({ date: "2099-01-05", settings: { dayStart: "09:00", dayEnd: "11:00", timeConfigured: true, bufferMinutes: 0, breaks: [] }, taskCandidates: [carried] });
+  assert.equal(second.blocks.filter(block => block.type === "focus" && block.questId === task.id).reduce((minutes, block) => minutes + block.workMinutes, 0), 75);
+});
+
 test("todo carryover treats each remaining card as one lightweight task", () => {
   const candidates = carryoverTaskCandidates({
     date: "2026-09-08",

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAppActions, useAppState } from "../../AppContext.jsx";
 import styles from "./Item.module.css";
 
+/** @param {{quest: import("../../app-types").UiQuest}} props */
 function Item({ quest }) {
   const { toggleQuest, setQuestStatus, deferQuest, reportQuest } = useAppActions();
   const { expandedQuestId, board } = useAppState();
@@ -15,12 +16,14 @@ function Item({ quest }) {
   const total = quest.progress?.total ?? quest.steps.length;
   const progressLabel = blocked ? "응답 대기" : `${done}/${total} 완료`;
 
+  /** @param {import("../../app-types").UiStep} step */
   function isLocked(step) {
     if (quest.execution !== "sequential") return false;
     const dependencyIds = step.dependsOn || step.depends_on || [];
     return dependencyIds.some((dependencyId) => !quest.steps.find((item) => item.id === dependencyId)?.completed);
   }
 
+  /** @param {import("../../app-types").UiStep} step */
   function toggleStep(step) {
     if (isLocked(step)) return;
     const steps = quest.steps.map((current) => current.id === step.id ? { ...current, completed: !current.completed } : { ...current });

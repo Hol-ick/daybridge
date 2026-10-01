@@ -71,7 +71,8 @@ test("buildDailySchedule honors dependencies and reports work that cannot fit", 
   });
 
   assert.deepEqual(schedule.blocks.filter((block) => block.type === "focus").map((block) => block.questId), ["parent", "child"]);
-  assert.deepEqual(schedule.unscheduled, [{ questId: "later", reason: "insufficient_time", remainingMinutes: 25 }]);
+  assert.deepEqual(schedule.unscheduled.map(({ taskMetadata, ...entry }) => entry), [{ questId: "later", reason: "insufficient_time", remainingMinutes: 25 }]);
+  assert.equal(schedule.unscheduled[0].taskMetadata.id, "later");
 });
 
 test("buildDailySchedule brings a deferred carryover quest back into the next day's focus blocks", () => {
@@ -90,7 +91,8 @@ test("briefing quests always take precedence over optional routine blocks", () =
     taskCandidates: [routine, candidate("briefing-must", "must", 50)],
   });
   assert.deepEqual(schedule.blocks.filter((block) => block.type === "focus").map((block) => block.questId), ["briefing-must"]);
-  assert.deepEqual(schedule.unscheduled, [{ questId: "routine-linux", reason: "insufficient_time", remainingMinutes: 50 }]);
+  assert.deepEqual(schedule.unscheduled.map(({ taskMetadata, ...entry }) => entry), [{ questId: "routine-linux", reason: "insufficient_time", remainingMinutes: 50 }]);
+  assert.equal(schedule.unscheduled[0].taskMetadata.sourceKind, "routine");
 });
 
 test("buildDailySchedule does not place a dependent quest when its prerequisite could not be placed", () => {
@@ -101,10 +103,11 @@ test("buildDailySchedule does not place a dependent quest when its prerequisite 
   });
 
   assert.deepEqual(schedule.blocks.filter((block) => block.type === "focus"), []);
-  assert.deepEqual(schedule.unscheduled, [
+  assert.deepEqual(schedule.unscheduled.map(({ taskMetadata, ...entry }) => entry), [
     { questId: "parent", reason: "insufficient_time", remainingMinutes: 50 },
     { questId: "child", reason: "dependency_unmet", remainingMinutes: 25 },
   ]);
+  assert.deepEqual(schedule.unscheduled.find(entry => entry.questId === "child").taskMetadata.dependsOn, ["parent"]);
 });
 
 test("buildDailySchedule retains locked existing focus blocks and never overlaps them or busy time", () => {

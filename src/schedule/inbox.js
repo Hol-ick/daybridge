@@ -9,10 +9,12 @@ const CLOCK_PATTERN = /(?<!\d)(?:[01]\d|2[0-3]):[0-5]\d(?!\d)/;
 const SOURCE_REF_PATTERN = /^(?:maru|record|daybridge):\/\/[^\s|]+$/;
 const COLUMNS = ["id", "title", "focus_units", "remaining_units", "state", "priority", "execution", "depends_on", "first_action", "done_when", "source_refs"];
 
+/** @param {unknown} value */
 function unescapeCell(value) {
   return String(value || "").replace(/\\\|/g, "|").replace(/\\\\/g, "\\").trim();
 }
 
+/** @param {unknown} line */
 function splitRow(line) {
   let value = String(line || "").trim();
   if (value.startsWith("|")) value = value.slice(1);
@@ -33,11 +35,13 @@ function splitRow(line) {
   return cells;
 }
 
+/** @param {unknown} markdown */
 function parseFrontMatter(markdown) {
   const lines = String(markdown || "").replace(/^\uFEFF/, "").split(/\r?\n/);
   if (lines[0]?.trim() !== "---") return { metadata: null, bodyLines: lines, errors: ["front matter가 ---로 시작하지 않습니다."] };
   const closing = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
   if (closing < 0) return { metadata: null, bodyLines: lines, errors: ["front matter 종료 구분자가 없습니다."] };
+  /** @type {Record<string, string>} */
   const metadata = {};
   for (const line of lines.slice(1, closing)) {
     const separator = line.indexOf(":");
@@ -47,10 +51,12 @@ function parseFrontMatter(markdown) {
   return { metadata, bodyLines: lines.slice(closing + 1), errors: [] };
 }
 
+/** @param {unknown} value */
 function parseList(value) {
   return String(value || "").split(",").map((item) => unescapeCell(item)).map((item) => item.trim()).filter(Boolean);
 }
 
+/** @param {unknown} value @param {string} field @param {string[]} errors @param {number} rowNumber */
 function positiveUnits(value, field, errors, rowNumber) {
   const number = Number(value);
   if (!Number.isInteger(number) || number < 1 || number > 24) {
@@ -60,6 +66,7 @@ function positiveUnits(value, field, errors, rowNumber) {
   return number;
 }
 
+/** @param {Record<string, string>} row */
 function hasForbiddenTimeField(row) {
   return Object.keys(row).some((key) => ["start_time", "end_time", "startTime", "endTime", "time", "time_range"].includes(key));
 }
@@ -69,8 +76,10 @@ function hasForbiddenTimeField(row) {
  * The parser is intentionally strict: malformed rows are excluded rather
  * than silently becoming a schedule block.
  */
+/** @param {unknown} markdown @param {{date?: string | null}} [options] @returns {import("./types").InboxResult} */
 export function parseScheduleInboxMarkdown(markdown, { date = null } = {}) {
   const { metadata, bodyLines, errors } = parseFrontMatter(markdown);
+  /** @type {import("./types").InboxResult} */
   const result = { valid: errors.length === 0, date: metadata?.schedule_date || null, timezone: metadata?.timezone || null, updatedAt: metadata?.updated_at || null, tasks: [], excluded: [], warnings: [], errors: [...errors] };
   if (!metadata) return result;
   if (metadata.artifact_type !== INBOX_ARTIFACT) result.errors.push(`artifact_type이 ${INBOX_ARTIFACT}가 아닙니다.`);
@@ -109,6 +118,7 @@ export function parseScheduleInboxMarkdown(markdown, { date = null } = {}) {
       continue;
     }
     const row = Object.fromEntries(COLUMNS.map((column, columnIndex) => [column, unescapeCell(cells[columnIndex])]));
+    /** @type {string[]} */
     const rowErrors = [];
     if (!ID_PATTERN.test(row.id)) rowErrors.push("id가 소문자 kebab-case가 아닙니다.");
     if (!row.title || row.title.length > 500) rowErrors.push("title이 비어 있거나 너무 깁니다.");
@@ -124,7 +134,7 @@ export function parseScheduleInboxMarkdown(markdown, { date = null } = {}) {
     if (hasForbiddenTimeField(row)) rowErrors.push("고정 시각 필드는 허용하지 않습니다.");
     const sourceRefs = parseList(row.source_refs);
     if (sourceRefs.some((reference) => !SOURCE_REF_PATTERN.test(reference))) rowErrors.push("source_refs는 안전한 논리 경로만 허용합니다.");
-    if (rowErrors.length) {
+    if (rowErrors.length || focusUnits === null || remainingUnits === null) {
       result.excluded.push({ row: rowNumber, id: row.id || null, reason: rowErrors.join(" ") });
       continue;
     }
@@ -137,7 +147,7 @@ export function parseScheduleInboxMarkdown(markdown, { date = null } = {}) {
       priority: row.priority,
       state: row.state,
       status: row.state,
-      execution: row.execution,
+      execution: /** @type {"independent" | "sequential"} */ (row.execution),
       dependsOn: parseList(row.depends_on),
       focusUnits,
       remainingUnits,

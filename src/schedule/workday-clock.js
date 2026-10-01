@@ -1,3 +1,4 @@
+/** @type {Record<string, [number, number]>} */
 const WORKDAY_TIMES = {
   morningStart: [9, 0],
   lunchStart: [11, 30],
@@ -5,17 +6,20 @@ const WORKDAY_TIMES = {
   workdayEnd: [18, 0],
 };
 
+/** @param {Date | string | number} value */
 function asDate(value) {
   const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
+/** @param {Date} date @param {[number, number]} time */
 function atLocalTime(date, [hours, minutes]) {
   const target = new Date(date.getTime());
   target.setHours(hours, minutes, 0, 0);
   return target;
 }
 
+/** @param {number} totalMinutes */
 function formatDuration(totalMinutes) {
   const safeMinutes = Math.max(0, totalMinutes);
   const hours = Math.floor(safeMinutes / 60);
@@ -30,6 +34,7 @@ function formatDuration(totalMinutes) {
  * Lunch: 11:30 -> 13:00
  * Afternoon: 13:00 -> 18:00
  */
+/** @param {Date | string | number} value */
 export function getWorkdayCountdown(value) {
   const now = asDate(value);
   const boundaries = {

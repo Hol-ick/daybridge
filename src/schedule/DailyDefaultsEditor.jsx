@@ -1,10 +1,12 @@
 import styles from "./DailyDefaultsEditor.module.css";
 import { useState } from "react";
 
+/** @param {import("./types").Routine[]} items @param {string} id @param {Partial<import("./types").Routine>} patch */
 function updateItem(items, id, patch) {
   return items.map((item) => item.id === id ? { ...item, ...patch } : item);
 }
 
+/** @param {{value?: import("./types").Routine[], onChange?: (routines: import("./types").Routine[]) => void, loading?: boolean}} props */
 export default function DailyDefaultsEditor({ value = [], onChange, loading = false }) {
   const routines = Array.isArray(value) ? value : [];
   const [newTitle, setNewTitle] = useState("");

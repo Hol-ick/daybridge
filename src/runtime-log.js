@@ -3,6 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 const BRIDGE_URL = "http://127.0.0.1:39393";
 const MAX_EVENT_LENGTH = 80;
 
+/** @param {unknown} value */
 function eventName(value) {
   return String(value || "unknown")
     .replace(/[^a-zA-Z0-9_.:-]/g, "_")
@@ -14,6 +15,7 @@ function currentSurface() {
   return document.body?.dataset?.surface || new URLSearchParams(window.location.search).get("surface") || "unknown";
 }
 
+/** @param {unknown} details */
 function safeDetails(details) {
   if (!details || typeof details !== "object" || Array.isArray(details)) return {};
   return Object.fromEntries(Object.entries(details).slice(0, 20).map(([key, value]) => {
@@ -28,6 +30,7 @@ function safeDetails(details) {
  * local bridge log (browser/dev mode). Logging is best-effort and never blocks
  * the widget's UI or data flow.
  */
+/** @param {string} name @param {Record<string, unknown>} [details] */
 export function recordRuntimeEvent(name, details = {}) {
   const payload = {
     schemaVersion: 1,

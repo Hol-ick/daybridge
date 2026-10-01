@@ -5,6 +5,7 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
  * when the bridge was unavailable during startup, so never let that stale
  * value decide which schedule the widget requests.
  */
+/** @param {{activityDate?: string} | null | undefined} board @param {string} today */
 export function resolveActivityDate(board, today) {
   if (!DATE_PATTERN.test(today)) return today;
   return board?.activityDate === today ? board.activityDate : today;

@@ -4,6 +4,7 @@ import AddItemForm from "./AddItemForm.jsx";
 import Item from "./Item.jsx";
 import styles from "./ItemList.module.css";
 
+/** @param {{title: string, items: import("../../app-types").UiQuest[], group: string, defaultOpen?: boolean}} props */
 function Group({ title, items, group, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   if (!items.length) return null;

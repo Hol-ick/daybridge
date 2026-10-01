@@ -14,51 +14,64 @@ export const SCHEDULE_INPUT_ARTIFACT = ARTIFACT_TYPE;
 export const SCHEDULE_INPUT_SCHEMA_VERSION = "1.1";
 export const FOCUS_UNIT_MINUTES = 50;
 
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) { return value !== null && typeof value === "object" && !Array.isArray(value); }
+
+/** @param {unknown} value @param {number} [limit] */
 function text(value, limit = 240) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, limit).trim() : "";
 }
 
+/** @param {unknown} value @returns {unknown[]} */
 function list(value) {
   return Array.isArray(value) ? value : [];
 }
 
+/** @param {unknown} value */
 function uniqueStrings(value) {
-  return [...new Set(list(value).filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()))];
+  return [...new Set(list(value).filter((item) => typeof item === "string").map((item) => item.trim()).filter(Boolean))];
 }
 
+/** @param {unknown} value */
 function dateValue(value) {
-  return DATE_PATTERN.test(value || "") ? value : null;
+  return typeof value === "string" && DATE_PATTERN.test(value) ? value : null;
 }
 
+/** @param {unknown} value */
 function positiveInteger(value) {
-  return Number.isInteger(value) && value > 0;
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
+/** @param {unknown} value */
 function units(value) {
   const number = Number(value);
   return Number.isInteger(number) && number > 0 ? number : null;
 }
 
+/** @param {unknown} value */
 function normalizeState(value) {
   const raw = text(value, 40) || "ready";
   return LEGACY_STATES.get(raw) || (STATES.has(raw) ? raw : null);
 }
 
+/** @param {Record<string, unknown>} source */
 function normalizeCoverage(source) {
-  const raw = source?.coverage?.status || source?.coverage;
+  const raw = (isRecord(source.coverage) ? source.coverage.status : null) || source.coverage;
   if (raw === "aligned") return "complete";
   if (raw == null && (source?.quality === "aligned" || source?.record_quality === "aligned")) return "complete";
-  return COVERAGE.has(raw) ? raw : "attention";
+  return typeof raw === "string" && COVERAGE.has(raw) ? raw : "attention";
 }
 
+/** @param {Record<string, unknown>} raw @param {Record<string, unknown>} source */
 function sourceRefs(raw, source) {
   const refs = raw?.source_refs ?? raw?.sourceRefs ?? raw?.evidence_refs ?? raw?.evidenceRefs ?? source?.refs ?? source?.closeout_ref;
   const normalized = Array.isArray(refs) ? uniqueStrings(refs).map((item) => text(item, 240)) : [text(refs, 240)].filter(Boolean);
   return normalized.filter((reference) => !SECRET_PATTERN.test(reference) && !LOCAL_PATH_PATTERN.test(reference));
 }
 
+/** @param {unknown} raw @param {number} index @param {string} [reason] */
 function reviewItem(raw, index, reason = "needs_user_confirmation") {
-  const value = typeof raw === "string" ? { question: raw } : (raw && typeof raw === "object" ? raw : {});
+  const value = typeof raw === "string" ? { question: raw } : (isRecord(raw) ? raw : {});
   return {
     id: text(value.id || `review-${index + 1}`, 120),
     question: text(value.question || value.title || value.text, 240),
@@ -74,14 +87,19 @@ function reviewItem(raw, index, reason = "needs_user_confirmation") {
  * records are deliberately kept out of the executable queue. Fixed clock
  * times are calendar constraints, not quest fields.
  */
+/** @param {unknown} packet @param {{sourceDate?: string, targetDate?: string}} [options] */
 export function validateQuestPlan(packet, { sourceDate, targetDate } = {}) {
   const errors = [];
+  /** @type {string[]} */
   const warnings = [];
+  /** @type {Array<{id: string, title: string, reason: string, message: string, sourceRefs: string[]}>} */
   const excluded = [];
+  /** @type {ReturnType<typeof reviewItem>[]} */
   const reviewQueue = [];
+  /** @type {Array<Record<string, unknown> & {id: string, depends_on: string[]}>} */
   const accepted = [];
 
-  if (!packet || typeof packet !== "object" || Array.isArray(packet)) {
+  if (!isRecord(packet)) {
     return { valid: false, status: "rejected", source: {}, accepted, reviewQueue, excluded, warnings, errors: ["packet must be a JSON object"] };
   }
 
@@ -89,7 +107,7 @@ export function validateQuestPlan(packet, { sourceDate, targetDate } = {}) {
   const schemaVersion = text(packet.schema_version || packet.schemaVersion, 20) || "1.0";
   if (!SUPPORTED_SCHEMA_VERSIONS.has(schemaVersion)) errors.push(`unsupported schema_version: ${schemaVersion}`);
 
-  const source = packet.source && typeof packet.source === "object" ? packet.source : {};
+  const source = isRecord(packet.source) ? packet.source : {};
   const packetSourceDate = dateValue(packet.source_date || packet.sourceDate || packet.activity_date || packet.activityDate);
   const packetTargetDate = dateValue(packet.schedule_date || packet.scheduleDate || packet.target_date || packet.targetDate);
   if (sourceDate && packetSourceDate && sourceDate !== packetSourceDate) errors.push("source date does not match the requested source date");
@@ -108,11 +126,12 @@ export function validateQuestPlan(packet, { sourceDate, targetDate } = {}) {
   const rawQuests = list(packet.quests);
   const seenIds = new Set();
   for (let index = 0; index < rawQuests.length; index += 1) {
-    const raw = rawQuests[index];
+    const rawValue = rawQuests[index];
+    const raw = isRecord(rawValue) ? rawValue : {};
     const rawId = text(raw?.id || raw?.quest_id || raw?.questId, 120);
     const rawTitle = text(raw?.title || raw?.action || raw?.text, 120);
-    const reason = (code, message = code) => excluded.push({ id: rawId || `quest-${index + 1}`, title: rawTitle || "제목 없는 작업", reason: code, message, sourceRefs: sourceRefs(raw, source) });
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) { reason("invalid_quest", "quest must be an object"); continue; }
+    const reason = (/** @type {string} */ code, message = code) => excluded.push({ id: rawId || `quest-${index + 1}`, title: rawTitle || "제목 없는 작업", reason: code, message, sourceRefs: sourceRefs(raw, source) });
+    if (!isRecord(rawValue)) { reason("invalid_quest", "quest must be an object"); continue; }
     if (!rawId) { reason("missing_id", "stable quest id is required"); continue; }
     if (seenIds.has(rawId)) { reason("duplicate_id", "quest ids must be unique in a packet"); continue; }
     seenIds.add(rawId);
@@ -162,7 +181,7 @@ export function validateQuestPlan(packet, { sourceDate, targetDate } = {}) {
       execution,
       state,
       status: state,
-      priority: PRIORITIES.has(raw.priority) ? raw.priority : "should",
+      priority: typeof raw.priority === "string" && PRIORITIES.has(raw.priority) ? raw.priority : "should",
       depends_on: dependsOn,
       focus_units: focusUnits,
       remaining_units: remainingUnits,
@@ -172,7 +191,7 @@ export function validateQuestPlan(packet, { sourceDate, targetDate } = {}) {
     };
     if (schemaVersion !== "1.0" && !text(raw.first_action || raw.firstAction || raw.current_action || raw.currentAction, 240)) warnings.push(`${rawId} has no first_action; title will be used as the first action`);
     if (execution === "independent" && list(raw.steps).length > 1) warnings.push(`${rawId} has multiple steps but is independent; only the first executable step should be shown`);
-    if (execution === "sequential" && list(raw.steps).length > 1 && list(raw.steps).some((step) => !text(typeof step === "string" ? step : step?.label || step?.title || step?.action, 180))) { reason("invalid_step", "every sequential step needs a label"); continue; }
+    if (execution === "sequential" && list(raw.steps).length > 1 && list(raw.steps).some((step) => !text(typeof step === "string" ? step : isRecord(step) ? step.label || step.title || step.action : undefined, 180))) { reason("invalid_step", "every sequential step needs a label"); continue; }
     accepted.push(normalized);
   }
 

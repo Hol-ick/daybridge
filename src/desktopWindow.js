@@ -37,17 +37,17 @@ export function overlayInteractionRegion({ height = OVERLAY_COLLAPSED_HEIGHT, se
   };
 }
 
-function readOverlayPosition() {
-  try {
-    const value = JSON.parse(localStorage.getItem(OVERLAY_POSITION_KEY) || "null");
-    return Number.isFinite(value?.x) && Number.isFinite(value?.y) ? { x: value.x, y: value.y } : null;
-  } catch { return null; }
-}
-
+/** @typedef {{x: number, y: number}} Position
+ * @typedef {{width: number, height: number}} SurfaceSize
+ * @typedef {{workArea: {position: Position, size: SurfaceSize}}} WorkAreaMonitor
+ * @typedef {Position & SurfaceSize} InteractionRegion
+ */
+/** @param {Position} position */
 function rememberOverlayPosition(position) {
   try { localStorage.setItem(OVERLAY_POSITION_KEY, JSON.stringify({ x: Math.round(position.x), y: Math.round(position.y) })); } catch { /* position memory is optional */ }
 }
 
+/** @param {WorkAreaMonitor} monitor @param {SurfaceSize} size */
 function overlayBounds(monitor, size) {
   const minX = monitor.workArea.position.x + OVERLAY_EDGE_GAP;
   const minY = monitor.workArea.position.y + OVERLAY_EDGE_GAP;
@@ -56,6 +56,7 @@ function overlayBounds(monitor, size) {
   return { minX, minY, maxX: Math.max(minX, maxX), maxY: Math.max(minY, maxY) };
 }
 
+/** @param {Position} position @param {WorkAreaMonitor} monitor @param {SurfaceSize} size */
 export function nearestOverlayCorner(position, monitor, size) {
   const bounds = overlayBounds(monitor, size);
   const corners = [
@@ -110,6 +111,7 @@ export async function startOverlayDrag() {
 
 let activeOverlayRegion = overlayInteractionRegion();
 
+/** @param {Position} position @param {InteractionRegion} region */
 function shellPositionForVisiblePosition(position, region) {
   return {
     x: Math.round(position.x - region.x),
@@ -117,6 +119,7 @@ function shellPositionForVisiblePosition(position, region) {
   };
 }
 
+/** @param {Position} position @param {InteractionRegion} region */
 function visiblePositionForShellPosition(position, region) {
   return {
     x: Math.round(position.x + region.x),
@@ -170,9 +173,11 @@ export async function closeOverlaySettingsModal() {
   return true;
 }
 
+/** @param {{onSnap?: (result: {snapped: boolean, position: Position | null}) => void}} [options] */
 export async function bindOverlayMagnet({ onSnap } = {}) {
   if (!isTauri() || getCurrentWindow().label !== "overlay") return () => {};
   const windowHandle = getCurrentWindow();
+  /** @type {number | null} */
   let timer = null;
   let disposed = false;
   const scheduleSnap = () => {
