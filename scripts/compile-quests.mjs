@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { readJsonStrictSync as readJson, atomicWriteJsonSync as atomicWriteJson, StoreError } from "./storage/json-store.mjs";
+import { runStoreOperation } from "./storage/date-transaction.mjs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateQuestPlan, FOCUS_UNIT_MINUTES } from "../src/schedule/input-contract.js";
 
@@ -20,8 +22,6 @@ export function shiftDate(date, amount) { const value = new Date(`${date}T12:00:
 export function nextBusinessDay(date) { let candidate = shiftDate(date, 1); while ([0, 6].includes(new Date(`${candidate}T12:00:00+09:00`).getUTCDay())) candidate = shiftDate(candidate, 1); return candidate; }
 function previousBusinessDay(date) { let candidate = shiftDate(date, -1); while ([0, 6].includes(new Date(`${candidate}T12:00:00+09:00`).getUTCDay())) candidate = shiftDate(candidate, -1); return candidate; }
 function clean(value, limit = 360) { return String(value || "").replace(/```[^`]*```/g, "").replace(/!?\[[^\]]*\]\([^)]*\)/g, "").replace(EMAIL, "[email removed]").replace(PHONE, "[phone removed]").replace(SECRET_WORDS, "[sensitive value removed]").replace(LOCAL_PATH, "[local path]").replace(/\s+/g, " ").replace(/^(?:[-*+]\s+|\d+[.)]\s+)/, "").trim().slice(0, limit).trim(); }
-function readJson(path) { try { return JSON.parse(readFileSync(path, "utf8")); } catch { return null; } }
-function atomicWriteJson(path, value) { mkdirSync(dirname(path), { recursive: true }); const temporary = join(dirname(path), `.${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`); writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8"); renameSync(temporary, path); }
 function safeRef(kind, date, suffix = "") { return `${kind}://${date}${suffix ? `/${suffix}` : ""}`; }
 function normaliseKey(value) { return clean(value, 180).toLowerCase().replace(/[^a-z0-9가-힣]+/gi, "-").replace(/^-|-$/g, ""); }
 function stableId(prefix, ...parts) { return `${prefix}-${createHash("sha256").update(parts.map(normaliseKey).join("|")).digest("hex").slice(0, 12)}`; }
@@ -155,8 +155,10 @@ function closeoutReviewQueue(packet, sourceDate) {
 }
 function parseMarkdown(text, sourceDate) { return String(text || "").split(/\r?\n/).map((line) => line.replace(/^\s*(?:[-*+] |\d+[.)] )/, "").trim()).filter((line) => line && ACTION_WORDS.test(line) && !COMPLETED_WORDS.test(line)).map((title) => candidateToQuest({ title }, { sourceDate, sourceLabel: "input", sourcePath: safeRef("input", sourceDate) }, 0)).filter(Boolean); }
 function preserveState(quests, outputPath, targetDate) {
-  const existing = readJson(outputPath); const previous = new Map(Array.isArray(existing?.quests) ? existing.quests.map((quest) => [quest.id, quest]) : []);
-  return quests.map((quest) => {
+  const existing = readJson(outputPath);
+  if (existing && !Array.isArray(existing.quests)) throw new StoreError("invalid_record", "Stored board quests are invalid; preserve the original file.");
+  const previous = new Map(Array.isArray(existing?.quests) ? existing.quests.map((quest) => [quest.id, quest]) : []);
+  const kept = quests.map((quest) => {
     const old = previous.get(quest.id); if (!old) return quest;
     const stepsById = new Map(Array.isArray(old.steps) ? old.steps.map((step) => [step.id, step]) : []);
     const steps = quest.steps.map((step) => ({ ...step, completed: Boolean(stepsById.get(step.id)?.completed) }));
@@ -164,6 +166,14 @@ function preserveState(quests, outputPath, targetDate) {
     const state = oldState === "completed" ? "completed" : (oldState === "paused" ? "deferred" : oldState || quest.state);
     return { ...quest, state, status: state, steps, progress: { completed, total: steps.length }, carryoverCount: targetDate !== existing.activityDate && state !== "completed" ? (Number(old.carryoverCount) || 0) + 1 : Number(old.carryoverCount) || quest.carryoverCount, reports: Array.isArray(old.reports) ? old.reports : quest.reports, updatedAt: old.updatedAt };
   });
+  // Recompiling source notes does not withdraw tasks explicitly added by the user.
+  const known = new Set(kept.map((quest) => quest.id));
+  if (existing?.activityDate === targetDate) {
+    for (const old of previous.values()) {
+      if (old?.sourcePath === "manual://widget" && !known.has(old.id)) kept.push(old);
+    }
+  }
+  return kept;
 }
 function makeMissions(quests) {
   const groups = new Map(); for (const quest of quests) { const group = groups.get(quest.missionId) || { id: quest.missionId, title: quest.project, project: quest.project, completed: 0, total: 0 }; group.completed += quest.progress.completed; group.total += quest.progress.total; groups.set(quest.missionId, group); }
@@ -172,10 +182,10 @@ function makeMissions(quests) {
 function resolveDates(options) { const targetDate = isDate(options.targetDate) ? options.targetDate : kstToday(); const sourceDate = isDate(options.sourceDate) ? options.sourceDate : previousBusinessDay(targetDate); return { targetDate, sourceDate }; }
 function parseArgs(argv) { const args = { source: "auto", input: [] }; for (let i = 0; i < argv.length; i += 1) { const value = argv[i]; if (value === "--input") args.input.push(argv[++i]); else if (value === "--target-date") args.targetDate = argv[++i]; else if (value === "--source-date") args.sourceDate = argv[++i]; else if (value === "--source") args.source = argv[++i]; else if (value === "--quest-plan") args.questPlan = argv[++i]; else if (value === "--output") args.output = argv[++i]; else if (value === "--print") args.print = true; else if (value === "--self-test") args.selfTest = true; } return args; }
 
-export function compile(options = {}) {
+function compileUnlocked(options = {}) {
   const { targetDate, sourceDate } = resolveDates(options);
   const source = options.source || "auto";
-  const outputPath = resolve(options.output || join(process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "Daybridge", "boards", `${targetDate}.json`));
+  const outputPath = resolve(options.resolvedOutput || options.output || join(process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "Daybridge", "boards", `${targetDate}.json`));
   const warnings = []; const sourceInputs = []; const excluded = []; const reviewQueue = []; let sourceCoverage = "stale"; let sourceQuality = "unknown"; let quests = []; let plan = null;
   const root = options.maruRoot || profileRoot(); const sourcePaths = root && !options.questPlan ? pathsFor(root, sourceDate) : null;
   const boundary = boundaryMetadata(sourcePaths, sourceDate, targetDate); warnings.push(...boundary.warnings); excluded.push(...boundary.excluded);
@@ -192,7 +202,25 @@ export function compile(options = {}) {
   const uniqueExcluded = [...new Map(excluded.map((item) => [`${clean(item.title, 260).toLowerCase()}|${clean(item.reason, 260).toLowerCase()}`, item])).values()];
   const uniqueReviewQueue = [...new Map(reviewQueue.map((item) => [item.id, item])).values()];
   const board = { schemaVersion: 2, activityDate: targetDate, sourceDate, sourceInputs, title: `${targetDate} quest board`, generatedAt: new Date().toISOString(), sourceCoverage, sourceQuality, sourceWarnings: uniqueWarnings, sourceMetadata: { ...boundary.metadata, ...(plan?.source || {}) }, excluded: uniqueExcluded, reviewQueue: uniqueReviewQueue, missions: makeMissions(kept), quests: kept };
-  if (options.output || !options.print) atomicWriteJson(outputPath, board); if (options.print || !options.output) console.log(JSON.stringify(board, null, 2)); else console.log(`Compiled ${board.quests.length} quests from ${sourceInputs.length} plan packet(s): ${outputPath}`); return board;
+  if (options.output || !options.print) {
+    atomicWriteJson(outputPath, board);
+    if (basename(dirname(outputPath)).toLowerCase() === "boards") atomicWriteJson(join(dirname(outputPath), "latest.json"), board);
+  }
+  return board;
+}
+export async function compile(options = {}) {
+  const { targetDate } = resolveDates(options);
+  const appData = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
+  const defaultRoot = join(appData, "Daybridge");
+  const pointer = options.output ? null : readJson(join(defaultRoot, "storage-location.json"));
+  const dataDir = pointer?.dataDirectory || process.env.DAYBRIDGE_DATA_DIR || defaultRoot;
+  const outputPath = resolve(options.output || join(dataDir, "boards", `${targetDate}.json`));
+  const root = basename(dirname(outputPath)).toLowerCase() === "boards" ? dirname(dirname(outputPath)) : dirname(outputPath);
+  // Print-only previews use the same read barrier without changing board JSON.
+  const board = await runStoreOperation(root, targetDate, () => compileUnlocked({ ...options, resolvedOutput: outputPath }));
+  if (options.print || !options.output) console.log(JSON.stringify(board, null, 2));
+  else console.log(`Compiled ${board.quests.length} quests from ${board.sourceInputs.length} plan packet(s): ${outputPath}`);
+  return board;
 }
 function selfTest() { const plan = { artifact_type: "daybridge_quest_plan", source: { quality: "aligned" }, quests: [{ id: "q-a", mission_id: "m-a", title: "Check source", actor: "user", kind: "review", steps: [{ id: "s-a", label: "Open source" }, { id: "s-b", label: "Record result", depends_on: ["s-a"] }], execution: "sequential" }, { id: "q-b", title: "Write note", actor: "user", kind: "execute" }] }; const quests = planCandidates(plan, "2026-08-11"); if (quests.length !== 2 || quests[0].steps.length !== 2 || quests[0].execution !== "sequential") throw new Error("Compiler self-test failed"); console.log("compile-quests self-test passed"); }
-const directExecution = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url); if (directExecution) { const args = parseArgs(process.argv.slice(2)); if (args.selfTest) selfTest(); else compile(args); }
+const directExecution = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url); if (directExecution) { const args = parseArgs(process.argv.slice(2)); if (args.selfTest) selfTest(); else await compile(args); }

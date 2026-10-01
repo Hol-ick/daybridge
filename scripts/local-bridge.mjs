@@ -2,8 +2,7 @@ import { createServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { buildDailySchedule, resolveNowFocus } from "../src/schedule/scheduler.js";
 import { toScheduleTitle } from "../src/schedule/model.js";
 import { parseScheduleInboxMarkdown } from "../src/schedule/inbox.js";
@@ -24,6 +23,8 @@ import { calendarEventsToBusyBlocks, inspectGoogleCalendarConnection, readGoogle
 import { createGoogleCalendarAdapter } from "./calendar/googleapis-adapter.mjs";
 import { beginGoogleCalendarAuthorization, finishGoogleCalendarAuthorization, unprotectTokenWithDpapi } from "./calendar/google-oauth.mjs";
 import { readActivityLog, recordActivity } from "./activity-log.mjs";
+import { readJsonStrict, readJsonStrictSync, atomicWriteJson as atomicWrite, StoreError } from "./storage/json-store.mjs";
+import { runStoreOperation } from "./storage/date-transaction.mjs";
 import { allowedOrigin, RequestError, validateRequest } from "./bridge/request-policy.mjs";
 
 const PORT = Number(process.env.DAYBRIDGE_BRIDGE_PORT || 39393);
@@ -31,15 +32,20 @@ const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local")
 const DEFAULT_DATA_DIR = resolve(join(APP_DATA, "Daybridge"));
 const LOCATION_PATH = join(DEFAULT_DATA_DIR, "storage-location.json");
 function configuredDataDir() {
-  try {
-    const stored = JSON.parse(readFileSync(LOCATION_PATH, "utf8"));
-    if (typeof stored?.dataDirectory === "string" && stored.dataDirectory.trim()) return resolve(stored.dataDirectory);
-  } catch {}
+  const stored = readJsonStrictSync(LOCATION_PATH);
+  if (typeof stored?.dataDirectory === "string" && stored.dataDirectory.trim()) return resolve(stored.dataDirectory);
   if (process.env.DAYBRIDGE_DATA_DIR) return resolve(process.env.DAYBRIDGE_DATA_DIR);
   return DEFAULT_DATA_DIR;
 }
 let DATA_DIR = configuredDataDir();
 let CONFIG_PATH = join(DATA_DIR, "config.json");
+async function readJson(path) {
+  const value = await readJsonStrict(path);
+  if (value && dirname(path) === join(DATA_DIR, "boards") && !Array.isArray(value.quests)) {
+    throw new StoreError("invalid_record", "Stored board quests are invalid; preserve the original file.");
+  }
+  return value;
+}
 const VALID_STATUSES = new Set(["ready", "in_progress", "deferred", "completed", "blocked", "not_started", "paused", "needs_confirmation"]);
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const phonePattern = /(?<!\d)01[016789][ -]?\d{3,4}[ -]?\d{4}(?!\d)/g;
@@ -160,7 +166,6 @@ function logRuntimeEvent(event, details = {}) {
     })
     .catch(() => {});
 }
-async function readJson(path) { try { return JSON.parse(await readFile(path, "utf8")); } catch { return null; } }
 function emptyBoard(activityDate, source = "session_inbox") {
   return {
     schemaVersion: 2,
@@ -234,12 +239,6 @@ function mergeInboxIntoBoard(board, inbox) {
     } : quest);
   }
   return { ...(board || emptyBoard(inbox.date)), quests: [...quests.values()] };
-}
-async function atomicWrite(path, value) {
-  await mkdir(dirname(path), { recursive: true });
-  const temporary = path + "." + randomUUID() + ".tmp";
-  await writeFile(temporary, JSON.stringify(value, null, 2) + "\n", "utf8");
-  await rename(temporary, path);
 }
 async function setDataDirectory(nextPath) {
   const value = typeof nextPath === "string" ? nextPath.trim() : "";
@@ -662,7 +661,7 @@ async function handleScheduleBlockReport(body) {
   const activityDate = safeDate(body.activityDate || body.date);
   if (!activityDate) return { status: 400, body: { error: "activityDate and a valid block report are required." } };
   let result;
-  try { result = await reportScheduleBlock(DATA_DIR, activityDate, body); } catch (error) { return { status: 400, body: { error: error instanceof Error ? sanitizeText(error.message, 160) : "Invalid block report." } }; }
+  try { result = await reportScheduleBlock(DATA_DIR, activityDate, body); } catch (error) { if (error instanceof StoreError) throw error; return { status: 400, body: { error: error instanceof Error ? sanitizeText(error.message, 160) : "Invalid block report." } }; }
   if (!result) return { status: 404, body: { error: "No schedule exists for this date." } };
   if (!result.schedule) return { status: 404, body: { error: "Schedule block was not found." } };
   await syncQuestFromScheduleBlockReport(activityDate, result.schedule, result.report);
@@ -706,7 +705,7 @@ async function handleScheduleBlockMove(body) {
   const activityDate = safeDate(body.activityDate || body.date);
   if (!activityDate) return { status: 400, body: { error: "activityDate and a valid block move are required." } };
   let result;
-  try { result = await moveScheduleBlock(DATA_DIR, activityDate, body); } catch (error) { return { status: 400, body: { error: error instanceof Error ? sanitizeText(error.message, 180) : "Invalid block move." } }; }
+  try { result = await moveScheduleBlock(DATA_DIR, activityDate, body); } catch (error) { if (error instanceof StoreError) throw error; return { status: 400, body: { error: error instanceof Error ? sanitizeText(error.message, 180) : "Invalid block move." } }; }
   if (!result) return { status: 404, body: { error: "No schedule exists for this date." } };
   if (!result.schedule) return { status: 404, body: { error: "Schedule block was not found." } };
   const config = await loadConfig();
@@ -734,7 +733,7 @@ async function handleScheduleBlockDiscard(body) {
   const activityDate = safeDate(body.activityDate || body.date);
   if (!activityDate) return { status: 400, body: { error: "activityDate and a valid block discard are required." } };
   let result;
-  try { result = await discardScheduleBlock(DATA_DIR, activityDate, body); } catch (error) { return { status: 400, body: { error: error instanceof Error ? sanitizeText(error.message, 180) : "Invalid block discard." } }; }
+  try { result = await discardScheduleBlock(DATA_DIR, activityDate, body); } catch (error) { if (error instanceof StoreError) throw error; return { status: 400, body: { error: error instanceof Error ? sanitizeText(error.message, 180) : "Invalid block discard." } }; }
   if (!result) return { status: 404, body: { error: "No schedule exists for this date." } };
   if (!result.schedule) return { status: 404, body: { error: "Schedule block was not found." } };
   const config = await loadConfig();
@@ -806,41 +805,72 @@ async function handleCalendarCallback(url, response) {
   if (result.state === "connected") { sendHtml(response, 200, "<strong>Google Calendar가 연결되었어요</strong><p>Daybridge는 일정 제목이나 참석자를 읽지 않고, 바쁜 시간만 시간표에 반영합니다. 이 창은 닫아도 됩니다.</p><script>setTimeout(()=>window.close(),1200)</script>"); return; }
   sendHtml(response, 400, "<strong>연결을 완료하지 못했어요</strong><p>OAuth 설정과 권한을 확인한 뒤 Daybridge에서 다시 시도해 주세요.</p>");
 }
+async function dispatch(request, response, url, origin, body) {
+    if (request.method === "GET" && url.pathname === "/api/health") { const config = await loadConfig(); send(response, 200, { status: "ok", dataDir: DATA_DIR, logDirectory: join(DATA_DIR, "logs"), handoffSinkDir: config.handoffSinkDir || null, connected: Boolean(config.handoffSinkDir) }, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/calendar/oauth/callback") { await handleCalendarCallback(url, response); return; }
+    if (request.method === "GET" && url.pathname === "/api/calendar/status") { const result = await handleCalendarStatus(); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/calendar/connect") { const result = await handleCalendarConnect(); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/calendar/codex-busy") { const result = await handleCodexCalendarBusy(body); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/runtime-events") { const result = await handleRuntimeEvent(body); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/board") { const result = await handleBoard(url); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/report") { const result = await handleReport(body); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/quests/manual") { const result = await handleManualQuest(body); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/schedule") { const result = await handleSchedule(url); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/schedule/inbox") { const result = await handleScheduleInbox(url); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/activity") { const activityDate = safeDate(url.searchParams.get("date")) || koreaNow().slice(0, 10); const records = await readActivityLog(DATA_DIR, activityDate, { limit: Number(url.searchParams.get("limit")) || 200 }); send(response, 200, { activityDate, records }, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/schedule/rebuild") { const result = await handleScheduleRebuild(body); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/schedule-settings") { send(response, 200, { settings: await loadScheduleSettings(DATA_DIR) }, origin); return; }
+    if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const result = await handleScheduleSettingsUpdate(body); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/storage-location") { send(response, 200, { dataDirectory: DATA_DIR, logDirectory: join(DATA_DIR, "logs"), scheduleDirectory: join(DATA_DIR, "schedules") }, origin); return; }
+    if (request.method === "PUT" && url.pathname === "/api/storage-location") { const result = await handleStorageLocationUpdate(body); send(response, result.status, result.body, origin); return; }
+    if (request.method === "GET" && url.pathname === "/api/daily-defaults") { send(response, 200, { dailyDefaults: await loadDailyDefaults(DATA_DIR) }, origin); return; }
+    if (request.method === "PUT" && url.pathname === "/api/daily-defaults") { const result = await handleDailyDefaultsUpdate(body); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/schedule/block-report") { const result = await handleScheduleBlockReport(body); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/schedule/block-move") { const result = await handleScheduleBlockMove(body); send(response, result.status, result.body, origin); return; }
+    if (request.method === "POST" && url.pathname === "/api/schedule/block-discard") { const result = await handleScheduleBlockDiscard(body); send(response, result.status, result.body, origin); return; }
+    send(response, 404, { error: "Not found." }, origin);
+}
 const server = createServer(async (request, response) => {
   const origin = request.headers.origin;
   const policy = validateRequest({ method: request.method, host: request.headers.host, origin, contentType: request.headers["content-type"], port: server.address().port });
   if (!policy.ok) { send(response, policy.status, { error: policy.code, code: policy.code }, origin); return; }
   if (Number(request.headers["content-length"]) > 128 * 1024) { send(response, 413, { error: "body_too_large", code: "body_too_large" }, origin); return; }
-  if (!request.url) { send(response, 400, { error: "Request URL is required." }, origin); return; }
   if (request.method === "OPTIONS") { send(response, 204, {}, origin); return; }
-  const url = new URL(request.url, "http://127.0.0.1:" + PORT);
+  let url;
   try {
-    if (request.method === "GET" && url.pathname === "/api/health") { const config = await loadConfig(); send(response, 200, { status: "ok", dataDir: DATA_DIR, logDirectory: join(DATA_DIR, "logs"), handoffSinkDir: config.handoffSinkDir || null, connected: Boolean(config.handoffSinkDir) }, origin); return; }
-    if (request.method === "GET" && url.pathname === "/api/calendar/oauth/callback") { await handleCalendarCallback(url, response); return; }
-    if (request.method === "GET" && url.pathname === "/api/calendar/status") { const result = await handleCalendarStatus(); send(response, result.status, result.body, origin); return; }
-    if (request.method === "POST" && url.pathname === "/api/calendar/connect") { const result = await handleCalendarConnect(); send(response, result.status, result.body, origin); return; }
-    if (request.method === "POST" && url.pathname === "/api/calendar/codex-busy") { const result = await handleCodexCalendarBusy(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    if (request.method === "POST" && url.pathname === "/api/runtime-events") { const result = await handleRuntimeEvent(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    if (request.method === "GET" && url.pathname === "/api/board") { const result = await handleBoard(url); send(response, result.status, result.body, origin); return; }
-    if (request.method === "POST" && url.pathname === "/api/report") { const result = await handleReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    if (request.method === "POST" && url.pathname === "/api/quests/manual") { const result = await handleManualQuest(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    if (request.method === "GET" && url.pathname === "/api/schedule") { const result = await handleSchedule(url); send(response, result.status, result.body, origin); return; }
-    if (request.method === "GET" && url.pathname === "/api/schedule/inbox") { const result = await handleScheduleInbox(url); send(response, result.status, result.body, origin); return; }
-    if (request.method === "GET" && url.pathname === "/api/activity") { const activityDate = safeDate(url.searchParams.get("date")) || koreaNow().slice(0, 10); const records = await readActivityLog(DATA_DIR, activityDate, { limit: Number(url.searchParams.get("limit")) || 200 }); send(response, 200, { activityDate, records }, origin); return; }
-    if (request.method === "POST" && url.pathname === "/api/schedule/rebuild") { const result = await handleScheduleRebuild(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    if (request.method === "GET" && url.pathname === "/api/schedule-settings") { send(response, 200, { settings: await loadScheduleSettings(DATA_DIR) }, origin); return; }
-    if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const result = await handleScheduleSettingsUpdate(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    if (request.method === "GET" && url.pathname === "/api/storage-location") { send(response, 200, { dataDirectory: DATA_DIR, logDirectory: join(DATA_DIR, "logs"), scheduleDirectory: join(DATA_DIR, "schedules") }, origin); return; }
-    if (request.method === "PUT" && url.pathname === "/api/storage-location") { const result = await handleStorageLocationUpdate(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    if (request.method === "GET" && url.pathname === "/api/daily-defaults") { send(response, 200, { dailyDefaults: await loadDailyDefaults(DATA_DIR) }, origin); return; }
-    if (request.method === "PUT" && url.pathname === "/api/daily-defaults") { const result = await handleDailyDefaultsUpdate(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    if (request.method === "POST" && url.pathname === "/api/schedule/block-report") { const result = await handleScheduleBlockReport(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    if (request.method === "POST" && url.pathname === "/api/schedule/block-move") { const result = await handleScheduleBlockMove(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    if (request.method === "POST" && url.pathname === "/api/schedule/block-discard") { const result = await handleScheduleBlockDiscard(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
-    send(response, 404, { error: "Not found." }, origin);
+    try { url = new URL(request.url, "http://127.0.0.1:" + server.address().port); }
+    catch { throw new RequestError(400, "invalid_url", "Request URL is invalid."); }
+    const body = ["POST", "PUT"].includes(request.method) ? await readRequestBody(request) : undefined;
+    const buffered = { status: null, headers: null, payload: null };
+    const pendingResponse = {
+      writeHead(status, headers) { buffered.status = status; buffered.headers = headers; },
+      end(payload) { buffered.payload = payload; },
+    };
+    const operation = async () => {
+      await dispatch(request, pendingResponse, url, origin, body);
+      if (buffered.status >= 400) {
+        const error = new Error("API operation rejected.");
+        error.httpResponse = buffered;
+        throw error;
+      }
+    };
+    const diagnostic = ["/api/health", "/api/storage-location", "/api/runtime-events", "/api/calendar/status", "/api/calendar/connect", "/api/calendar/oauth/callback"].includes(url.pathname);
+    if (diagnostic) await operation();
+    else {
+      const date = safeDate(body?.activityDate || body?.date || url.searchParams.get("date"))
+        || (["/api/schedule", "/api/board", "/api/schedule/inbox", "/api/activity"].includes(url.pathname) ? koreaNow().slice(0, 10) : "global");
+      await runStoreOperation(DATA_DIR, date, operation);
+    }
+    response.writeHead(buffered.status, buffered.headers);
+    response.end(buffered.payload);
   } catch (error) {
-    if (!(error instanceof RequestError)) logRuntimeEvent("http_error", { error: error?.stack || error?.message || String(error), message: `${request.method} ${url.pathname}` });
-    send(response, error instanceof RequestError ? error.status : 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error.", ...(error instanceof RequestError ? { code: error.code } : {}) }, origin);
+    if (error.httpResponse) {
+      response.writeHead(error.httpResponse.status, error.httpResponse.headers);
+      response.end(error.httpResponse.payload);
+      return;
+    }
+    if (!(error instanceof RequestError)) logRuntimeEvent("http_error", { error: error?.stack || error?.message || String(error), message: `${request.method} ${url?.pathname || "invalid URL"}` });
+    send(response, error instanceof RequestError || error instanceof StoreError ? error.status : 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error.", ...(error instanceof RequestError || error instanceof StoreError ? { code: error.code } : {}) }, origin);
   }
 });
 await mkdir(join(DATA_DIR, "boards"), { recursive: true });

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { readJsonStrict as readJson, atomicWriteJson as atomicWrite, StoreError } from "./storage/json-store.mjs";
+import { join, resolve } from "node:path";
+import { runStoreOperation } from "./storage/date-transaction.mjs";
 import { getAvailableFocusSlots } from "../src/schedule/scheduler.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -52,15 +53,6 @@ function sanitizeText(value, limit = 600) {
 function assertDate(value) {
   if (!isDate(value)) throw new TypeError("date must use YYYY-MM-DD format.");
   return value;
-}
-async function readJson(path) {
-  try { return JSON.parse(await readFile(path, "utf8")); } catch { return null; }
-}
-async function atomicWrite(path, value) {
-  await mkdir(dirname(path), { recursive: true });
-  const temporary = `${path}.${randomUUID()}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-  await rename(temporary, path);
 }
 function arrayOfPositiveIntegers(value, fallback) {
   if (!Array.isArray(value)) return fallback;
@@ -245,20 +237,20 @@ function normalizeDailyDefaults(input) {
   };
 }
 
-export async function loadDailyDefaults(dataDir) {
+async function loadDailyDefaultsUnlocked(dataDir) {
   const stored = await readJson(dailyDefaultsPath(dataDir));
   const normalized = normalizeDailyDefaults(stored);
   if (Array.isArray(stored) || Array.isArray(stored?.routines)) return normalized;
   return { schemaVersion: 1, routines: DEFAULT_DAILY_DEFAULTS.routines.map((routine) => ({ ...routine, days: [...routine.days] })) };
 }
 
-export async function saveDailyDefaults(dataDir, input) {
+async function saveDailyDefaultsUnlocked(dataDir, input) {
   const normalized = normalizeDailyDefaults(input);
   await atomicWrite(dailyDefaultsPath(dataDir), normalized);
   return normalized;
 }
 
-export async function loadScheduleSettings(dataDir) {
+async function loadScheduleSettingsUnlocked(dataDir) {
   const stored = await readJson(settingsPath(dataDir));
   try {
     const normalized = normalizeSettings(stored || DEFAULT_SCHEDULE_SETTINGS);
@@ -266,27 +258,28 @@ export async function loadScheduleSettings(dataDir) {
   } catch { return { ...DEFAULT_SCHEDULE_SETTINGS, focusDurations: [...DEFAULT_SCHEDULE_SETTINGS.focusDurations] }; }
 }
 
-export async function saveScheduleSettings(dataDir, settings) {
+async function saveScheduleSettingsUnlocked(dataDir, settings) {
   const normalized = normalizeSettings(settings || {});
   await atomicWrite(settingsPath(dataDir), normalized);
   return normalized;
 }
 
-export async function loadSchedule(dataDir, date) {
+async function loadScheduleUnlocked(dataDir, date) {
   const requestedDate = assertDate(date);
   const stored = await readJson(schedulePath(dataDir, requestedDate));
   if (!stored) return null;
-  try { return normalizeSchedule(requestedDate, stored); } catch { return null; }
+  if (Array.isArray(stored) || !Array.isArray(stored.blocks)) throw new StoreError("invalid_record", "Stored schedule blocks are invalid; preserve the original file.");
+  try { return normalizeSchedule(requestedDate, stored); } catch (error) { throw new StoreError("invalid_record", "Stored schedule is invalid; preserve the original file.", error); }
 }
 
-export async function saveSchedule(dataDir, date, schedule) {
+async function saveScheduleUnlocked(dataDir, date, schedule) {
   const requestedDate = assertDate(date);
   const normalized = normalizeSchedule(requestedDate, schedule);
   await atomicWrite(schedulePath(dataDir, requestedDate), normalized);
   return normalized;
 }
 
-export async function reportScheduleBlock(dataDir, date, input = {}) {
+async function reportScheduleBlockUnlocked(dataDir, date, input = {}) {
   const requestedDate = assertDate(date);
   const blockId = typeof input.blockId === "string" ? sanitizeText(input.blockId, 120) : "";
   const status = typeof input.status === "string" ? input.status : "";
@@ -344,7 +337,7 @@ export async function reportScheduleBlock(dataDir, date, input = {}) {
   };
 }
 
-export async function moveScheduleBlock(dataDir, date, input = {}) {
+async function moveScheduleBlockUnlocked(dataDir, date, input = {}) {
   const requestedDate = assertDate(date);
   const blockId = typeof input.blockId === "string" ? sanitizeText(input.blockId, 120) : "";
   const targetBlockId = typeof input.targetBlockId === "string" && input.targetBlockId.trim() ? sanitizeText(input.targetBlockId, 120) : "";
@@ -428,7 +421,7 @@ export async function moveScheduleBlock(dataDir, date, input = {}) {
   };
 }
 
-export async function discardScheduleBlock(dataDir, date, input = {}) {
+async function discardScheduleBlockUnlocked(dataDir, date, input = {}) {
   const requestedDate = assertDate(date);
   const blockId = typeof input.blockId === "string" ? sanitizeText(input.blockId, 120) : "";
   if (!blockId) throw new TypeError("blockId is required to discard a schedule block.");
@@ -456,4 +449,40 @@ export async function discardScheduleBlock(dataDir, date, input = {}) {
     schedule: updated,
     discard: { id: randomUUID(), occurredAt: discardedAt, ...discard },
   };
+}
+
+export async function loadDailyDefaults(dataDir, ...args) {
+  return await runStoreOperation(dataDir, "global", () => loadDailyDefaultsUnlocked(dataDir, ...args));
+}
+
+export async function saveDailyDefaults(dataDir, ...args) {
+  return await runStoreOperation(dataDir, "global", () => saveDailyDefaultsUnlocked(dataDir, ...args));
+}
+
+export async function loadScheduleSettings(dataDir, ...args) {
+  return await runStoreOperation(dataDir, "global", () => loadScheduleSettingsUnlocked(dataDir, ...args));
+}
+
+export async function saveScheduleSettings(dataDir, ...args) {
+  return await runStoreOperation(dataDir, "global", () => saveScheduleSettingsUnlocked(dataDir, ...args));
+}
+
+export async function loadSchedule(dataDir, ...args) {
+  return await runStoreOperation(dataDir, args[0], () => loadScheduleUnlocked(dataDir, ...args));
+}
+
+export async function saveSchedule(dataDir, ...args) {
+  return await runStoreOperation(dataDir, args[0], () => saveScheduleUnlocked(dataDir, ...args));
+}
+
+export async function reportScheduleBlock(dataDir, ...args) {
+  return await runStoreOperation(dataDir, args[0], () => reportScheduleBlockUnlocked(dataDir, ...args));
+}
+
+export async function moveScheduleBlock(dataDir, ...args) {
+  return await runStoreOperation(dataDir, args[0], () => moveScheduleBlockUnlocked(dataDir, ...args));
+}
+
+export async function discardScheduleBlock(dataDir, ...args) {
+  return await runStoreOperation(dataDir, args[0], () => discardScheduleBlockUnlocked(dataDir, ...args));
 }

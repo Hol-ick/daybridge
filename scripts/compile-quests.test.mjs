@@ -15,22 +15,22 @@ function planFixture() { return { artifact_type: "daybridge_quest_plan", schema_
 test("nextBusinessDay skips the weekend", () => assert.equal(nextBusinessDay("2026-08-14"), "2026-08-17"));
 test("long card-evidence statements become concise action titles", () => assert.equal(titleFor("217개 카드에 원문 확인 필요 Detail이 남아 있다."), "217개 카드 원문 근거 확인하기"));
 
-test("quest plan preserves atomic work, explicit sequence, and mission progress", () => {
+test("quest plan preserves atomic work, explicit sequence, and mission progress", async () => {
   const root = mkdtempSync(join(tmpdir(), "daybridge-plan-")); const planPath = join(root, "plan.json"); const output = join(root, "board.json");
-  try { writeJson(planPath, planFixture()); const board = compile({ questPlan: planPath, sourceDate: "2026-08-11", targetDate: "2026-08-12", output }); assert.equal(board.sourceCoverage, "connected"); assert.equal(board.quests.length, 2); assert.equal(board.quests[0].execution, "sequential"); assert.deepEqual(board.quests[0].steps[1].dependsOn, ["s-open"]); assert.deepEqual(board.quests[1].dependsOn, ["q-source"]); assert.equal(board.missions[0].progress.total, 3); writeJson(output, { ...board, quests: board.quests.map((quest) => quest.id === "q-source" ? { ...quest, state: "in_progress", status: "in_progress", steps: quest.steps.map((step) => step.id === "s-open" ? { ...step, completed: true } : step) } : quest) }); const refreshed = compile({ questPlan: planPath, sourceDate: "2026-08-12", targetDate: "2026-08-13", output }); const kept = refreshed.quests.find((quest) => quest.id === "q-source"); assert.equal(kept.state, "in_progress"); assert.equal(kept.progress.completed, 1); assert.equal(kept.carryoverCount, 1); } finally { rmSync(root, { recursive: true, force: true }); }
+  try { writeJson(planPath, planFixture()); const board = await compile({ questPlan: planPath, sourceDate: "2026-08-11", targetDate: "2026-08-12", output }); assert.equal(board.sourceCoverage, "connected"); assert.equal(board.quests.length, 2); assert.equal(board.quests[0].execution, "sequential"); assert.deepEqual(board.quests[0].steps[1].dependsOn, ["s-open"]); assert.deepEqual(board.quests[1].dependsOn, ["q-source"]); assert.equal(board.missions[0].progress.total, 3); writeJson(output, { ...board, quests: board.quests.map((quest) => quest.id === "q-source" ? { ...quest, state: "in_progress", status: "in_progress", steps: quest.steps.map((step) => step.id === "s-open" ? { ...step, completed: true } : step) } : quest) }); const refreshed = await compile({ questPlan: planPath, sourceDate: "2026-08-12", targetDate: "2026-08-13", output }); const kept = refreshed.quests.find((quest) => quest.id === "q-source"); assert.equal(kept.state, "in_progress"); assert.equal(kept.progress.completed, 1); assert.equal(kept.carryoverCount, 1); } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("independent quests do not invent sub-quests", () => {
+test("independent quests do not invent sub-quests", async () => {
   const root = mkdtempSync(join(tmpdir(), "daybridge-independent-")); const planPath = join(root, "plan.json"); const output = join(root, "board.json");
   try {
     writeJson(planPath, { artifact_type: "daybridge_quest_plan", status: "ready", quests: [{ id: "q-one", title: "Prepare the briefing", execution: "independent", steps: [{ id: "s-a", label: "Open the note" }, { id: "s-b", label: "Write the result" }] }] });
-    const board = compile({ questPlan: planPath, sourceDate: "2026-08-11", targetDate: "2026-08-12", output });
+    const board = await compile({ questPlan: planPath, sourceDate: "2026-08-11", targetDate: "2026-08-12", output });
     assert.equal(board.quests[0].steps.length, 1);
     assert.equal(board.quests[0].steps[0].label, "Open the note");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("8/13 quest quality keeps source warnings, exclusions, and safe atomic cards", () => {
+test("8/13 quest quality keeps source warnings, exclusions, and safe atomic cards", async () => {
   const root = mkdtempSync(join(tmpdir(), "daybridge-quality-")); const planPath = join(root, "plan.json"); const output = join(root, "board.json");
   try {
     writeJson(planPath, {
@@ -48,7 +48,7 @@ test("8/13 quest quality keeps source warnings, exclusions, and safe atomic card
         { id: "q-thread", title: "Retry Codex conversation coverage", first_step: "Retry bounded list_threads access", steps: [{ id: "s-thread", label: "Retry bounded list_threads access" }] },
       ],
     });
-    const board = compile({ questPlan: planPath, sourceDate: "2026-08-13", targetDate: "2026-08-14", output });
+    const board = await compile({ questPlan: planPath, sourceDate: "2026-08-13", targetDate: "2026-08-14", output });
     assert.equal(board.sourceCoverage, "attention");
     assert.deepEqual(board.sourceWarnings, ["Conversation coverage is unavailable.", "Session archive is blocked."]);
     assert.equal(board.quests.length, 3);
@@ -59,25 +59,25 @@ test("8/13 quest quality keeps source warnings, exclusions, and safe atomic card
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("user cards reject local paths and future source packets", () => {
+test("user cards reject local paths and future source packets", async () => {
   const root = mkdtempSync(join(tmpdir(), "daybridge-boundaries-")); const planPath = join(root, "plan.json"); const output = join(root, "board.json");
   try {
     const localPath = ["<drive>:", "fixture", "legacy-root"].join("\\");
     writeJson(planPath, { artifact_type: "daybridge_quest_plan", status: "ready", quests: [
       { id: "q-local", title: `Check ${localPath}`, first_step: `Check ${localPath}`, steps: [{ id: "s-local", label: `Check ${localPath}` }] },
     ] });
-    const board = compile({ questPlan: planPath, sourceDate: "2099-01-01", targetDate: "2026-08-14", output });
+    const board = await compile({ questPlan: planPath, sourceDate: "2099-01-01", targetDate: "2026-08-14", output });
     assert.equal(board.quests.length, 0);
     assert.ok(board.sourceWarnings.some((warning) => /future/i.test(warning)));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("legacy closeout fallback is visibly attention and future packets are safe", () => {
+test("legacy closeout fallback is visibly attention and future packets are safe", async () => {
   const root = mkdtempSync(join(tmpdir(), "daybridge-legacy-")); const system = join(root, "04_Operations_And_Automation", "Memory_System", "reports", "daily", "_system");
-  try { const date = "2099-01-01"; const path = join(system, `${date}_briefing_synthesis.json`); mkdirSync(system, { recursive: true }); writeJson(path, { artifact_type: "maru_briefing_synthesis", phase: "closeout", status: "ready", coverage: { record_quality: "aligned" }, immediate_actions: [{ title: "Check the source", first_step: "Open it" }] }); const board = compile({ source: "closeout", sourceDate: date, targetDate: "2026-08-14", maruRoot: root, print: true }); assert.equal(board.sourceCoverage, "attention"); assert.equal(board.quests.length, 0); assert.ok(board.sourceWarnings.some((warning) => /future/i.test(warning))); } finally { rmSync(root, { recursive: true, force: true }); }
+  try { const date = "2099-01-01"; const path = join(system, `${date}_briefing_synthesis.json`); mkdirSync(system, { recursive: true }); writeJson(path, { artifact_type: "maru_briefing_synthesis", phase: "closeout", status: "ready", coverage: { record_quality: "aligned" }, immediate_actions: [{ title: "Check the source", first_step: "Open it" }] }); const board = await compile({ source: "closeout", sourceDate: date, targetDate: "2026-08-14", maruRoot: root, output: join(root, "preview-board.json"), print: true }); assert.equal(board.sourceCoverage, "attention"); assert.equal(board.quests.length, 0); assert.ok(board.sourceWarnings.some((warning) => /future/i.test(warning))); } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("canonical focus units become 50-minute board estimates and confirmation questions stay review-only", () => {
+test("canonical focus units become 50-minute board estimates and confirmation questions stay review-only", async () => {
   const root = mkdtempSync(join(tmpdir(), "daybridge-contract-")); const planPath = join(root, "plan.json"); const output = join(root, "board.json");
   try {
     writeJson(planPath, {
@@ -90,7 +90,7 @@ test("canonical focus units become 50-minute board estimates and confirmation qu
       quests: [{ id: "q-two-units", title: "문서 검토", actor: "user", kind: "review", priority: "must", focus_units: 2, remaining_units: 1, first_action: "문서를 연다", done_when: "검토 결과를 기록한다" }],
       confirmation_questions: ["이 문서를 외부에 공유할까?"]
     });
-    const board = compile({ questPlan: planPath, sourceDate: "2026-08-25", targetDate: "2026-08-26", output });
+    const board = await compile({ questPlan: planPath, sourceDate: "2026-08-25", targetDate: "2026-08-26", output });
     assert.equal(board.sourceCoverage, "connected");
     assert.equal(board.quests[0].estimateMinutes, 100);
     assert.equal(board.quests[0].remainingMinutes, 50);
