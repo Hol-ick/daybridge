@@ -27,6 +27,7 @@ import { readJsonStrict, readJsonStrictSync, atomicWriteJson as atomicWrite, Sto
 import { runStoreOperation } from "./storage/date-transaction.mjs";
 import { allowedOrigin, RequestError, validateRequest } from "./bridge/request-policy.mjs";
 import { enqueueHandoff, flushHandoffOutbox } from "./bridge/handoff-outbox.mjs";
+import { findCarryoverSource } from "./storage/carryover-source.mjs";
 
 const PORT = Number(process.env.DAYBRIDGE_BRIDGE_PORT || 39393);
 const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
@@ -57,10 +58,6 @@ const CODEX_CALENDAR_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
 
 function now() { return new Date().toISOString(); }
 function safeDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(value || "") ? value : null; }
-function previousCalendarDate(activityDate) {
-  const [year, month, day] = activityDate.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
-}
 function sanitizeText(value, limit = 600) {
   const text = String(value || "").replace(emailPattern, "[email removed]").replace(phonePattern, "[phone removed]").replace(secretPattern, "$1[sensitive value removed]").replace(localPathPattern, "[local path]").replace(/\s+/g, " ").trim();
   return text.length > limit ? text.slice(0, limit - 1).trimEnd() + "…" : text;
@@ -549,9 +546,8 @@ async function rebuildSchedule(activityDate) {
   }
   const settings = await loadScheduleSettings(DATA_DIR);
   const existingSchedule = await loadSchedule(DATA_DIR, activityDate);
-  const previousDate = previousCalendarDate(activityDate);
-  const previousSchedule = await loadSchedule(DATA_DIR, previousDate);
-  const carryoverCandidates = carryoverTaskCandidates(previousSchedule);
+  const carryoverSource = await findCarryoverSource({ dataDir: DATA_DIR, beforeDate: activityDate });
+  const carryoverCandidates = carryoverTaskCandidates(carryoverSource?.schedule);
   const generatedAt = koreaNow();
   const briefingTasks = board.quests.map(toTaskCandidate).filter(Boolean);
   // A malformed handoff must never erase a previously usable timetable.
@@ -589,7 +585,7 @@ async function rebuildSchedule(activityDate) {
       errors: inbox.errors.slice(0, 10),
     },
     carryover: {
-      sourceDate: previousDate,
+      sourceDate: carryoverSource?.sourceDate || null,
       count: carryoverCount,
     },
   });
