@@ -336,6 +336,9 @@ def check_dashboard_actions(browser) -> None:
     def handle_manual(route) -> None:
         manual_calls.append(json.loads(route.request.post_data or "{}"))
         assert route.request.headers.get("x-request-id")
+        if len(manual_calls) > 1:
+            route.fulfill(status=500, content_type="application/json", body=json.dumps({"code": "storage_write_failed"}))
+            return
         result = json.loads(MANUAL_CREATED)
         result["saveState"] = "local_saved"
         result["handoff"] = {"state": "pending", "sent": 0, "pending": 1, "failed": 1}
@@ -370,6 +373,13 @@ def check_dashboard_actions(browser) -> None:
     assert "로컬 저장 완료" in page.locator('[role="status"]').inner_text()
     assert "전달 대기 중" in page.locator('[role="status"]').inner_text()
     page.screenshot(path="test-artifacts/daybridge-handoff-pending.png", full_page=True)
+    page.locator('[data-testid="manual-task-add-toggle"]').click()
+    page.locator('[data-testid="manual-task-title"]').fill("저장 실패 시험")
+    page.locator('[data-testid="manual-task-submit"]').click()
+    page.get_by_text("작업 저장을 확인하지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요", exact=True).wait_for(state="visible")
+    assert len(manual_calls) == 2, "HTTP 500 must not be retried"
+    assert page.locator('[data-testid="manual-task-title"]').input_value() == "저장 실패 시험"
+    page.screenshot(path="test-artifacts/daybridge-save-failure.png", full_page=True)
 
     assert_no_page_errors(errors)
     close_fixture_context(context)

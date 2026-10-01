@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rmdir, symlink, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { once } from "node:events";
 import { promisify } from "node:util";
 import { startFixtureBridge } from "./test-support/fixture-bridge.mjs";
 import { enqueueHandoff, flushHandoffOutbox } from "./bridge/handoff-outbox.mjs";
@@ -11,6 +12,74 @@ import { readActivityLog, recordActivity, projectActivityLog, repairActivityProj
 import { readJsonStrict } from "./storage/json-store.mjs";
 
 const date = "2099-01-02";
+test("Windows denies access to a locked delivery file without undoing local success", { skip: process.platform !== "win32" }, async () => {
+  const f = await startFixtureBridge({ initialFiles: {
+    [`boards/${date}.json`]: JSON.stringify({ schemaVersion: 2, activityDate: date, quests: [], sourceWarnings: [] }),
+    "schedule-settings.json": JSON.stringify({ timeConfigured: false }),
+  } });
+  let locker;
+  try {
+    const payload = { activityDate: date, title: "fixture locked destination" };
+    const options = { requestId: "locked-001" };
+    const first = await f.request("POST", "/api/quests/manual", payload, options);
+    const [name] = await readdir(join(f.dataDir, "events", date));
+    const sink = join(f.appDataDir, "sink");
+    await mkdir(join(sink, date), { recursive: true });
+    const destination = join(sink, date, name);
+    const original = await readFile(join(f.dataDir, "events", date, name), "utf8");
+    await writeFile(destination, original);
+    const script = "$stream=[System.IO.File]::Open($env:DAYBRIDGE_FIXTURE_LOCK_PATH,[System.IO.FileMode]::Open,[System.IO.FileAccess]::ReadWrite,[System.IO.FileShare]::None);Write-Output 'ready';[Console]::ReadLine() | Out-Null;$stream.Dispose()";
+    locker = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { env: { ...process.env, DAYBRIDGE_FIXTURE_LOCK_PATH: destination }, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    let timer;
+    try {
+      const output = await Promise.race([once(locker.stdout, "data"), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("fixture lock timeout")), 5000); locker.once("error", reject); })]);
+      assert.match(String(output[0]), /ready/);
+    } finally { clearTimeout(timer); }
+    await assert.rejects(readFile(destination), error => ["EACCES", "EPERM", "EBUSY"].includes(error.code));
+    await writeFile(join(f.dataDir, "config.json"), JSON.stringify({ handoffSinkDir: sink }));
+    const blocked = await f.request("POST", "/api/quests/manual", payload, options);
+    assert.equal(blocked.status, 201);
+    assert.equal(blocked.body.quest.id, first.body.quest.id);
+    assert.equal(blocked.body.handoff.state, "pending");
+    assert.equal(blocked.body.handoff.failed, 1);
+    const exited = once(locker, "exit");
+    locker.stdin.end("\n");
+    await exited;
+    assert.equal(await readFile(destination, "utf8"), original);
+    const delivered = await f.request("POST", "/api/quests/manual", payload, options);
+    assert.equal(delivered.body.handoff.state, "sent");
+  } finally {
+    if (locker && locker.exitCode === null && locker.signalCode === null) { const exited = once(locker, "exit"); locker.kill(); await exited; }
+    await f.close();
+  }
+});
+test("bridge restart drains persisted outbox automatically without another mutation", async () => {
+  const f = await startFixtureBridge({ initialFiles: {
+    [`boards/${date}.json`]: JSON.stringify({ schemaVersion: 2, activityDate: date, quests: [], sourceWarnings: [] }),
+    "schedule-settings.json": JSON.stringify({ timeConfigured: false }),
+  } });
+  try {
+    const payload = { activityDate: date, title: "fixture restart" };
+    const options = { requestId: "restart-001" };
+    const first = await f.request("POST", "/api/quests/manual", payload, options);
+    assert.equal(first.body.handoff.state, "unconfigured");
+    const sink = join(f.appDataDir, "sink");
+    await writeFile(join(f.dataDir, "config.json"), JSON.stringify({ handoffSinkDir: sink }));
+    const pid = f.processId;
+    await f.restart();
+    assert.notEqual(f.processId, pid);
+    const names = await readdir(join(f.dataDir, "outbox"));
+    const deadline = Date.now() + 5000;
+    while ((await readJsonStrict(join(f.dataDir, "outbox", names[0]))).state !== "sent") {
+      assert(Date.now() < deadline, "restart did not drain persisted event");
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal((await readdir(join(sink, date))).length, 1);
+    const replay = await f.request("POST", "/api/quests/manual", payload, options);
+    assert.equal(replay.body.quest.id, first.body.quest.id);
+    assert.equal(replay.headers.get("x-request-replayed"), "true");
+  } finally { await f.close(); }
+});
 test("sink failure preserves local success and retry delivers one stable event", async () => {
   const f = await startFixtureBridge({ initialFiles: {
     [`boards/${date}.json`]: JSON.stringify({ schemaVersion: 2, activityDate: date, quests: [], sourceWarnings: [] }),

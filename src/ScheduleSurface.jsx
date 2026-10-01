@@ -136,7 +136,9 @@ export default function ScheduleSurface() {
       return true;
     } catch (error) {
       recordRuntimeEvent("manual_task_add_error", { date: activityDate, title, error: error?.message || String(error) });
-      setNotice("작업을 추가하지 못했어요. 제목을 확인해 주세요");
+      setNotice(error?.status === 400
+        ? "작업을 추가하지 못했어요. 제목을 확인해 주세요"
+        : "작업 저장을 확인하지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요");
       return false;
     }
   }, [activityDate, refresh]);
