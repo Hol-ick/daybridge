@@ -56,4 +56,22 @@ The optional continuation runner writes `daybridge_continuation.json` with `wait
 | Local board and user receipts | Daybridge | Yes |
 | Canonical project memory | MARU memory system | No |
 
-The bridge treats a click as a user acknowledgement, not independent proof. Every quest retains sanitized `source_refs`, coverage, quality, and exclusion warnings. Calendar OAuth credentials live only in the operating system credential store; calendar event fields never cross into Daybridge files or MARU handoffs.
+The bridge treats a click as a user acknowledgement, not independent proof. Every quest retains sanitized `source_refs`, coverage, quality, and exclusion warnings. On Windows, the OAuth token file is encrypted with DPAPI; it is not a Credential Manager entry. Calendar event details never cross into Daybridge files or MARU handoffs.
+
+## Persistence and retry contracts (2026-10-01)
+
+All board, schedule and shared-state mutations use the same store gate and date transaction. A prepared final-values journal is durable before destination writes; a later process recovers a prepared journal before returning state. Unknown lock owners and damaged JSON/journals produce explicit errors and preserve the original files. The compiler uses this boundary too. Atomic replacement has bounded Windows sharing-error retries.
+
+Mutating UI requests carry a stable request ID. Local user state, the request result and a sanitized handoff outbox entry commit in one transaction. A retry of the same operation returns the saved result instead of adding another event or task. Outbox delivery is separate: `local_saved` establishes local success, while pending or failed delivery remains visible and retries after restart. A ready sink is not evidence of delivery.
+
+Carryover reads the latest valid previous schedule across inactive dates. An empty latest schedule stops older work from reappearing; damaged recent sources are reported instead of skipped. Stable IDs, exact remaining work, dependencies, source metadata and carryover counts survive rebuilds. Work completed or discarded today remains terminal.
+
+The UI, settings store and scheduler share `settings-contract.js`. Buffer minutes are integers from 0 through 30. An explicitly empty break list means no breaks; an omitted list uses defaults. Valid settings and the resulting schedule commit together. Invalid legacy files remain visible until the user saves a valid replacement.
+
+## Native distribution and operational boundary
+
+Release startup selects the manifest-verified `bridge-runtime` resource directory, with bundled Windows x64 Node and a bundled bridge entry. It does not search for a checkout or system Node. Debug builds retain the development fallback. The distribution wrapper builds in `src-tauri/target/package`, preserving the historical operational executable.
+
+The early `--validate-package` branch runs before Tauri UI, startup registration or keep-alive initialization. It permits only a fresh immediate temporary-directory child and owned token, isolates data/profile/environment, uses a random port and forbids storage migration and Calendar authorization. A Windows Job Object stops its own bridge when the validation parent exits or is killed. `verify:package` checks save/restart/cleanup behavior; `verify:installer` checks and extracts the NSIS inventory, then runs the same checks on its actual payload. Neither executes NSIS installation or verifies login startup.
+
+Health exposes bridge identity, storage-location selection and configuration mismatch. Read-only diagnostics preserve an active storage location when the pointer changes and report the mismatch. Selecting an operational source of truth, migrating data, restarting the actual app and changing startup registration require separate scoped action. Historical worklogs describe the state at their own dates; current behavior follows the source and current verification receipts.

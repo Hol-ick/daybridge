@@ -3,6 +3,7 @@
 use serde_json::json;
 mod bridge_health;
 mod bridge_runtime;
+mod package_validation;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -955,6 +956,16 @@ fn exit_app(app: tauri::AppHandle, reason: Option<String>) {
 }
 
 fn main() {
+    let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+    if let Some(result) = package_validation::run_if_requested(&args) {
+        match result {
+            Ok(()) => std::process::exit(0),
+            Err(error) => {
+                eprintln!("Daybridge package validation failed: {error}");
+                std::process::exit(2);
+            }
+        }
+    }
     tauri::Builder::default()
         .setup(|app| {
             clear_explicit_exit_marker(app.handle());

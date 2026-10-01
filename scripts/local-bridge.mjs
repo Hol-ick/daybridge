@@ -51,6 +51,10 @@ function configuredDataDir() {
   return DEFAULT_DATA_DIR;
 }
 let DATA_DIR = configuredDataDir();
+const PACKAGE_VALIDATION = process.env.DAYBRIDGE_PACKAGE_VALIDATION === "1";
+if (PACKAGE_VALIDATION && (PORT !== 0 || !process.env.DAYBRIDGE_DATA_DIR || DATA_DIR !== resolve(process.env.DAYBRIDGE_DATA_DIR))) {
+  throw new Error("Package validation requires isolated environment data and an automatic port.");
+}
 async function readJson(path) {
   const value = await readJsonStrict(path);
   if (value && dirname(path) === join(DATA_DIR, "boards") && !Array.isArray(value.quests)) {
@@ -837,6 +841,10 @@ async function handleCalendarCallback(url, response) {
   sendHtml(response, 400, "<strong>연결을 완료하지 못했어요</strong><p>OAuth 설정과 권한을 확인한 뒤 Daybridge에서 다시 시도해 주세요.</p>");
 }
 async function dispatch(request, response, url, origin, body) {
+    if (PACKAGE_VALIDATION && (url.pathname === "/api/storage-location" && request.method === "PUT"
+      || url.pathname === "/api/calendar/connect" || url.pathname === "/api/calendar/oauth/callback")) {
+      send(response, 409, {code: "package_validation_restricted", error: "This operation is disabled during package validation."}, origin); return;
+    }
     if (request.method === "GET" && url.pathname === "/api/health") { send(response, 200, await runtimeHealth({ identity: RUNTIME_IDENTITY, dataDir: DATA_DIR, sourceRoot: SOURCE_ROOT, locationPath: LOCATION_PATH, defaultDataDir: DEFAULT_DATA_DIR, envDataDir: process.env.DAYBRIDGE_DATA_DIR, profilePath: PROFILE_PATH, dataLocationSource: DATA_LOCATION_SOURCE, lastDelivery }), origin); return; }
     if (request.method === "GET" && url.pathname === "/api/calendar/oauth/callback") { await handleCalendarCallback(url, response); return; }
     if (request.method === "GET" && url.pathname === "/api/calendar/status") { const result = await handleCalendarStatus(); send(response, result.status, result.body, origin); return; }
@@ -946,6 +954,7 @@ async function deliverPendingHandoffs() {
   try {
     const config = (await readRuntimeConfiguration({ dataDir: deliveryDataDir, profilePath: PROFILE_PATH })).config;
     deliverySink = config.handoffSinkDir;
+    if (PACKAGE_VALIDATION && deliverySink) throw new Error("Package validation cannot deliver to an external handoff sink.");
     const delivery = await flushHandoffOutbox({ dataDir: deliveryDataDir, sinkDir: deliverySink });
     await repairActivityProjections(deliveryDataDir).catch(error => logRuntimeEvent("activity_projection_pending", { error: error.code || "projection_failed" }));
     const result = { ...delivery, state: !config.handoffSinkDir ? "unconfigured" : delivery.pending ? "pending" : "sent" };

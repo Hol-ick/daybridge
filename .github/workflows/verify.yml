@@ -32,3 +32,7 @@ jobs:
           toolchain: 1.98.1
       - name: Native regression
         run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Build independent release resources
+        run: pnpm build:widget --no-bundle
+      - name: Verify isolated package execution
+        run: pnpm verify:package

@@ -17,6 +17,25 @@ pub struct BridgeRuntime {
     pub working_directory: PathBuf,
 }
 
+pub fn node_path(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        let wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+        let unc: Vec<u16> = r"\\?\UNC\".encode_utf16().collect();
+        let prefix: Vec<u16> = r"\\?\".encode_utf16().collect();
+        if wide.starts_with(&unc) {
+            let mut ordinary: Vec<u16> = r"\\".encode_utf16().collect();
+            ordinary.extend_from_slice(&wide[unc.len()..]);
+            return std::ffi::OsString::from_wide(&ordinary).into();
+        }
+        if wide.starts_with(&prefix) {
+            return std::ffi::OsString::from_wide(&wide[prefix.len()..]).into();
+        }
+    }
+    path.to_path_buf()
+}
+
 fn check_file(root: &Path, name: &str, record: &serde_json::Value) -> Result<(), String> {
     let mut file =
         File::open(root.join(name)).map_err(|_| format!("패키지 실행 파일이 없습니다: {name}"))?;
@@ -69,9 +88,10 @@ fn resolve_with_development(
         ] {
             check_file(&root, name, &manifest["files"][name])?;
         }
-        let root = root
+        let canonical = root
             .canonicalize()
             .map_err(|_| "패키지 실행 경로를 확인할 수 없습니다.".to_string())?;
+        let root = node_path(&canonical);
         return Ok(BridgeRuntime {
             source: RuntimeSource::Bundled,
             node: root.join("node.exe"),
@@ -173,7 +193,7 @@ mod tests {
         let fixture = Fixture::new();
         fixture.bundle();
         let runtime = resolve_bridge_runtime(&fixture.0, false).unwrap();
-        let root = fixture.0.join("bridge-runtime").canonicalize().unwrap();
+        let root = node_path(&fixture.0.join("bridge-runtime").canonicalize().unwrap());
         assert_eq!(runtime.source, RuntimeSource::Bundled);
         assert_eq!(runtime.node, root.join("node.exe"));
         assert_eq!(runtime.script, root.join("scripts/local-bridge.mjs"));
@@ -225,5 +245,22 @@ mod tests {
         assert!(resolve_bridge_runtime(&fixture.0, false)
             .unwrap_err()
             .contains("호환"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn node_paths_remove_verbatim_prefixes_without_losing_unicode_or_unc() {
+        assert_eq!(
+            node_path(Path::new(r"\\?\C:\Fixture\스케줄")),
+            PathBuf::from(r"C:\Fixture\스케줄")
+        );
+        assert_eq!(
+            node_path(Path::new(r"\\?\UNC\server\Fixture\스케줄")),
+            PathBuf::from(r"\\server\Fixture\스케줄")
+        );
+        assert_eq!(
+            node_path(Path::new(r"C:\Fixture\스케줄")),
+            PathBuf::from(r"C:\Fixture\스케줄")
+        );
     }
 }

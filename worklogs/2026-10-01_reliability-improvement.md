@@ -141,3 +141,35 @@
 - 별도 release 실행 파일과 bridge-runtime을 생성했고, 실제 복사된 네 파일의 hash·길이를 모두 재검사했다. 49개 npm dependency와 고지 파일을 포함한다. renderer 출처의 고지 문서도 runtime notices에 포함한다. 영수증은 Git에서 제외한 test-artifacts/release-resource-inventory.json이며 executableStarted=false, installerVerified=false다.
 - 명시적 검증 모드, release exe의 임시 설치 폴더 실행, NSIS 생성·실제 설치·로그인 검증은 미완료다. Windows Sandbox 실행 파일은 없다. 새 배포 exe를 실행하거나 사용자 앱·시작 프로그램·운영 자료·Calendar 권한을 바꾸지 않았다. 작업 9, A08, 작업 10 및 전체 목표는 active다.
 - 최종 전체 Node 161개/32 suite(실패·skip 0), Rust 12개, pnpm build:widget --no-bundle의 웹·release 빌드, resource inventory와 diff 검사 통과. 기존 Tauri import 경고는 남아 있다. 원격 CI와 설치본 동작은 이 로컬 검증으로 승격하지 않는다.
+
+## 작업 9 진행: 배포 exe와 NSIS 내부 프로그램 검증
+
+- native 초기 진입에 명시적 `--validate-package` 모드를 추가했다. Tauri UI, Windows 시작 등록, keep-alive보다 먼저 분기하며 새 temp 직계 하위 폴더·32자리 ownership token만 받는다. 환경·프로필·저장 위치를 격리하고 port 0을 사용한다. Windows Job Object는 자기 child bridge만 귀속하고 부모 강제 종료에도 정리한다. 검증 모드의 저장 위치 변경·Calendar 승인 경로·외부 handoff 전달은 차단한다.
+- 첫 exe 시험은 실패했다. 추가 진단에서 Rust canonicalize의 Windows verbatim 경로로 인한 Node EISDIR lstat 'C:'를 확인했다. Node 경계에서 드라이브/UNC 경로를 변환하고 Unicode 보존 회귀를 추가했다. 수정 뒤 no-bundle exe 및 NSIS 내부 exe에서 실제 실행이 성공했다.
+- `pnpm verify:package`는 검증 marker 없는 기존 exe를 실행 전 거부한다. 새 임시 설치 위치에서 빈 PATH, bundled source, health, 수동 durable 저장, 재기동 후 같은 항목, 저장 경로 이탈·OAuth 거부, 정상 종료, 부모 강제 종료 후 자기 bridge 정리, 시작 등록 값 보존의 10개를 확인했다. 영수증은 ignored `test-artifacts/package-execution.json`이다.
+- `pnpm build:widget`이 NSIS 설치 파일 25,898,798 bytes를 생성했다. SHA-256은 `45cfb08015165b2fc9e38882006bdc845455a6e620df2036aa5249bd3f3badb6`이다. `pnpm verify:installer`는 기존 7-Zip으로 12개 inventory를 검증하고 own temp로만 추출한 뒤 실제 포함 exe에서 같은 10개를 통과했다. traversal/중복/필수 파일 누락/타입 거부 검사도 추가했다.
+- no-bundle/복원된 빌드 exe hash는 `55733967e5a94f99b509316599fbf29a00d409d5b2bdf58c4425defae8ccc326`, NSIS payload exe hash는 `783df544214e748564456ca5980eff808b96047991c38b6d84ed4f382eb36bc1`이다. 별도 추출 비교에서 같은 길이 9,267,712 bytes 중 Tauri bundle-type marker의 UNK→NSS 3bytes만 달랐다. Tauri bundler의 stamping/restore 소스와 일치한다. 서로 다른 hash를 같은 파일로 기록하지 않는다.
+- installer receipt는 `payload_verified`, `installationExecuted=false`, `loginVerified=false`, `installerVerified=false`를 유지한다. 실제 NSIS 설치·설치 후 UI/tray/로그인·삭제 검증은 수행하지 않았다. Windows Sandbox나 기존 test VM 환경을 확보하지 못했다. 운영 앱·자료 정본·시작 설정·Calendar 승인은 변경하지 않았다. 기존 운영 exe hash는 다시 확인했고 변함없었다.
+- Rust 16개, strict check, release/웹/NSIS build, payload 검증이 통과했다. Windows CI에 격리 release build와 exe verification을 추가했으며 원격 CI 실행은 미확인이다. 최종 전체 Node는 162개/33 file, fail/skip 0으로 통과했다.
+- 첫 전체 Node 실행에는 fixture startup timeout과 cross-process lock open EPERM이 있었다. 원인 확정 없이 production retry나 timeout을 바꾸지 않았다. 관련 16개 단독 및 전체 162개 재실행은 통과했다. 이 간헐 실패는 미해결 관찰로 남긴다. 재실행 성공을 원인 해결로 표현하지 않는다.
+
+## 작업 10 진행: 현재 동작과 감사 대응표
+
+README·ARCHITECTURE·DEBUGGING·PROJECT_STATUS의 현재 checkpoint를 코드에 맞췄다. 현재 닫기=명시적 종료, 18:00 자동 종료 부재, daily supplement 기본 루틴, release resource 경로, 전체 strict 검사, DPAPI 암호화 token file, 저장 journal/idempotency/outbox, 운영 불일치의 진단 범위, 실제 설치 미검증을 명시했다. 과거 worklog와 프로젝트 상태의 역사 부분은 보존한다.
+
+| 감사 | status | evidence | verification | remaining |
+|---|---|---|---|---|
+| A01 웹 요청 변경 | verified | HTTP policy / 작업 2 / 15f2903 | 거부 요청 상태·event 보존 회귀, 전체 162개 | 정상 허용 origin 사용 유지 |
+| A02 동시 저장 손실 | verified | date transaction / 작업 3 / a653633·60e0cb9 | 20개 보존·교차 프로세스·compiler 공동 잠금 회귀 | 이번 최초 실행 EPERM 간헐 원인 조사 |
+| A03 실제 자료 시험 접근 | verified | fixture isolation / 작업 1 / 15f2903 | parent profile/pointer 무시, own temp/port, mock browser | 운영 자료는 시험 대상 아님 |
+| A04 공백 이월 | verified | carryover / 작업 5 / 04ae562·8fbab42 | 공백·빈 source·손상·완료/폐기·metadata 회귀 | 운영 앱에는 미적용 |
+| A05 휴식 비활성 | verified | settings contract / 작업 6 / 9c42f7b | empty breaks 보존·mock 화면 13개 범위 | 운영 앱에는 미적용 |
+| A06 설정 범위 불일치 | verified | settings contract / 작업 6 / 9c42f7b | store/scheduler/UI 0–30·오류 원본 보존 | 운영 앱에는 미적용 |
+| A07 검사 공백 | verified | strict coverage+runner / 작업 8 / 0565e81·16fd103·c9f7184 | src 31개 strict·전체162·Rust16·기존 browser13 | 원격 CI 결과, startup timeout 관찰 조사 |
+| A08 독립 설치 불가 | open | bundle/resource / 작업 9 / 36573bd·ed78ad3 및 이번 checkpoint | exe와 실제 NSIS payload의 10개 격리 실행 통과 | 실제 NSIS 설치·로그인·삭제 미검증 |
+| A09 경로 불일치 | verified | runtime identity/inspect / 작업 0·7 / 9b62109 | 읽기 전용 불일치 진단·파일 보존 | operational_path_unresolved, 정본 선택·복구 별도 |
+| A10 중복/부분 실패 | verified | stable request/receipt/outbox / 작업 4 / 7f86ded·7ad6e62·3a48f28·8f3de7c | 재시도 중복0·재기동 전달·잠금된 sink 실패 회귀 | 실제 운영 sink 전달 별도 |
+| A11 손상 덮어쓰기 | verified | strict JSON/journal / 작업 3 / e29abc3·a653633 | 원본 byte 보존·준비 journal 복구·탈출 차단 | 실제 손상 자료 자동 교정 없음 |
+| A12 낡은 설명 | fixed | 위 4개 문서와 현재 checkpoint / 작업 10 | 소스·receipt와 대조, 과거 기록 보존 | 이번 commit/push·MARU 종료 기록 확인 |
+
+목표는 active다. 작업 0–8 완료와 작업 9/10 진행은 실제 설치 검증 완료를 대신하지 않는다. 다음은 간헐 잠금/startup 오류의 재현·관측과 격리 Windows 설치 시험 환경 확보다.

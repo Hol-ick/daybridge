@@ -172,7 +172,7 @@ pnpm bridge
 pnpm dev
 ```
 
-The compact card should show at most three current focus quests. Select **전체 보기** to inspect all parent quests, change a status, and open **진행 보고**. In the native shell, use `pnpm dev:widget`; an OS close request on the persistent overlay is ignored and logged, while the tray menu provides **위젯 다시 표시** and the explicit Quit command. The packaged widget also reasserts visibility and topmost order periodically without taking focus from the active application.
+In the native shell, use `pnpm dev:widget`. The tray provides **위젯 다시 표시** and explicit Quit. A window close request is intercepted and routed through explicit app shutdown so keep-alive does not reopen it. Visibility recovery remains active while the app runs. The current source has no 18:00 automatic app or computer shutdown.
 
 위젯이 보이지 않을 때는 대시보드 또는 오버레이의 **설정**을 열어 **위젯 새로고침**을 누른다. 이 동작은 저장·재배치와 분리되어 위젯 표시를 복구하고 일정·캘린더 상태를 다시 읽는다. 성공하면 `위젯을 새로고침했어요` 알림과 `overlay_manual_refresh` 이벤트가 남고, 조회 실패는 `overlay_manual_refresh_error`로 기록된다.
 
@@ -205,6 +205,19 @@ replaces a previous complete artifact only after verifying its inventory and
 checksums; unknown files, linked paths and damaged artifacts are preserved with
 an error. Generated runtime files stay outside Git. Actual installation, login
 startup, keep-alive and operational data selection require separate evidence.
+
+### Validate the executable and installer payload
+
+```powershell
+pnpm verify:package
+pnpm verify:installer
+```
+
+The first command accepts only a build containing the explicit validation marker; an older operational executable is refused before launch. It copies the executable and hash-verified resources to a new temporary directory and runs the early native validation branch with empty PATH, isolated data/profile and a random port. It checks runtime identity, local save, restart persistence, storage/OAuth restrictions, graceful cleanup and child cleanup after killing its own parent. Windows startup registration is compared without exposing its value.
+
+The second command uses existing 7-Zip to validate the NSIS inventory and extract to a new temporary directory, then executes the extracted payload with the same checks. Receipts are `test-artifacts/package-execution.json` and `test-artifacts/installer-payload.json`. The installer receipt deliberately keeps `installationExecuted`, `loginVerified` and `installerVerified` false. Tauri stamps the embedded bundle-type marker as NSS for the installer payload and restores UNK in the build executable; record the two executable hashes separately.
+
+For actual installation verification, use an isolated Windows test environment and separately record NSIS install success, installed resources, launch without checkout/system Node, temporary-data save/restart, logout/login startup, uninstall and residual files. No such environment was established in the 2026-10-01 payload check. Do not treat extraction as installation or replace the operational app to obtain this evidence.
 
 ## 5. Check the MARU handoff
 
