@@ -87,7 +87,11 @@ export async function openDashboard() {
 }
 
 export async function openDashboardSettings() {
-  if (!isTauri()) return false;
+  if (!isTauri()) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("surface", "dashboard");
+    return Boolean(window.open(url.toString(), "daybridge-settings"));
+  }
   await invoke("open_dashboard_settings");
   return true;
 }

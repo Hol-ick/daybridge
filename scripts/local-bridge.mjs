@@ -24,6 +24,7 @@ import { calendarEventsToBusyBlocks, inspectGoogleCalendarConnection, readGoogle
 import { createGoogleCalendarAdapter } from "./calendar/googleapis-adapter.mjs";
 import { beginGoogleCalendarAuthorization, finishGoogleCalendarAuthorization, unprotectTokenWithDpapi } from "./calendar/google-oauth.mjs";
 import { readActivityLog, recordActivity } from "./activity-log.mjs";
+import { allowedOrigin, RequestError, validateRequest } from "./bridge/request-policy.mjs";
 
 const PORT = Number(process.env.DAYBRIDGE_BRIDGE_PORT || 39393);
 const APP_DATA = process.env.LOCALAPPDATA || join(homedir(), "AppData", "Local");
@@ -274,13 +275,12 @@ function normalizeSteps(value, existing) {
 function responseBody(board, connection, eventRecorded = false) { return { board, connection, eventRecorded }; }
 async function readRequestBody(request) {
   const chunks = []; let total = 0;
-  for await (const chunk of request) { total += chunk.length; if (total > 128 * 1024) throw new Error("Request body is too large."); chunks.push(chunk); }
-  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new Error("Request body must be valid JSON."); }
+  for await (const chunk of request) { total += chunk.length; if (total <= 128 * 1024) chunks.push(chunk); }
+  if (total > 128 * 1024) throw new RequestError(413, "body_too_large", "Request body is too large.");
+  try { return JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw new RequestError(400, "invalid_json", "Request body must be valid JSON."); }
 }
-const allowedOrigins = new Set(["http://127.0.0.1:4173", "http://localhost:4173", "http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5174", "http://localhost:5174", "http://127.0.0.1:5178", "http://localhost:5178", "http://tauri.localhost", "https://tauri.localhost", "tauri://localhost"]);
-function allowedOrigin(origin) { return allowedOrigins.has(origin) || /^https?:\/\/tauri\.localhost(?::\d+)?$/.test(origin || ""); }
 function send(response, status, payload, origin) {
-  response.writeHead(status, { "Access-Control-Allow-Origin": allowedOrigin(origin) ? origin : "http://127.0.0.1:4173", "Vary": "Origin", "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS", "Access-Control-Allow-Headers": "Content-Type", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  response.writeHead(status, { ...(allowedOrigin(origin) ? { "Access-Control-Allow-Origin": origin } : {}), "Vary": "Origin", "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, X-Request-Id", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   response.end(JSON.stringify(payload));
 }
 function sendHtml(response, status, markup) {
@@ -808,6 +808,9 @@ async function handleCalendarCallback(url, response) {
 }
 const server = createServer(async (request, response) => {
   const origin = request.headers.origin;
+  const policy = validateRequest({ method: request.method, host: request.headers.host, origin, contentType: request.headers["content-type"], port: server.address().port });
+  if (!policy.ok) { send(response, policy.status, { error: policy.code, code: policy.code }, origin); return; }
+  if (Number(request.headers["content-length"]) > 128 * 1024) { send(response, 413, { error: "body_too_large", code: "body_too_large" }, origin); return; }
   if (!request.url) { send(response, 400, { error: "Request URL is required." }, origin); return; }
   if (request.method === "OPTIONS") { send(response, 204, {}, origin); return; }
   const url = new URL(request.url, "http://127.0.0.1:" + PORT);
@@ -823,7 +826,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/quests/manual") { const result = await handleManualQuest(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule") { const result = await handleSchedule(url); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule/inbox") { const result = await handleScheduleInbox(url); send(response, result.status, result.body, origin); return; }
-    if (request.method === "GET" && url.pathname === "/api/activity") { const activityDate = safeDate(url.searchParams.get("date")) || koreaNow().slice(0, 10); const records = await readActivityLog(DATA_DIR, activityDate, { limit: Number(url.searchParams.get("limit")) || 200 }); send(response, 200, { activityDate, records }); return; }
+    if (request.method === "GET" && url.pathname === "/api/activity") { const activityDate = safeDate(url.searchParams.get("date")) || koreaNow().slice(0, 10); const records = await readActivityLog(DATA_DIR, activityDate, { limit: Number(url.searchParams.get("limit")) || 200 }); send(response, 200, { activityDate, records }, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/rebuild") { const result = await handleScheduleRebuild(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "GET" && url.pathname === "/api/schedule-settings") { send(response, 200, { settings: await loadScheduleSettings(DATA_DIR) }, origin); return; }
     if (request.method === "PUT" && url.pathname === "/api/schedule-settings") { const result = await handleScheduleSettingsUpdate(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
@@ -835,7 +838,10 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/api/schedule/block-move") { const result = await handleScheduleBlockMove(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     if (request.method === "POST" && url.pathname === "/api/schedule/block-discard") { const result = await handleScheduleBlockDiscard(await readRequestBody(request)); send(response, result.status, result.body, origin); return; }
     send(response, 404, { error: "Not found." }, origin);
-  } catch (error) { logRuntimeEvent("http_error", { error: error?.stack || error?.message || String(error), message: `${request.method} ${url.pathname}` }); send(response, 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error." }, origin); }
+  } catch (error) {
+    if (!(error instanceof RequestError)) logRuntimeEvent("http_error", { error: error?.stack || error?.message || String(error), message: `${request.method} ${url.pathname}` });
+    send(response, error instanceof RequestError ? error.status : 500, { error: error instanceof Error ? sanitizeText(error.message, 160) : "Unexpected bridge error.", ...(error instanceof RequestError ? { code: error.code } : {}) }, origin);
+  }
 });
 await mkdir(join(DATA_DIR, "boards"), { recursive: true });
 logRuntimeEvent("bridge_started", { accepted: true, connection: "local" });
@@ -848,4 +854,4 @@ process.on("unhandledRejection", (reason) => {
   logRuntimeEvent("bridge_unhandled_rejection", { error: reason?.message || String(reason) });
   console.error(reason);
 });
-server.listen(PORT, "127.0.0.1", () => console.log("Daybridge local bridge listening on http://127.0.0.1:" + PORT));
+server.listen(PORT, "127.0.0.1", () => console.log("Daybridge local bridge listening on http://127.0.0.1:" + server.address().port));

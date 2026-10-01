@@ -1,34 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
+import { startFixtureBridge } from "./test-support/fixture-bridge.mjs";
 import test from "node:test";
 
 const DATE = "2099-01-03";
 
-async function startBridge(dataDir) {
-  const port = 39900 + Math.floor(Math.random() * 500);
-  const child = spawn(process.execPath, ["scripts/local-bridge.mjs"], {
-    cwd: process.cwd(),
-    env: { ...process.env, DAYBRIDGE_BRIDGE_PORT: String(port), DAYBRIDGE_DATA_DIR: dataDir },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  const output = [];
-  const ready = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`bridge did not start: ${output.join("")}`)), 5_000);
-    child.stdout.on("data", (chunk) => {
-      output.push(chunk.toString());
-      if (output.join("").includes("listening")) { clearTimeout(timer); resolve(); }
-    });
-    child.once("error", (error) => { clearTimeout(timer); reject(error); });
-    child.once("exit", (code) => {
-      if (code !== 0) { clearTimeout(timer); reject(new Error(`bridge exited (${code}): ${output.join("")}`)); }
-    });
-  });
-  await ready;
-  return { child, baseUrl: `http://127.0.0.1:${port}` };
-}
 
 async function createBoard(dataDir) {
   await mkdir(join(dataDir, "boards"), { recursive: true });
@@ -52,8 +29,8 @@ async function createBoard(dataDir) {
 }
 
 test("schedule block move reorders open focus cards without entering lunch", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-schedule-move-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await createBoard(dataDir);
     const rebuilt = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
@@ -82,14 +59,13 @@ test("schedule block move reorders open focus cards without entering lunch", asy
     assert.equal(activity.records.at(-1).action, "task_reordered");
     assert.equal(activity.records.at(-1).subject.title, initialFocus[0].title);
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });
 
 test("rebuilding a new day brings forward only the previous day's unfinished schedule cards", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-schedule-carryover-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await createBoard(dataDir);
     await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "", dayEnd: "", timeConfigured: false, bufferMinutes: 10 }));
@@ -122,14 +98,13 @@ test("rebuilding a new day brings forward only the previous day's unfinished sch
     assert.equal(activity.records.at(-1).details.carryoverCount, 1);
     assert.equal(activity.records.at(-1).details.reason, "previous_day_unfinished");
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });
 
 test("schedule block move rejects completed cards and lunch-only targets", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-schedule-move-invalid-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await createBoard(dataDir);
     const rebuilt = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
@@ -140,14 +115,13 @@ test("schedule block move rejects completed cards and lunch-only targets", async
     const response = await fetch(`${baseUrl}/api/schedule/block-move`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE, blockId: first.id, targetBlockId: "lunch-2099-01-03-1", position: "before" }) });
     assert.equal(response.status, 400);
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });
 
 test("schedule block discard removes the card and keeps its quest unit out after rebuild", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-schedule-discard-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await createBoard(dataDir);
     const rebuilt = await fetch(`${baseUrl}/api/schedule/rebuild`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE }) });
@@ -173,14 +147,13 @@ test("schedule block discard removes the card and keeps its quest unit out after
     assert.equal(rebuiltResult.schedule.blocks.some((block) => block.questId === source.questId), false);
     assert.deepEqual(rebuiltResult.schedule.discardedBlocks.map((item) => item.questId), [source.questId]);
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });
 
 test("schedule block completion persists to the quest and survives adding another task", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-schedule-status-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await createBoard(dataDir);
     await mkdir(join(dataDir, "inbox"), { recursive: true });
@@ -227,14 +200,13 @@ test("schedule block completion persists to the quest and survives adding anothe
     assert.ok(preserved.length >= 1);
     assert.ok(preserved.every((block) => block.status === "completed"), preserved);
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });
 
 test("completing the active todo card automatically starts the next unfinished card and records both changes", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-todo-auto-start-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await createBoard(dataDir);
     await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "", dayEnd: "", timeConfigured: false, bufferMinutes: 10 }));
@@ -280,14 +252,13 @@ test("completing the active todo card automatically starts the next unfinished c
     assert.equal(persisted.schedule.blocks.find((block) => block.id === active.id).status, "completed");
     assert.equal(persisted.schedule.blocks.find((block) => block.id === next.id).status, "in_progress");
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });
 
 test("untimed todo completion remains completed after adding another task", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-todo-status-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await createBoard(dataDir);
     await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "", dayEnd: "", timeConfigured: false, bufferMinutes: 10 }));
@@ -319,14 +290,13 @@ test("untimed todo completion remains completed after adding another task", asyn
     assert.equal(preserved.status, "completed");
     assert.ok(added.schedule.blocks.some((block) => block.title === "todo 새 작업"));
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });
 
 test("untimed todo move changes card order without assigning times", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-todo-move-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await createBoard(dataDir);
     await writeFile(join(dataDir, "schedule-settings.json"), JSON.stringify({ dayStart: "", dayEnd: "", timeConfigured: false, bufferMinutes: 10 }));
@@ -356,7 +326,6 @@ test("untimed todo move changes card order without assigning times", async () =>
     const stableFocus = afterRebuild.schedule.blocks.filter((block) => block.type === "focus").sort((left, right) => left.order - right.order);
     assert.deepEqual(stableFocus.map((block) => block.id), [target.id, source.id, focus[2].id]);
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });

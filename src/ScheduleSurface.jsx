@@ -240,10 +240,16 @@ export default function ScheduleSurface() {
     };
     consumeOpenRequest();
     let unlisten;
-    void listen("daybridge:open-settings", () => consumeOpenRequest()).then((stopListening) => { unlisten = stopListening; });
+    let disposed = false;
+    if (isTauri()) {
+      void listen("daybridge:open-settings", () => consumeOpenRequest()).then((stopListening) => {
+        if (disposed) stopListening();
+        else unlisten = stopListening;
+      }).catch((error) => recordRuntimeEvent("settings_listener_error", { error: error?.message || String(error) }));
+    }
     const timer = window.setInterval(consumeOpenRequest, 200);
     const stop = window.setTimeout(() => window.clearInterval(timer), 3_000);
-    return () => { window.clearInterval(timer); window.clearTimeout(stop); unlisten?.(); };
+    return () => { disposed = true; window.clearInterval(timer); window.clearTimeout(stop); unlisten?.(); };
   }, [dailyDefaultsLoaded, loadDailyDefaults, loadScheduleSettings, loadStorageLocation, scheduleSettingsLoaded, storageDirectoryLoaded, surface]);
   useEffect(() => {
     const interval = window.setInterval(() => { void loadSchedule({ quiet: true }); }, 60_000);
@@ -420,7 +426,7 @@ export default function ScheduleSurface() {
 
   const connectCalendar = useCallback(async () => {
     try {
-      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/calendar/connect`, { method: "POST" }));
+      const result = await readJson(await fetchBridge(`${BRIDGE_URL}/api/calendar/connect`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }));
       setCalendarConnection(result.calendar || { state: "attention", reason: "status_unavailable" });
       if (result.authorizationUrl) {
         window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");

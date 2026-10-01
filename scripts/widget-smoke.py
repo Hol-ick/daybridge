@@ -202,8 +202,41 @@ def freeze_page_date(context, iso_timestamp: str) -> None:
     """)
 
 
+
+def fixture_context(browser, **options):
+    """Block every bridge API request before registering scenario-specific mocks."""
+    context = browser.new_context(service_workers="block", **options)
+    context._unexpected_bridge_requests = []
+
+    def block_unregistered(route):
+        context._unexpected_bridge_requests.append(f"{route.request.method} {route.request.url}")
+        route.fulfill(status=503, content_type="application/json", body='{"error":"unregistered_fixture_request"}')
+
+    context.route(re.compile(r"http://(?:127\.0\.0\.1|localhost):39393/api/.*"), block_unregistered)
+    # Shared background calls are explicit fixture responses, never a live bridge fallback.
+    shared = {
+        "/api/board": (404, {"error": "fixture board unavailable"}),
+        "/api/runtime-events": (200, {"accepted": True}),
+        "/api/storage-location": (200, {"dataDirectory": "fixture://data", "logDirectory": "fixture://logs", "scheduleDirectory": "fixture://schedules"}),
+        "/api/daily-defaults": (200, json.loads(DAILY_DEFAULTS)),
+        "/api/activity": (200, {"records": []}),
+        "/api/schedule/rebuild": (200, json.loads(EMPTY_SCHEDULE)),
+    }
+    for path, (status, body) in shared.items():
+        context.route(re.compile(r"http://127\.0\.0\.1:39393" + re.escape(path) + r"(?:\?|$)"),
+                      lambda route, *, status=status, body=body: route.fulfill(status=status, content_type="application/json", body=json.dumps(body)))
+    freeze_page_date(context, "2026-08-24T09:00:00+09:00")
+    return context
+
+
+def close_fixture_context(context):
+    unexpected = list(context._unexpected_bridge_requests)
+    context.close()
+    assert not unexpected, f"Unregistered bridge requests: {unexpected}"
+
+
 def check_dashboard(browser) -> None:
-    context = browser.new_context(viewport={"width": 960, "height": 760}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 960, "height": 760}, device_scale_factor=1)
     daily_defaults_calls: list[dict] = []
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
@@ -252,12 +285,13 @@ def check_dashboard(browser) -> None:
     page.screenshot(path=str(dashboard_artifact), full_page=True)
 
     page.locator('[data-testid="schedule-settings"]').click()
-    page.wait_for_selector('form[aria-label="위젯 설정"]')
+    page.wait_for_selector('[data-testid="now-focus-overlay-settings-sheet"]')
+    page.get_by_role("button", name="표시·색상").click()
     assert page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
-    settings_box = page.locator('form[aria-label="위젯 설정"]').bounding_box()
-    assert settings_box and round(settings_box["width"]) == 456
+    settings_box = page.locator('[data-testid="now-focus-overlay-settings-sheet"]').bounding_box()
+    assert settings_box and round(settings_box["width"]) == page.viewport_size["width"]
     assert page.get_by_text("위젯 설정", exact=True).is_visible()
-    assert page.get_by_text("매일 반복할 일", exact=True).is_visible()
+    page.get_by_role("button", name="반복 일정").click()
     page.get_by_label("새 매일 기본 일정").fill("오전 메일 확인")
     page.get_by_role("button", name="＋ 추가").click()
     assert page.get_by_label("오전 메일 확인 기본 일정").input_value() == "오전 메일 확인"
@@ -265,21 +299,21 @@ def check_dashboard(browser) -> None:
     artifact = Path("test-artifacts/daybridge-schedule-dashboard.png")
     artifact.parent.mkdir(exist_ok=True)
     page.screenshot(path=str(artifact), full_page=True)
-    refresh_button = page.locator('[data-testid="schedule-widget-refresh"]')
+    refresh_button = page.locator('[data-testid="now-focus-overlay-refresh"]')
     assert refresh_button.is_visible()
     refresh_button.click()
     page.wait_for_function("document.querySelector('[role=status]').textContent.includes('위젯을 새로고침했어요')")
     assert refresh_button.inner_text() == "위젯 새로고침"
     page.get_by_role("button", name="저장", exact=True).click()
-    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('매일 기본 일정을 저장했어요')")
+    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('설정을 저장했어요')")
     assert daily_defaults_calls and daily_defaults_calls[0]["dailyDefaults"]["routines"][-1]["title"] == "오전 메일 확인"
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def check_dashboard_actions(browser) -> None:
     """Prove the management surface is wired to command endpoints, not a static mock."""
-    context = browser.new_context(viewport={"width": 960, "height": 760}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 960, "height": 760}, device_scale_factor=1)
     freeze_page_date(context, "2026-08-24T01:00:00+09:00")
     report_calls: list[dict] = []
     manual_calls: list[dict] = []
@@ -331,11 +365,11 @@ def check_dashboard_actions(browser) -> None:
     page.wait_for_function("document.querySelector('[data-testid=manual-task-form]') === null")
 
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def check_overlay(browser) -> None:
-    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 320, "height": 560}, device_scale_factor=1)
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=EMPTY_SCHEDULE),
@@ -459,61 +493,40 @@ def check_overlay(browser) -> None:
     assert collapsed_box and round(collapsed_box["height"]) == 64
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
-    # This is the modal viewport used by the native overlay while options are
-    # open. The compact corner card itself remains 288px wide.
-    page.set_viewport_size({"width": 520, "height": 620})
-    page.locator('[data-testid="now-focus-overlay-settings"]').click()
-    page.wait_for_selector('[data-testid="now-focus-overlay-settings-modal"]')
-    page.wait_for_selector('[data-testid="now-focus-overlay-settings-sheet"]')
-    settings_sheet = page.locator('[data-testid="now-focus-overlay-settings-sheet"]')
-    page.wait_for_function("""() => {
-        const sheet = document.querySelector('[data-testid=now-focus-overlay-settings-sheet]');
-        if (!sheet) return false;
-        const rect = sheet.getBoundingClientRect();
-        return Math.abs((rect.x + rect.width / 2) - window.innerWidth / 2) <= 1
-          && Math.abs((rect.y + rect.height / 2) - window.innerHeight / 2) <= 1;
+    # Settings now open in the dashboard rather than resizing the overlay.
+    with page.expect_popup() as popup_info:
+        page.locator('[data-testid="now-focus-overlay-settings"]').click()
+    settings_page = popup_info.value
+    settings_page.on("pageerror", lambda error: errors.append(str(error)))
+    settings_page.set_viewport_size({"width": 720, "height": 680})
+    settings_page.wait_for_selector('[data-testid="now-focus-overlay-settings-sheet"]')
+    assert "surface=dashboard" in settings_page.url
+    assert page.locator('[data-testid="now-focus-overlay-settings-modal"]').count() == 0
+    settings_sheet = settings_page.locator('[data-testid="now-focus-overlay-settings-sheet"]')
+    settings_page.wait_for_function("""() => {
+        const rect = document.querySelector('[data-testid=now-focus-overlay-settings-sheet]').getBoundingClientRect();
+        return Math.round(rect.width) === window.innerWidth && Math.round(rect.height) === window.innerHeight;
     }""")
     settings_box = settings_sheet.bounding_box()
-    viewport = page.viewport_size
-    assert settings_box and viewport
-    assert abs((settings_box["x"] + settings_box["width"] / 2) - viewport["width"] / 2) <= 1, (settings_box, viewport)
-    assert abs((settings_box["y"] + settings_box["height"] / 2) - viewport["height"] / 2) <= 1, (settings_box, viewport)
-    settings_modal = page.locator('[data-testid="now-focus-overlay-settings-modal"]')
-    assert settings_modal.evaluate("element => getComputedStyle(element).backgroundColor") == "rgba(0, 0, 0, 0)"
-    assert settings_modal.evaluate("element => getComputedStyle(element).backdropFilter") == "none"
-    assert not page.locator('[data-testid="now-focus-overlay-surface"]').is_visible()
-    assert page.locator('[data-testid="now-focus-overlay-settings-modal"] input[name="privateOverlay"]').is_visible()
-    # The settings panel is deliberately a quiet desktop dialog, rather than a
-    # neon-labelled generated-looking card. Its visible labels must describe
-    # the two actual settings groups without decorative product jargon.
-    assert page.get_by_text("위젯 설정", exact=True).is_visible()
-    assert page.get_by_text("매일 반복할 일", exact=True).is_visible()
-    assert page.get_by_text("WIDGET", exact=True).count() == 0
-    assert page.get_by_text("ROUTINE", exact=True).count() == 0
-    assert page.get_by_text("표시 옵션", exact=True).count() == 0
-    assert page.get_by_label("영양제 먹기 기본 일정").input_value() == "영양제 먹기"
-    page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
-    # Losing focus while the options dialog is open must not collapse the
-    # underlying card and leave the still-open form clipped to 64px.
-    page.evaluate("window.dispatchEvent(new Event('blur'))")
-    page.wait_for_timeout(360)
-    assert page.locator('[data-testid="now-focus-overlay-settings-modal"]').is_visible()
-    settings_box = settings_sheet.bounding_box()
-    assert settings_box and settings_box["y"] >= 0 and settings_box["y"] + settings_box["height"] <= viewport["height"], (settings_box, viewport)
-    overlay_refresh = page.locator('[data-testid="now-focus-overlay-refresh"]')
-    assert overlay_refresh.is_visible()
-    overlay_refresh.click()
-    page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-refresh]')?.textContent?.includes('위젯 새로고침')")
-    page.locator('[data-testid="now-focus-overlay-settings-modal"] [aria-label="설정 닫기"]').click()
-    assert page.locator('[data-testid="now-focus-overlay-settings-modal"]').count() == 0
-    page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().width) === 288 && Math.round(surface.getBoundingClientRect().height) === 64; })()")
+    assert settings_box and round(settings_box["width"]) == 720 and round(settings_box["height"]) == 680
+    settings_page.get_by_role("button", name="표시·색상").click()
+    assert settings_page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
+    settings_page.get_by_role("button", name="반복 일정").click()
+    assert settings_page.get_by_label("영양제 먹기 기본 일정").input_value() == "영양제 먹기"
+    settings_page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
+    settings_page.locator('[data-testid="now-focus-overlay-refresh"]').click()
+    settings_page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-refresh]')?.textContent?.includes('위젯 새로고침')")
+    settings_page.locator('[aria-label="설정 닫기"]').click()
+    settings_page.wait_for_selector('[data-testid="now-focus-overlay-settings-modal"]', state="detached")
+    settings_page.close()
+    assert round(surface.bounding_box()["width"]) == 288
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def check_overlay_todo_items(browser) -> None:
     """Prove an unconfigured day renders as an untimed actionable list."""
-    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 320, "height": 560}, device_scale_factor=1)
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=TODO_SCHEDULE),
@@ -566,11 +579,14 @@ def check_overlay_todo_items(browser) -> None:
     page.wait_for_selector('[data-testid="now-focus-overlay-drag-preview"]')
     # Users naturally release near a card boundary or in the small gap between
     # cards. That must still select the adjacent card as the drop target.
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().height) === Number(document.querySelector('[data-testid=now-focus-overlay-surface]').dataset.expandedHeight)")
+    second_box = second.bounding_box()
     gap_drop_y = second_box["y"] - 2
     first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": second_box["x"] + second_box["width"] / 2, "clientY": gap_drop_y})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-docs]')?.getAttribute('data-drop-target') === 'true'")
     page.wait_for_timeout(100)
-    first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": second_box["x"] + second_box["width"] / 2, "clientY": gap_drop_y})
+    with page.expect_response(lambda response: response.url.endswith("/api/schedule/block-move")):
+        first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": second_box["x"] + second_box["width"] / 2, "clientY": gap_drop_y})
     assert move_calls and move_calls[0]["blockId"] == "todo-linux" and move_calls[0]["targetBlockId"] == "todo-docs", move_calls
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-docs]')?.getBoundingClientRect().top < document.querySelector('[data-testid=now-focus-overlay-block-todo-linux]')?.getBoundingClientRect().top")
     first = page.locator('[data-testid="now-focus-overlay-block-todo-linux"]')
@@ -586,17 +602,18 @@ def check_overlay_todo_items(browser) -> None:
     assert trash_box["y"] >= footer_box["y"] + footer_box["height"] + 4, (trash_box, footer_box)
     first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": trash_box["x"] + trash_box["width"] / 2, "clientY": trash_box["y"] + trash_box["height"] / 2})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-trash]')?.getAttribute('data-trash-active') === 'true'")
-    first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": trash_box["x"] + trash_box["width"] / 2, "clientY": trash_box["y"] + trash_box["height"] / 2})
+    with page.expect_response(lambda response: response.url.endswith("/api/schedule/block-discard")):
+        first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": trash_box["x"] + trash_box["width"] / 2, "clientY": trash_box["y"] + trash_box["height"] / 2})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-linux]') === null")
     assert discard_calls and discard_calls[0]["blockId"] == "todo-linux"
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-todo-items.png", full_page=True)
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def check_overlay_auto_starts_next_todo(browser) -> None:
     """Completing the active card must promote one remaining card in the rendered widget."""
-    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 320, "height": 560}, device_scale_factor=1)
     freeze_page_date(context, "2026-08-24T01:00:00+09:00")
     report_calls: list[dict] = []
     context.route(
@@ -622,19 +639,20 @@ def check_overlay_auto_starts_next_todo(browser) -> None:
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
     page.locator('[data-testid="now-focus-overlay-open"]').click()
-    page.locator('[data-testid="now-focus-overlay-block-todo-docs"]').click()
+    with page.expect_response(lambda response: response.url.endswith("/api/schedule/block-report")):
+        page.locator('[data-testid="now-focus-overlay-block-todo-docs"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-todo-linux]')?.getAttribute('data-status') === 'in_progress'")
     assert report_calls and report_calls[0]["blockId"] == "todo-docs" and report_calls[0]["status"] == "completed"
     assert page.locator('[data-testid="now-focus-overlay-block-todo-docs"]').get_attribute("data-status") == "completed"
     assert page.locator('[data-testid="now-focus-overlay-title"]').text_content() == "리눅스 학습"
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-auto-started.png", full_page=True)
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def check_overlay_shows_empty_summary_after_completion(browser) -> None:
     """Completed history remains in the list while the compact card explains it is clear."""
-    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 320, "height": 560}, device_scale_factor=1)
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=TODO_ALL_COMPLETED_SCHEDULE),
@@ -663,12 +681,12 @@ def check_overlay_shows_empty_summary_after_completion(browser) -> None:
     assert completed_card.get_attribute("data-status") == "completed"
     assert completed_card.get_by_text("영양제 먹기", exact=True).is_visible()
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def check_overlay_compact_expansion(browser) -> None:
     """Prove short schedules stop at their content instead of a blank 520px panel."""
-    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 320, "height": 560}, device_scale_factor=1)
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=DRAG_SCHEDULE),
@@ -705,12 +723,12 @@ def check_overlay_compact_expansion(browser) -> None:
     assert add_box and settings_box and abs(add_box["width"] - settings_box["width"]) <= 1 and abs(add_box["height"] - settings_box["height"]) <= 1, (add_box, settings_box)
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-compact-list.png", full_page=True)
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def check_overlay_scrolls_only_at_maximum_height(browser) -> None:
     """Prove a long schedule uses the capped viewport before showing its list scrollbar."""
-    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 320, "height": 560}, device_scale_factor=1)
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=TALL_SCHEDULE),
@@ -736,12 +754,12 @@ def check_overlay_scrolls_only_at_maximum_height(browser) -> None:
     assert list_metrics["overflowY"] == "auto", list_metrics
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-scroll-limit.png", full_page=True)
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def check_overlay_long_title(browser) -> None:
     """Prove long card titles stay on one marquee line and removed controls stay absent."""
-    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 320, "height": 560}, device_scale_factor=1)
     context.route(
         re.compile(r"http://127\.0\.0\.1:39393/api/schedule(?:\?|$)"),
         lambda route: route.fulfill(status=200, content_type="application/json", body=LONG_FUNCTIONAL_SCHEDULE),
@@ -773,12 +791,12 @@ def check_overlay_long_title(browser) -> None:
     assert marquee.evaluate("element => getComputedStyle(element).transform") != initial_transform
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-marquee-moved.png", full_page=True)
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def check_overlay_reorder(browser) -> None:
     """Prove card drag, FLIP swap motion, trash discard, status clicks, and toolbar controls work."""
-    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 320, "height": 560}, device_scale_factor=1)
     freeze_page_date(context, "2026-08-24T01:00:00+09:00")
     move_calls: list[dict] = []
     report_calls: list[dict] = []
@@ -836,12 +854,17 @@ def check_overlay_reorder(browser) -> None:
     preview_style = preview.evaluate("element => { const style = getComputedStyle(element); return { position: style.position, opacity: parseFloat(style.opacity), transform: style.transform, pointerEvents: style.pointerEvents }; }")
     assert preview_style["position"] == "absolute" and preview_style["opacity"] >= 0.9 and preview_style["pointerEvents"] == "none", preview_style
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-dragging.png", full_page=True)
+    page.wait_for_function("Math.round(document.querySelector('[data-testid=now-focus-overlay-surface]').getBoundingClientRect().height) === Number(document.querySelector('[data-testid=now-focus-overlay-surface]').dataset.expandedHeight)")
+    second_box = second.bounding_box()
+    target_x = second_box["x"] + second_box["width"] / 2
+    target_y = second_box["y"] + 10
     first.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": target_x, "clientY": target_y})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getAttribute('data-drop-target') === 'true'")
     target_style = second.evaluate("element => { const style = getComputedStyle(element); return { animationName: style.animationName, position: element.getAttribute('data-drop-position') }; }")
     assert "overlay-drop-target-pulse" in target_style["animationName"] and target_style["position"] in {"before", "after"}, target_style
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-drop-target.png", full_page=True)
-    first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": target_x, "clientY": target_y})
+    with page.expect_response(lambda response: response.url.endswith("/api/schedule/block-move")):
+        first.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": target_x, "clientY": target_y})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-drag-preview]') === null")
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-a]')?.getAttribute('data-swap-role') === 'source' && document.querySelector('[data-testid=now-focus-overlay-block-drag-b]')?.getAttribute('data-swap-role') === 'target'")
     swap_style = second.evaluate("element => getComputedStyle(element).animationName")
@@ -855,7 +878,8 @@ def check_overlay_reorder(browser) -> None:
     assert move_calls and move_calls[0]["blockId"] == "drag-a" and move_calls[0]["targetBlockId"] == "drag-b"
     assert move_calls[0]["position"] in {"before", "after"}
     assert page.locator('[data-testid="now-focus-overlay-block-drag-b"]').bounding_box()["y"] < page.locator('[data-testid="now-focus-overlay-block-drag-a"]').bounding_box()["y"]
-    page.locator('[data-testid="now-focus-overlay-block-drag-b"]').click()
+    with page.expect_response(lambda response: response.url.endswith("/api/schedule/block-report")):
+        page.locator('[data-testid="now-focus-overlay-block-drag-b"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-status-drag-b]').textContent === '진행 중'")
     assert report_calls and report_calls[0]["blockId"] == "drag-b" and report_calls[0]["status"] == "in_progress"
 
@@ -874,18 +898,19 @@ def check_overlay_reorder(browser) -> None:
     discard_card.dispatch_event("mousemove", {"button": 0, "buttons": 1, "clientX": trash_center_x, "clientY": trash_center_y})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-trash]')?.getAttribute('data-trash-active') === 'true'")
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-trash-active.png", full_page=True)
-    discard_card.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": trash_center_x, "clientY": trash_center_y})
+    with page.expect_response(lambda response: response.url.endswith("/api/schedule/block-discard")):
+        discard_card.dispatch_event("mouseup", {"button": 0, "buttons": 0, "clientX": trash_center_x, "clientY": trash_center_y})
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-block-drag-a]') === null")
     assert discard_calls and discard_calls[0]["blockId"] == "drag-a"
     assert page.locator('[data-testid="now-focus-overlay-trash"]').count() == 0
     page.screenshot(path="test-artifacts/daybridge-schedule-overlay-dragged.png", full_page=True)
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def check_overlay_stale_card_is_not_reported_to_today(browser) -> None:
     """A stale card must clear rather than write its status into the new date."""
-    context = browser.new_context(viewport={"width": 320, "height": 560}, device_scale_factor=1)
+    context = fixture_context(browser, viewport={"width": 320, "height": 560}, device_scale_factor=1)
     freeze_page_date(context, "2026-09-02T09:00:00+09:00")
     schedule_requests = 0
     missing_today_board = False
@@ -926,7 +951,7 @@ def check_overlay_stale_card_is_not_reported_to_today(browser) -> None:
     assert schedule_requests >= 2
     assert not report_calls
     assert_no_page_errors(errors)
-    context.close()
+    close_fixture_context(context)
 
 
 def main() -> None:
@@ -936,18 +961,27 @@ def main() -> None:
         if chrome_path:
             launch_options["executable_path"] = chrome_path
         browser = playwright.chromium.launch(**launch_options)
-        check_dashboard(browser)
-        check_dashboard_actions(browser)
-        check_overlay(browser)
-        check_overlay_compact_expansion(browser)
-        check_overlay_scrolls_only_at_maximum_height(browser)
-        check_overlay_todo_items(browser)
-        check_overlay_auto_starts_next_todo(browser)
-        check_overlay_shows_empty_summary_after_completion(browser)
-        check_overlay_long_title(browser)
-        check_overlay_reorder(browser)
-        check_overlay_stale_card_is_not_reported_to_today(browser)
-        browser.close()
+        try:
+            for check in [check_dashboard, check_dashboard_actions, check_overlay,
+                          check_overlay_compact_expansion, check_overlay_scrolls_only_at_maximum_height,
+                          check_overlay_todo_items, check_overlay_auto_starts_next_todo,
+                          check_overlay_shows_empty_summary_after_completion, check_overlay_long_title,
+                          check_overlay_reorder, check_overlay_stale_card_is_not_reported_to_today]:
+                print(f"Running {check.__name__}", flush=True)
+                check(browser)
+                print(f"Passed {check.__name__}", flush=True)
+        except Exception:
+            artifacts = Path("test-artifacts")
+            artifacts.mkdir(exist_ok=True)
+            for index, context in enumerate(browser.contexts):
+                (artifacts / f"smoke-failure-{index}-requests.json").write_text(
+                    json.dumps(getattr(context, "_unexpected_bridge_requests", [])), encoding="utf-8")
+                for page_index, page in enumerate(context.pages):
+                    page.screenshot(path=str(artifacts / f"smoke-failure-{index}-{page_index}.png"), full_page=True)
+                    (artifacts / f"smoke-failure-{index}-{page_index}.html").write_text(page.content(), encoding="utf-8")
+            raise
+        finally:
+            browser.close()
 
 
 if __name__ == "__main__":

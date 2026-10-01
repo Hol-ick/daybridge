@@ -1,34 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
+import { startFixtureBridge } from "./test-support/fixture-bridge.mjs";
 import test from "node:test";
 
 const DATE = "2099-01-02";
 
-async function startBridge(dataDir) {
-  const port = 39400 + Math.floor(Math.random() * 500);
-  const child = spawn(process.execPath, ["scripts/local-bridge.mjs"], {
-    cwd: process.cwd(),
-    env: { ...process.env, DAYBRIDGE_BRIDGE_PORT: String(port), DAYBRIDGE_DATA_DIR: dataDir },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  const output = [];
-  const ready = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`bridge did not start: ${output.join("")}`)), 5_000);
-    child.stdout.on("data", (chunk) => {
-      output.push(chunk.toString());
-      if (output.join("").includes("listening")) { clearTimeout(timer); resolve(); }
-    });
-    child.once("error", (error) => { clearTimeout(timer); reject(error); });
-    child.once("exit", (code) => {
-      if (code !== 0) { clearTimeout(timer); reject(new Error(`bridge exited (${code}): ${output.join("")}`)); }
-    });
-  });
-  await ready;
-  return { child, baseUrl: `http://127.0.0.1:${port}` };
-}
 
 async function createBoard(dataDir) {
   const { mkdir, writeFile } = await import("node:fs/promises");
@@ -40,8 +17,8 @@ async function createBoard(dataDir) {
 }
 
 test("manual task endpoint saves a title-only task as an untimed todo card", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-manual-task-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await createBoard(dataDir);
     const response = await fetch(`${baseUrl}/api/quests/manual`, {
@@ -70,14 +47,13 @@ test("manual task endpoint saves a title-only task as an untimed todo card", asy
     const activityMarkdown = await readFile(join(dataDir, "activity", `${DATE}.md`), "utf8");
     assert.match(activityMarkdown, /작업 추가/);
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });
 
 test("manual task endpoint requires only a nonblank title and ignores legacy duration input", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-manual-task-invalid-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await createBoard(dataDir);
     const blank = await fetch(`${baseUrl}/api/quests/manual`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE, title: "" }) });
@@ -85,7 +61,6 @@ test("manual task endpoint requires only a nonblank title and ignores legacy dur
     const legacyDuration = await fetch(`${baseUrl}/api/quests/manual`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityDate: DATE, title: "리눅스 학습", durationMinutes: 75 }) });
     assert.equal(legacyDuration.status, 201);
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });

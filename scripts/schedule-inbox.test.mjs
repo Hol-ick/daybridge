@@ -1,27 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
+import { startFixtureBridge } from "./test-support/fixture-bridge.mjs";
 import test from "node:test";
 
 const DATE = "2099-02-03";
 const DIRECT_DATE = "2099-02-04";
 
-async function startBridge(dataDir) {
-  const port = 40400 + Math.floor(Math.random() * 400);
-  const child = spawn(process.execPath, ["scripts/local-bridge.mjs"], {
-    cwd: process.cwd(), env: { ...process.env, DAYBRIDGE_BRIDGE_PORT: String(port), DAYBRIDGE_DATA_DIR: dataDir }, stdio: ["ignore", "pipe", "pipe"],
-  });
-  const output = [];
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`bridge did not start: ${output.join("")}`)), 5000);
-    child.stdout.on("data", (chunk) => { output.push(chunk.toString()); if (output.join("").includes("listening")) { clearTimeout(timer); resolve(); } });
-    child.once("error", (error) => { clearTimeout(timer); reject(error); });
-    child.once("exit", (code) => { if (code !== 0) { clearTimeout(timer); reject(new Error(`bridge exited (${code}): ${output.join("")}`)); } });
-  });
-  return { child, baseUrl: `http://127.0.0.1:${port}` };
-}
 
 function inbox(title = "리눅스 학습", date = DATE) {
   return `---
@@ -39,8 +24,8 @@ updated_at: ${date}T09:00:00+09:00
 }
 
 test("local bridge ingests a changed date inbox and exposes validation details", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-schedule-inbox-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     await mkdir(join(dataDir, "boards"), { recursive: true });
     await writeFile(join(dataDir, "boards", `${DATE}.json`), JSON.stringify({
@@ -69,14 +54,13 @@ test("local bridge ingests a changed date inbox and exposes validation details",
     const saved = JSON.parse(await readFile(join(dataDir, "schedules", `${DATE}.json`), "utf8"));
     assert.equal(typeof saved.inbox.fingerprint, "string");
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });
 
 test("a direct session inbox builds a schedule without a closeout board", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "daybridge-direct-inbox-"));
-  const { child, baseUrl } = await startBridge(dataDir);
+  const fixture = await startFixtureBridge();
+  const { dataDir, baseUrl } = fixture;
   try {
     const inboxPath = join(dataDir, "inbox", `schedule-${DIRECT_DATE}.md`);
     await mkdir(join(dataDir, "inbox"), { recursive: true });
@@ -99,7 +83,6 @@ test("a direct session inbox builds a schedule without a closeout board", async 
     assert.equal(boardBody.board.quests[0].sourceKind, "session");
     assert.equal(boardBody.board.quests[0].title, "현재 세션 작업");
   } finally {
-    child.kill();
-    await rm(dataDir, { recursive: true, force: true });
+    await fixture.close();
   }
 });
