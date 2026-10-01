@@ -2,6 +2,7 @@
 
 use serde_json::json;
 mod bridge_health;
+mod bridge_runtime;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -21,7 +22,6 @@ const OVERLAY_POSITION_FILE: &str = "overlay-position.json";
 const RUNTIME_LOG_FILE: &str = "runtime-events.ndjson";
 const WINDOWS_STARTUP_VALUE: &str = "Daybridge";
 const LOCAL_BRIDGE_PORT: u16 = 39393;
-const LOCAL_BRIDGE_SCRIPT: &str = "scripts/local-bridge.mjs";
 const KEEP_ALIVE_SCRIPT_FILE: &str = "daybridge-keep-alive.ps1";
 const EXPLICIT_EXIT_MARKER_FILE: &str = "explicit-exit.flag";
 const OVERLAY_CANVAS_WIDTH: i32 = 760;
@@ -230,24 +230,11 @@ fn bridge_is_reachable() -> bool {
     bridge_health::bridge_is_reachable_at(bridge_endpoint())
 }
 
-fn bridge_project_root() -> Option<PathBuf> {
-    let executable = std::env::current_exe().ok()?;
-    // Packaged local builds live at <project>/src-tauri/target/<profile>/daybridge.exe.
-    // Walking up four parents reaches the checkout root:
-    // <project>/src-tauri/target/<profile>/daybridge.exe
-    executable
-        .parent()?
-        .parent()?
-        .parent()?
-        .parent()
-        .map(PathBuf::from)
-}
-
 #[cfg(windows)]
 fn stop_existing_local_bridge(app: &tauri::AppHandle, script: &std::path::Path) -> Result<usize, String> {
     // The bridge is a separate Node process and survives when an older widget
     // executable is replaced. Restrict the stop operation to the exact script
-    // path from this checkout; never terminate a process merely because it
+    // path from the selected runtime; never terminate a process merely because it
     // happens to use the bridge port.
     let command_text = r#"
 $ErrorActionPreference = 'Stop'
@@ -298,21 +285,9 @@ fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
     if bridge_health::probe_bridge(bridge_endpoint()) == bridge_health::BridgeProbe::ForeignListener {
         return Err("브리지 포트의 서비스가 호환되는 Daybridge인지 확인하지 못했습니다. 실행 진단을 확인해 주세요.".to_string());
     }
-    let project_root = bridge_project_root()
-        .ok_or_else(|| "Daybridge 프로젝트 경로를 확인할 수 없습니다.".to_string())?;
-    let script = project_root.join(LOCAL_BRIDGE_SCRIPT);
-    if !script.is_file() {
-        let error = format!(
-            "로컬 브리지 스크립트를 찾을 수 없습니다: {}",
-            script.display()
-        );
-        let _ = append_runtime_event(
-            app,
-            "bridge_autostart_unavailable",
-            &json!({ "error": error }).to_string(),
-        );
-        return Err(error);
-    }
+    let resources = app.path().resource_dir().map_err(|_| "앱 실행 리소스 경로를 확인할 수 없습니다.".to_string())?;
+    let runtime = bridge_runtime::resolve_bridge_runtime(&resources, cfg!(debug_assertions))?;
+    let script = runtime.script;
 
     if bridge_is_reachable() {
         let stopped = stop_existing_local_bridge(&app, &script)?;
@@ -344,11 +319,10 @@ fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
         }
     }
 
-    let node = std::env::var_os("DAYBRIDGE_NODE").unwrap_or_else(|| "node".into());
-    let mut command = Command::new(&node);
+    let mut command = Command::new(&runtime.node);
     command
         .arg(&script)
-        .current_dir(&project_root)
+        .current_dir(&runtime.working_directory)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -370,7 +344,7 @@ fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
     let _ = append_runtime_event(
         app,
         "bridge_autostart_spawned",
-        &json!({ "port": LOCAL_BRIDGE_PORT, "pid": child.id() }).to_string(),
+        &json!({ "port": LOCAL_BRIDGE_PORT, "pid": child.id(), "runtimeSource": format!("{:?}", runtime.source) }).to_string(),
     );
 
     // Give Node a short head start so the first WebView request does not race
@@ -1011,7 +985,7 @@ fn main() {
                 }
             }
             // The widget and its local HTTP bridge are separate processes. Start
-            // the bridge from the same checkout when the app launches so a
+            // the bundled runtime (or debug checkout) when the app launches so a
             // Windows login cannot leave a visible but disconnected widget.
             if let Err(error) = start_local_bridge(app.handle()) {
                 eprintln!("Daybridge 로컬 브리지 자동 시작 실패: {error}");

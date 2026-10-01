@@ -1,6 +1,6 @@
 import {createHash} from "node:crypto";
 import {execFileSync} from "node:child_process";
-import {copyFile, mkdir, readFile, readdir, writeFile} from "node:fs/promises";
+import {copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile} from "node:fs/promises";
 import {dirname, join, resolve} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 import {rolldown} from "rolldown";
@@ -67,7 +67,8 @@ export async function prepareBridgeRuntime({nodeExecutable, outputDir}) {
   const info = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8"));
   await copyFile(resolve(nodeExecutable), join(root, "node.exe"));
   await writeFile(join(root, "package.json"), JSON.stringify({name: "daybridge-bridge-runtime", version: info.version, private: true, type: "module"}, null, 2) + "\n");
-  const notices = [`Node.js ${node.version}\nSource: https://github.com/nodejs/node/blob/${node.version}/LICENSE\n\n${license}`, ...dependencies.map(item => `${item.name}@${item.version} (${item.license})\n\n${item.texts.join("\n\n")}`)];
+  const attribution = await readFile(join(projectRoot, "THIRD_PARTY_NOTICES.md"), "utf8");
+  const notices = [attribution, `Node.js ${node.version}\nSource: https://github.com/nodejs/node/blob/${node.version}/LICENSE\n\n${license}`, ...dependencies.map(item => `${item.name}@${item.version} (${item.license})\n\n${item.texts.join("\n\n")}`)];
   await writeFile(join(root, "THIRD_PARTY_NOTICES.txt"), notices.join("\n\n----------------------------------------\n\n"));
   const files = {};
   for (const name of ["node.exe", "package.json", "scripts/local-bridge.mjs", "THIRD_PARTY_NOTICES.txt"]) {
@@ -79,9 +80,60 @@ export async function prepareBridgeRuntime({nodeExecutable, outputDir}) {
   return manifest;
 }
 
+async function verifyGeneratedRuntime(target) {
+    const info = await lstat(target);
+    if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Existing bridge runtime is not a managed directory");
+    if ((await lstat(join(target, "scripts"))).isSymbolicLink() || (await lstat(join(target, "runtime-manifest.json"))).isSymbolicLink()) throw new Error("Existing bridge runtime contains linked metadata or scripts");
+    const manifest = JSON.parse(await readFile(join(target, "runtime-manifest.json"), "utf8"));
+    const files = ["node.exe", "package.json", "scripts/local-bridge.mjs", "THIRD_PARTY_NOTICES.txt"];
+    const names = (await readdir(target)).sort();
+    if (manifest.schemaVersion !== 1 || JSON.stringify(names) !== JSON.stringify(["node.exe", "package.json", "runtime-manifest.json", "scripts", "THIRD_PARTY_NOTICES.txt"].sort())) throw new Error("Existing bridge runtime contains unmanaged files");
+    if (JSON.stringify((await readdir(join(target, "scripts"))).sort()) !== JSON.stringify(["local-bridge.mjs"])) throw new Error("Existing bridge runtime contains unmanaged scripts");
+    for (const name of files) {
+      if ((await lstat(join(target, name))).isSymbolicLink()) throw new Error("Existing bridge runtime contains a linked file");
+      const data = await readFile(join(target, name));
+      if (manifest.files?.[name]?.sha256 !== digest(data) || manifest.files[name].bytes !== data.length) throw new Error("Existing bridge runtime checksum mismatch; preserve it for inspection");
+    }
+    const pkg = JSON.parse(await readFile(join(target, "package.json"), "utf8"));
+    if (pkg.name !== "daybridge-bridge-runtime") throw new Error("Existing bridge runtime is not a managed package");
+}
+
+/** Replace only a complete, verified artifact that this packager previously generated. */
+export async function prepareTauriBridgeRuntime({nodeExecutable, resourceDirectory = join(projectRoot, "src-tauri/resources")}) {
+  const resources = resolve(resourceDirectory);
+  await mkdir(resources, {recursive: true});
+  const target = join(resources, "bridge-runtime");
+  let existing = false;
+  try {await verifyGeneratedRuntime(target); existing = true;}
+  catch (error) {if (error.code !== "ENOENT" || (await lstat(target).catch(() => null))) throw error;}
+  const stage = await mkdtemp(join(resources, ".bridge-build-"));
+  const next = join(stage, "next");
+  const previous = join(stage, "previous");
+  let moved = false;
+  let published = false;
+  try {
+    const manifest = await prepareBridgeRuntime({nodeExecutable, outputDir: next});
+    if (existing) {
+      await rename(target, previous);
+      moved = true;
+      // Recheck after moving: edits made while bundling must also be preserved.
+      await verifyGeneratedRuntime(previous);
+    }
+    await rename(next, target);
+    published = true;
+    return manifest;
+  } finally {
+    if (moved && !published) await rename(previous, target);
+    // stage is a fresh child created above; no user-supplied deletion path is used.
+    await rm(stage, {recursive: true, force: true, maxRetries: 5, retryDelay: 100});
+  }
+}
+
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const outputDir = process.argv[2];
-  if (!outputDir) throw new Error("Usage: node scripts/package-bridge.mjs <new-output-directory>");
-  const manifest = await prepareBridgeRuntime({nodeExecutable: process.execPath, outputDir});
+  if (!outputDir) throw new Error("Usage: node scripts/package-bridge.mjs <new-output-directory> | --tauri");
+  const manifest = outputDir === "--tauri"
+    ? await prepareTauriBridgeRuntime({nodeExecutable: process.execPath})
+    : await prepareBridgeRuntime({nodeExecutable: process.execPath, outputDir});
   console.log(JSON.stringify({node: manifest.node, dependencies: manifest.dependencies.length, files: manifest.files}, null, 2));
 }

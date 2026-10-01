@@ -24,7 +24,7 @@
     "check": "tsc --noEmit",
     "tauri": "tauri",
     "dev:widget": "tauri dev",
-    "build:widget": "tauri build"
+    "build:widget": "node scripts/build-widget.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",

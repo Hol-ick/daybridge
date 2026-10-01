@@ -8,7 +8,7 @@ The bridge packaging command uses Node.js v24.19.0 for Windows x64 and rolldown
 [Node.js license](https://github.com/nodejs/node/blob/v24.19.0/LICENSE).
 Its SHA-256 is checked before packaging.
 
-Each runtime includes `THIRD_PARTY_NOTICES.txt` with the complete Node notices
+Each runtime includes `THIRD_PARTY_NOTICES.txt` with this attribution, the complete Node notices
 and the license/notice files of the npm packages included in the bridge bundle,
 including googleapis 170.0.0. The generated `runtime-manifest.json` records
 dependency versions and SHA-256 hashes of the runtime files. Packaging fails

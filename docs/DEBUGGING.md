@@ -185,6 +185,27 @@ pnpm build:widget
 
 Windows needs WebView2, Rust with the MSVC target, and Microsoft C++ Build Tools with the Windows SDK. A missing compiler/toolchain is a local setup blocker, not a successful native build.
 
+`pnpm build:widget` prepares the pinned Windows x64 bridge runtime and then
+merges `src-tauri/tauri.release.conf.json` into the Tauri build. The resulting
+resources contain their own Node executable and bridge dependencies. Release
+startup verifies their file hashes and selects the resource directory; it never
+walks up to a development checkout or uses `DAYBRIDGE_NODE`/system Node.
+Development builds retain the checkout fallback when bundled resources are absent.
+The distribution command builds under `src-tauri/target/package`, separate from
+the historical `target/release` executable that may still be running.
+
+Use `pnpm build:widget --no-bundle` to compile the release executable and resource
+layout without creating an installer. Compilation does not verify an installed
+application. Standalone `tauri build` without the release configuration does not
+include the bridge runtime and is not the supported distribution command.
+
+`pnpm package:bridge <new-output-directory>` prepares only the runtime.
+`pnpm package:bridge --tauri` prepares its generated resource folder. Rebuilding
+replaces a previous complete artifact only after verifying its inventory and
+checksums; unknown files, linked paths and damaged artifacts are preserved with
+an error. Generated runtime files stay outside Git. Actual installation, login
+startup, keep-alive and operational data selection require separate evidence.
+
 ## 5. Check the MARU handoff
 
 At closeout, run the collector for the work date:

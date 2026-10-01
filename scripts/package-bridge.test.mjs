@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {mkdtemp, mkdir, copyFile, writeFile, readFile, rm} from "node:fs/promises";
+import {mkdtemp, mkdir, copyFile, writeFile, readFile, rm, rename as renameRuntime} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {spawn, spawnSync} from "node:child_process";
 import {once} from "node:events";
 import {createHash} from "node:crypto";
-import {prepareBridgeRuntime} from "./package-bridge.mjs";
+import {prepareBridgeRuntime, prepareTauriBridgeRuntime} from "./package-bridge.mjs";
 
 test("an independent bridge runtime includes its interpreter, dependencies and inventory", async () => {
   const root = await mkdtemp(join(tmpdir(), "daybridge-package-"));
@@ -92,6 +92,20 @@ test("an independent bridge runtime includes its interpreter, dependencies and i
     assert.equal(board.body.board.quests.length, 1);
     assert.equal(board.body.board.quests[0].id, created.body.quest.id);
     await assert.rejects(prepareBridgeRuntime({nodeExecutable: process.execPath, outputDir: runtime}), /already exists/);
+    await stop();
+    const resourceDirectory = join(root, "resources");
+    await mkdir(resourceDirectory);
+    const published = join(resourceDirectory, "bridge-runtime");
+    await renameRuntime(runtime, published);
+    await prepareTauriBridgeRuntime({nodeExecutable: process.execPath, resourceDirectory});
+    assert.equal(JSON.parse(await readFile(join(published, "runtime-manifest.json"), "utf8")).schemaVersion, 1);
+    await writeFile(join(published, "private-note.txt"), "preserve unknown content");
+    await assert.rejects(prepareTauriBridgeRuntime({nodeExecutable: process.execPath, resourceDirectory}), /unmanaged files/);
+    assert.equal(await readFile(join(published, "private-note.txt"), "utf8"), "preserve unknown content");
+    await rm(join(published, "private-note.txt"));
+    await writeFile(join(published, "scripts/local-bridge.mjs"), "preserve damaged artifact");
+    await assert.rejects(prepareTauriBridgeRuntime({nodeExecutable: process.execPath, resourceDirectory}), /checksum mismatch/);
+    assert.equal(await readFile(join(published, "scripts/local-bridge.mjs"), "utf8"), "preserve damaged artifact");
   } finally {await stop(); await rm(root, {recursive: true, force: true, maxRetries: 5, retryDelay: 100});}
 });
 

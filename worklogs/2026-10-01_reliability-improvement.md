@@ -131,3 +131,13 @@
 - 임시 독립 폴더에서 빈 PATH와 격리 app/data/profile, 임의 포트만 사용해 bundled node 기동·health identity·수동 항목 durable 저장·자기 child 종료·재기동 후 동일 항목과 새 instance 확인을 통과했다. sourceRoot는 패키지 폴더이며 bundle에 개발 저장소 절대 경로가 없음을 확인했다. 실제 운영 브리지와 app은 사용하지 않았다.
 - 이 결과는 bridge runtime의 격리 실행 근거다. native resource 선택, 배포 exe 검증 모드, release/NSIS 생성과 실제 설치·로그인 검증은 아직 완료되지 않았다. 작업 9 전체와 A08, 작업 10, 전체 목표는 active로 유지한다.
 - 검증: 전체 Node 161개/32 suite, frozen install, pnpm check, pnpm build와 diff 검사 통과. 기존 Tauri 정적/동적 import 경고는 유지된다. 이 변경은 UI와 native 창 동작을 바꾸지 않는다.
+
+## 작업 9 진행: native 리소스 선택과 배포 빌드
+
+- bridge_runtime 모듈의 RuntimeSource와 resolve_bridge_runtime을 native 기동에 연결했다. release는 resource_dir의 bridge-runtime을 선택하며 manifest 버전·플랫폼과 네 파일의 실제 바이트 수·SHA-256을 검사한다. Node와 script 경로도 같은 리소스에서 선택한다. debug에서만 컴파일 시 checkout fallback과 DAYBRIDGE_NODE를 허용한다. 네 단계 부모 폴더 탐색은 제거했다.
+- 누락·부분·손상·호환되지 않는 런타임은 오류다. 정상 bundle 선택, release checkout 우회 차단, script 손상, manifest 부재와 다른 Node 버전의 실패를 포함해 Rust 12개 통과했다. 기존 관리 bridge의 교체는 같은 script와 port 소유자 제한을 유지한다.
+- pnpm build:widget은 런타임을 준비한 뒤 tauri.release.conf.json을 병합한다. 기본 Tauri 설정은 개발 소스 경로를 계속 사용할 수 있도록 리소스 없이 유지하며 배포 리소스는 별도 설정으로 포함한다. 새 artifact만 생성하는 인터페이스를 유지하고, 재빌드는 이전 inventory·hash·링크 여부를 확인한 생성물만 교체한다. bundling 동안 수정된 내용도 이동 후 다시 검사하고 실패하면 이전 artifact를 복원한다. 미확인 파일과 손상 산출물은 보존한다.
+- 첫 release 빌드는 이전 target/release/daybridge.exe의 Windows 접근 거부로 실패했다. 읽기 전용 확인에서 그 실행 파일의 앱 1개가 실행 중이었다. 앱을 종료하지 않고 wrapper의 빌드 대상을 target/package로 분리했다. 수정 뒤 pnpm build:widget --no-bundle이 성공했다. 기존 실행 파일의 hash가 이후에도 동일함을 확인했다. 실패 빌드가 복사한 생성형 리소스 캐시는 기존 target에 남아 있으며 운영 파일로 승격하지 않는다.
+- 별도 release 실행 파일과 bridge-runtime을 생성했고, 실제 복사된 네 파일의 hash·길이를 모두 재검사했다. 49개 npm dependency와 고지 파일을 포함한다. renderer 출처의 고지 문서도 runtime notices에 포함한다. 영수증은 Git에서 제외한 test-artifacts/release-resource-inventory.json이며 executableStarted=false, installerVerified=false다.
+- 명시적 검증 모드, release exe의 임시 설치 폴더 실행, NSIS 생성·실제 설치·로그인 검증은 미완료다. Windows Sandbox 실행 파일은 없다. 새 배포 exe를 실행하거나 사용자 앱·시작 프로그램·운영 자료·Calendar 권한을 바꾸지 않았다. 작업 9, A08, 작업 10 및 전체 목표는 active다.
+- 최종 전체 Node 161개/32 suite(실패·skip 0), Rust 12개, pnpm build:widget --no-bundle의 웹·release 빌드, resource inventory와 diff 검사 통과. 기존 Tauri import 경고는 남아 있다. 원격 CI와 설치본 동작은 이 로컬 검증으로 승격하지 않는다.

@@ -10,7 +10,11 @@ Tasks 0–8 of the reliability plan have implementation and local verification e
 
 Task 8 also fixes metadata loss for work that could not fit into a timed schedule: task titles, prerequisites and safe provenance survive normalization, serialization and carryover. The test reproduced the loss before the fix.
 
-Tasks 9–10 remain open: bundle an independent bridge runtime, verify the release package in an isolated environment, then reconcile documentation and the final audit handoff. The overall Codex goal remains active. Operational data paths, the user's running app, installation and Calendar authorization have not been changed. The older sections below describe prior implementation history; use the latest [reliability worklog](worklogs/2026-10-01_reliability-improvement.md) for the current checkpoint.
+Task 9 is in progress. The independent bridge runtime bundles Node v24.19.0 for Windows x64 and 49 npm dependency packages, including googleapis 170.0.0, with file hashes and full notices. An isolated runtime starts with an empty PATH, saves a manual task and preserves it after restart. Native release startup selects verified bundled resources; only debug builds allow the checkout fallback. Missing, damaged or incompatible resources produce an error.
+
+The final regression passes 161 Node tests across 32 suites and 12 Rust tests. The release executable and resources compile under `src-tauri/target/package`, separately from the historical executable that is still running. The copied resources pass their manifest checksums. This is compilation and bridge-runtime evidence: the release executable has not been launched, and a production-side-effect-free verification mode and actual NSIS installation/login checks remain open. Windows Sandbox executable is absent on this host; no isolated Windows environment has been established for installer verification.
+
+Tasks 9–10 and the overall Codex goal remain active. Operational data paths, the user's running app, installation and Calendar authorization have not been changed. The older sections below describe prior implementation history; use the latest [reliability worklog](worklogs/2026-10-01_reliability-improvement.md) for the current checkpoint.
 
 ## Objective
 
