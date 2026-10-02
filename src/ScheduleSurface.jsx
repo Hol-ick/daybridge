@@ -73,6 +73,14 @@ export default function ScheduleSurface() {
   const [calendarCoverage, setCalendarCoverage] = useState("attention");
   const [calendarConnection, setCalendarConnection] = useState({ state: "attention", reason: "status_pending" });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  useEffect(() => {
+    if (!isTauri() || surface !== "overlay") return;
+    let disposed = false;
+    let unlisten = () => {};
+    void listen("memo-archive-open", () => { setSettingsOpen(false); setArchiveOpen(true); }).then(stop => { if (disposed) stop(); else unlisten = stop; });
+    return () => { disposed = true; unlisten(); };
+  }, [surface]);
   const [overlayMagnetPulse, setOverlayMagnetPulse] = useState(false);
   const [privateMode, setPrivateMode] = useState(initialPrivateMode);
   const [notice, setNotice] = useState("");
@@ -498,9 +506,10 @@ export default function ScheduleSurface() {
       settingsOpen={settingsOpen}
       onOpenSettings={openSettings}
       onOpenMemoArchive={() => {
-        if (!isTauri()) { setNotice("메모 보관함은 Windows 앱에서 열 수 있어요"); return; }
-        void invoke("open_memo_archive_directory").catch(() => setNotice("메모 보관함을 열지 못했어요"));
+        setSettingsOpen(false); setArchiveOpen(true);
       }}
+      archiveOpen={archiveOpen}
+      onCloseMemoArchive={() => setArchiveOpen(false)}
       onCloseSettings={() => setSettingsOpen(false)}
       onSaveSettings={saveSettings}
       onRefreshWidget={refreshWidget}

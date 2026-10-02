@@ -6,14 +6,14 @@ use super::memo_store::MemoRepository;
 #[derive(Default)]
 struct Lifecycle { active: bool, closed: Option<Value>, exit_reason: Option<String>, log_failures: u64 }
 #[derive(Default)]
-pub struct MemoStore { gate: Mutex<()>, lifecycle: Mutex<Lifecycle> }
+pub struct MemoStore { pub(super) gate: Mutex<()>, lifecycle: Mutex<Lifecycle> }
 
 fn memo_window(window: &tauri::WebviewWindow) -> Result<(), String> {
     if window.label() != "memo" { return Err("메모창에서만 사용할 수 있습니다.".into()); }
     Ok(())
 }
 
-fn repository(app: &tauri::AppHandle) -> Result<MemoRepository, String> {
+pub(super) fn repository(app: &tauri::AppHandle) -> Result<MemoRepository, String> {
     let root = app.path().app_local_data_dir().map_err(|_| "write_failed")?;
     MemoRepository::open(root.join("memos"))
 }
@@ -35,7 +35,7 @@ fn record_with_recovery(missing: &mut u64, event: &str, details: &Value, mut sin
 }
 
 // Only controlled metadata reaches the shared runtime log.
-fn log(app: &tauri::AppHandle, event: &str, details: Value) -> bool {
+pub(super) fn log(app: &tauri::AppHandle, event: &str, details: Value) -> bool {
     let store = app.state::<MemoStore>();
     let Ok(mut life) = store.lifecycle.lock() else { return false; };
     record_with_recovery(&mut life.log_failures, event, &details, |name, value| super::append_runtime_event(app, name, &value.to_string()).is_ok())
@@ -125,11 +125,10 @@ pub fn hide_quick_memo(window: tauri::WebviewWindow, store: tauri::State<MemoSto
 }
 
 pub fn open_archive(app: &tauri::AppHandle) -> Result<(), String> {
-    let path = repository(app)?.archive_directory();
-    #[cfg(windows)]
-    { std::process::Command::new("explorer.exe").arg(path).spawn().map_err(|_| "archive_open_failed")?; }
-    #[cfg(not(windows))]
-    { let _ = path; return Err("archive_open_failed".into()); }
+    let window = app.get_webview_window("overlay").ok_or("archive_open_failed")?;
+    window.emit("memo-archive-open", ()).map_err(|_| "archive_open_failed")?;
+    window.show().map_err(|_| "archive_open_failed")?;
+    window.set_focus().map_err(|_| "archive_open_failed")?;
     Ok(())
 }
 

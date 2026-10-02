@@ -3,6 +3,7 @@ import { closeOverlaySettingsModal, openDaybridgeDataDirectory, openOverlaySetti
 import { getWorkdayCountdown } from "./workday-clock.js";
 import styles from "./NowFocusOverlay.module.css";
 import ManualTaskForm from "./ManualTaskForm.jsx";
+import MemoArchivePanel from "../memo/MemoArchivePanel.jsx";
 import DailyDefaultsEditor from "./DailyDefaultsEditor.jsx";
 import { DEFAULT_MEALS } from "./settings-contract.js";
 import { recordRuntimeEvent } from "../runtime-log.js";
@@ -319,7 +320,8 @@ export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefresh
  * It owns no timer or state: the host decides which block is current.
  */
 /** @param {import("./ui-types").OverlayProps} props */
-export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, onOpenSettings, onOpenMemoArchive, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false, scheduleSettings = {}, onScheduleSettingsChange, scheduleSettingsLoading = false, appearance = {}, onAppearanceChange, notice = "", storageDirectory = "", onStorageDirectoryChange, storageDirectoryLoading = false, magnetPulse = false }) {
+export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onAddManualTask, onMoveBlock, onDiscardBlock, settingsOpen = false, archiveOpen = false, onCloseMemoArchive, onOpenSettings, onOpenMemoArchive, onCloseSettings, onSaveSettings, onRefreshWidget, refreshingWidget = false, privateMode = false, dailyDefaults = [], onDailyDefaultsChange, dailyDefaultsLoading = false, scheduleSettings = {}, onScheduleSettingsChange, scheduleSettingsLoading = false, appearance = {}, onAppearanceChange, notice = "", storageDirectory = "", onStorageDirectoryChange, storageDirectoryLoading = false, magnetPulse = false }) {
+  const modalOpen = settingsOpen || archiveOpen;
   const dragRef = useRef(/** @type {{point: {x: number, y: number} | null, inputType: string | null, cleanup: (() => void) | null, suppressClick: boolean}} */ ({ point: null, inputType: null, cleanup: null, suppressClick: false }));
   const pointerDragRef = useRef(/** @type {import("./ui-types").PointerDragState} */ ({ blockId: "", block: null, element: null, inputType: null, pointerId: null, startX: 0, startY: 0, offsetX: 0, offsetY: 0, width: 0, height: 0, started: false, cleanup: null }));
   const suppressCardClickRef = useRef(false);
@@ -421,8 +423,8 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
 
   useLayoutEffect(() => {
     const wasSettingsOpen = settingsWasOpenRef.current;
-    settingsWasOpenRef.current = settingsOpen;
-    if (settingsOpen) {
+    settingsWasOpenRef.current = modalOpen;
+    if (modalOpen) {
       // A dialog must never share the corner card's collapsing viewport. The
       // native window moves to the screen centre while the underlying card is
       // made inert, so a blur cannot leave a 64px-tall clipped form behind.
@@ -434,7 +436,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       if (expanded) setExpanded(false);
       void openOverlaySettingsModal().catch((error) => {
         recordRuntimeEvent("settings_modal_open_error", { error: error?.message || String(error) });
-        onCloseSettings?.();
+        if (archiveOpen) onCloseMemoArchive?.(); else onCloseSettings?.();
         return false;
       });
       return;
@@ -445,7 +447,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
         return false;
       });
     }
-  }, [onCloseSettings, settingsOpen]);
+  }, [onCloseSettings, modalOpen]);
 
   const movableBlocks = useMemo(() => blocks.filter((item) => scheduleBlockKind(item) === "focus" && !["completed", "deferred", "skipped"].includes(item?.status || "")), [blocks]);
   const findDropTarget = (/** @type {number} */ clientX, /** @type {number} */ clientY, sourceId = "") => {
@@ -602,14 +604,16 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   };
 
   const finishCollapse = () => {
-    if (!collapsePendingRef.current || settingsOpen) return;
+    if (!collapsePendingRef.current || modalOpen) return;
     collapsePendingRef.current = false;
     void setOverlayInteractionRegion({ height: OVERLAY_COLLAPSED_HEIGHT }).catch(() => false);
   };
 
   const setExpandedMode = (/** @type {boolean} */ next) => {
-    if (settingsOpen) {
-      if (!next) onCloseSettings?.();
+    if (modalOpen) {
+      if (!next) {
+        if (archiveOpen) onCloseMemoArchive?.(); else onCloseSettings?.();
+      }
       return;
     }
     if (next) {
@@ -634,17 +638,17 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   };
 
   useEffect(() => {
-    if (!expanded || settingsOpen) return undefined;
+    if (!expanded || modalOpen) return undefined;
     if (skipNextExpandedRegionSyncRef.current) {
       skipNextExpandedRegionSyncRef.current = false;
       return undefined;
     }
     void setOverlayInteractionRegion({ height: targetExpandedHeight });
     return undefined;
-  }, [expanded, settingsOpen, targetExpandedHeight]);
+  }, [expanded, modalOpen, targetExpandedHeight]);
 
   useEffect(() => {
-    if (!expanded || settingsOpen) return undefined;
+    if (!expanded || modalOpen) return undefined;
     const collapse = () => setExpandedMode(false);
     const handleWindowBlur = () => collapse();
     const handleOutsidePointer = (/** @type {PointerEvent} */ event) => {
@@ -657,7 +661,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
       window.removeEventListener("blur", handleWindowBlur);
       document.removeEventListener("pointerdown", handleOutsidePointer, true);
     };
-  }, [expanded, settingsOpen, taskOpen]);
+  }, [expanded, modalOpen, taskOpen]);
 
   const handlePointerDown = (/** @type {import("./ui-types").DragEvent} */ event) => {
     if (dragRef.current.point) return;
@@ -718,11 +722,11 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
     finishCollapse();
   };
 
-  const surfaceClassName = [styles.surface, expanded ? styles.expanded : "", settingsOpen ? styles.settingsMode : "", taskOpen ? styles.taskOpen : "", magnetPulse ? styles.magnetPulse : ""].filter(Boolean).join(" ");
+  const surfaceClassName = [styles.surface, expanded ? styles.expanded : "", modalOpen ? styles.settingsMode : "", taskOpen ? styles.taskOpen : "", magnetPulse ? styles.magnetPulse : ""].filter(Boolean).join(" ");
 
   return (
     <aside className={styles.overlay} style={{ "--green": appearance?.accent || "#62dca5", "--modal-accent": appearance?.accent || "#839eff" }} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
-      {!settingsOpen && notice ? <div className={styles.overlayToast} role="status" aria-live="polite" data-testid="daybridge-toast">{notice}</div> : null}
+      {!modalOpen && notice ? <div className={styles.overlayToast} role="status" aria-live="polite" data-testid="daybridge-toast">{notice}</div> : null}
       <div
         className={surfaceClassName}
         style={{ "--overlay-expanded-height": `${targetExpandedHeight}px` }}
@@ -731,7 +735,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
         onTransitionEnd={handleSurfaceTransitionEnd}
         data-testid="now-focus-overlay-surface"
         data-expanded-height={targetExpandedHeight}
-        aria-hidden={settingsOpen ? "true" : undefined}
+        aria-hidden={modalOpen ? "true" : undefined}
       >
         <section className={styles.expandedPanel} aria-label={todoListMode ? "오늘 할 일 목록" : "오늘 시간표 관리"} aria-hidden={!expanded} data-tauri-drag-region="false" data-testid="now-focus-overlay-expanded">
           {blocks.length ? (
@@ -833,6 +837,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
         </div>
       </div>
       {settingsOpen ? <OverlaySettingsModal privateMode={privateMode} onClose={onCloseSettings} onSubmit={onSaveSettings} onRefreshWidget={onRefreshWidget} refreshingWidget={refreshingWidget} dailyDefaults={dailyDefaults} onDailyDefaultsChange={onDailyDefaultsChange} dailyDefaultsLoading={dailyDefaultsLoading} scheduleSettings={scheduleSettings} onScheduleSettingsChange={onScheduleSettingsChange} scheduleSettingsLoading={scheduleSettingsLoading} appearance={appearance} onAppearanceChange={onAppearanceChange} storageDirectory={storageDirectory} onStorageDirectoryChange={onStorageDirectoryChange} storageDirectoryLoading={storageDirectoryLoading} notice={notice} /> : null}
+      {archiveOpen ? <MemoArchivePanel onClose={onCloseMemoArchive} onAddTask={onAddManualTask} /> : null}
     </aside>
   );
 }

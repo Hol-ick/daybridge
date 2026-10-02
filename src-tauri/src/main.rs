@@ -7,6 +7,7 @@ mod package_validation;
 mod quick_memo;
 mod memo_store;
 mod memo_hotkey;
+mod memo_archive;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -1133,6 +1134,11 @@ fn main() {
             quick_memo::finalize_memo_session,
             quick_memo::hide_quick_memo,
             quick_memo::open_memo_archive_directory,
+            memo_archive::list_memo_archives,
+            memo_archive::read_memo_archive,
+            memo_archive::export_memo_archive,
+            memo_archive::delete_memo_archive,
+            memo_archive::restore_memo_archive,
             quick_memo::complete_memo_exit,
             memo_hotkey::memo_shortcut_status,
             open_dashboard,

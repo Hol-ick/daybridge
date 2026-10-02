@@ -68,6 +68,8 @@ export interface OverlayProps extends Omit<SettingsProps, "onClose" | "onSubmit"
   settingsOpen?: boolean;
   onOpenSettings?: () => void;
   onOpenMemoArchive?: () => void;
+  archiveOpen?: boolean;
+  onCloseMemoArchive?: () => void;
   onCloseSettings?: () => void;
   onSaveSettings?: SettingsProps["onSubmit"];
   magnetPulse?: boolean;
