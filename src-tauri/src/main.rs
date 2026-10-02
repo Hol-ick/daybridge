@@ -4,6 +4,8 @@ use serde_json::json;
 mod bridge_health;
 mod bridge_runtime;
 mod package_validation;
+mod quick_memo;
+mod memo_hotkey;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -990,7 +992,9 @@ fn main() {
         }
     }
     tauri::Builder::default()
+        .manage(quick_memo::MemoStore(std::sync::Mutex::new(())))
         .setup(|app| {
+            app.manage(memo_hotkey::MemoHotkey::start(app.handle().clone()));
             clear_explicit_exit_marker(app.handle());
             let _ = append_runtime_event(
                 app.handle(),
@@ -1066,7 +1070,8 @@ fn main() {
                 MenuItem::with_id(app, "show_overlay", "위젯 다시 표시", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "숨기기", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &show_overlay_item, &hide, &quit])?;
+            let memo = MenuItem::with_id(app, "memo", "메모 열기 (Ctrl+D)", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&memo, &show, &show_overlay_item, &hide, &quit])?;
 
             TrayIconBuilder::with_id("daybridge-tray")
                 .icon(
@@ -1077,6 +1082,7 @@ fn main() {
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
+                    "memo" => { let _ = quick_memo::show(app); }
                     "show" => {
                         let _ = show_dashboard(app);
                     }
@@ -1110,6 +1116,11 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            quick_memo::open_quick_memo,
+            quick_memo::read_quick_memo,
+            quick_memo::save_quick_memo,
+            quick_memo::hide_quick_memo,
+            memo_hotkey::memo_shortcut_status,
             open_dashboard,
             open_dashboard_settings,
             open_daybridge_data_directory,
@@ -1132,6 +1143,11 @@ fn main() {
                 }
             }
             if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "memo" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    return;
+                }
                 let _ = append_runtime_event(
                     &window.app_handle(),
                     "window_close_requested",
@@ -1156,8 +1172,13 @@ fn main() {
                 );
             }
         })
-        .run(tauri::generate_context!())
-        .expect("failed to run Daybridge");
+        .build(tauri::generate_context!())
+        .expect("failed to build Daybridge")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                app.state::<memo_hotkey::MemoHotkey>().stop();
+            }
+        });
 }
 
 #[cfg(test)]

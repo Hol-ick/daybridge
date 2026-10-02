@@ -20,6 +20,14 @@ Daybridge is a local-first desktop companion. It reduces a detailed daily note t
 
 ## Local development
 
+### 빠른 메모 (Windows)
+
+Daybridge 실행 중 **Ctrl+D**를 누르면 별도 메모창이 열리고 바로 입력할 수 있다. 트레이의 **메모 열기 (Ctrl+D)**도 같은 창을 연다. 여러 번 눌러도 창을 추가로 만들지 않는다. 메모창의 X 또는 Esc는 창만 숨기며 입력 내용은 자동 저장한다. 저장 오류가 표시되면 창을 유지한 채 **다시 저장**을 누른다.
+
+메모는 앱의 로컬 데이터 폴더에 `quick-memo.txt`로 저장되며 일정·원본 노트·MARU와 동기화하지 않는다. 최대 크기는 UTF-8 기준 1 MiB다. 앱을 완전히 종료하기 전에는 **자동 저장됨** 표시를 확인한다. Ctrl+D는 실행 중 다른 앱의 같은 단축키보다 우선하며, 이미 다른 프로그램이 전역 등록했다면 메모창에 등록 실패를 알린다. Windows 잠금·로그인 화면에서는 사용할 수 없다.
+
+`/?surface=memo`는 브라우저 미리보기다. 브라우저 저장소를 사용하며 Windows 전역 단축키를 등록하지 않는다. 운영 메모와 공유하지 않는다.
+
 Requirements: Node.js 22.12 or later and pnpm 11. The native Windows widget additionally needs Rust (MSVC target), Microsoft C++ Build Tools with the Windows SDK, and WebView2.
 
 ```bash

@@ -46,6 +46,7 @@ export function recordRuntimeEvent(name, details = {}) {
       clientOccurredAt: payload.occurredAt,
     });
     void invoke("record_runtime_event", { event: payload.event, details: nativeDetails }).catch(() => {});
+    if (payload.surface === "memo") return;
     // Packaged windows also send user-facing events to the local bridge so
     // they appear in the same monthly, Korean-readable TXT log as browser
     // sessions. Native NDJSON remains the low-level diagnostic source.
@@ -61,6 +62,7 @@ export function recordRuntimeEvent(name, details = {}) {
     }).catch(() => {});
     return;
   }
+  if (payload.surface === "memo") return;
   const bridgePayload = JSON.stringify({
     event: payload.event,
     occurredAt: payload.occurredAt,

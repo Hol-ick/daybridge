@@ -12,6 +12,19 @@
   "app": {
     "windows": [
       {
+        "label": "memo",
+        "url": "index.html?surface=memo",
+        "title": "Daybridge 메모",
+        "width": 520,
+        "height": 540,
+        "minWidth": 340,
+        "minHeight": 320,
+        "resizable": true,
+        "visible": false,
+        "center": true,
+        "backgroundColor": "#252531"
+      },
+      {
         "label": "overlay",
         "title": "Daybridge",
         "width": 760,

@@ -1,0 +1,15 @@
+.quick-memo { box-sizing: border-box; height: 100dvh; display: flex; flex-direction: column; padding: 24px; background: #252531; color: #f1f0f6; font-weight: 400; }
+.quick-memo header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+.memo-brand { font-size: 10px; font-weight: 650; letter-spacing: 2px; color: #b6b3c7; }
+.quick-memo h1 { margin: 5px 0 0; font-size: 25px; font-weight: 600; }
+.quick-memo kbd { border: 1px solid #5a576b; border-radius: 7px; padding: 6px 9px; color: #c9c6db; font-size: 12px; white-space: nowrap; }
+.quick-memo textarea { flex: 1; min-height: 60px; width: 100%; box-sizing: border-box; resize: none; background: #2e2e3c; border: 1px solid #535066; border-radius: 10px; padding: 17px; font: inherit; font-size: 15px; line-height: 1.8; color: #f1f0f6; }
+.quick-memo textarea::placeholder { color: #b4b1c4; }
+.quick-memo textarea:focus-visible, .quick-memo button:focus-visible { outline: 2px solid #b5a4ec; outline-offset: 2px; }
+.quick-memo footer { min-height: 32px; margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; align-items: center; font-size: 11px; color: #c1bdd0; }
+.quick-memo button { color: #f5f1ff; border: 1px solid #80748f; border-radius: 5px; background: #40374f; padding: 6px 10px; cursor: pointer; }
+.memo-alert, .memo-load-error { font-size: 13px; line-height: 1.6; color: #ffcea4; }
+.memo-alert { margin: 0 0 12px; }
+.memo-load-error { flex: 1; }
+.memo-save-error { color: #ffc49c; }
+@media (max-width: 380px) { .quick-memo { padding: 16px; } }

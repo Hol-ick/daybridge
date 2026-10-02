@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
+import MemoSurface from "./MemoSurface.jsx";
 import { recordRuntimeEvent } from "./runtime-log.js";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { mountAfterBridgeReady } from "./desktop-bootstrap.js";
@@ -18,13 +19,14 @@ recordRuntimeEvent("webview_boot", { mode: import.meta.env.MODE });
 const root = document.getElementById("root");
 if (!root) throw new Error("Daybridge root element is missing");
 const renderer = ReactDOM.createRoot(root);
+const memoSurface = new URLSearchParams(window.location.search).get("surface") === "memo";
 void mountAfterBridgeReady({
-  desktop: isTauri(),
+  desktop: isTauri() && !memoSurface,
   ensureBridge: () => invoke("wait_for_initial_bridge"),
   report: recordRuntimeEvent,
   mount: () => renderer.render(
     <React.StrictMode>
-      <App />
+      {memoSurface ? <MemoSurface /> : <App />}
     </React.StrictMode>,
   ),
 });
