@@ -1138,7 +1138,7 @@ fn main() {
             memo_archive::read_memo_archive,
             memo_archive::export_memo_archive,
             memo_archive::delete_memo_archive,
-            memo_archive::restore_memo_archive,
+            memo_archive::close_memo_archive,
             quick_memo::complete_memo_exit,
             memo_hotkey::memo_shortcut_status,
             open_dashboard,
@@ -1175,6 +1175,7 @@ fn main() {
                 );
                 api.prevent_close();
                 let app = window.app_handle();
+                if window.label() == "archive" { let _ = app.emit("memo-archive-visibility", false); }
                 // Window dismissal must leave the tray and global memo shortcut alive.
                 // Only an explicit quit action ends the background application.
                 match window.hide() {

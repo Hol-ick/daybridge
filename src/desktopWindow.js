@@ -73,8 +73,8 @@ export function nearestOverlayCorner(position, monitor, size) {
 }
 
 export function currentSurface() {
-  if (!isTauri()) return new URLSearchParams(window.location.search).get("surface") === "overlay" ? "overlay" : "dashboard";
-  return getCurrentWindow().label === "overlay" ? "overlay" : "dashboard";
+  const value = isTauri() ? getCurrentWindow().label : new URLSearchParams(window.location.search).get("surface");
+  return value === "overlay" || value === "archive" ? value : "dashboard";
 }
 
 export async function openDashboard() {

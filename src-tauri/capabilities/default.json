@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability set for the Daybridge desktop widget.",
-  "windows": ["overlay", "dashboard", "memo"],
+  "windows": ["overlay", "dashboard", "memo", "archive"],
   "permissions": [
     "core:default",
     "core:window:allow-set-size",

@@ -125,8 +125,20 @@ pub fn hide_quick_memo(window: tauri::WebviewWindow, store: tauri::State<MemoSto
 }
 
 pub fn open_archive(app: &tauri::AppHandle) -> Result<(), String> {
-    let window = app.get_webview_window("overlay").ok_or("archive_open_failed")?;
+    let window = app.get_webview_window("archive").ok_or("archive_open_failed")?;
+    if !window.is_visible().unwrap_or(false) {
+        if let Ok(Some(monitor)) = window.current_monitor() {
+            if let Ok(size) = window.outer_size() {
+                let area = monitor.work_area();
+                let gap = (304.0 * monitor.scale_factor()) as i32;
+                let x = (area.position.x + area.size.width as i32 - gap - size.width as i32).max(area.position.x);
+                let y = area.position.y + (area.size.height.saturating_sub(size.height) / 2) as i32;
+                let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+            }
+        }
+    }
     window.emit("memo-archive-open", ()).map_err(|_| "archive_open_failed")?;
+    app.emit("memo-archive-visibility", true).map_err(|_| "archive_open_failed")?;
     window.show().map_err(|_| "archive_open_failed")?;
     window.set_focus().map_err(|_| "archive_open_failed")?;
     Ok(())

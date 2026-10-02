@@ -187,6 +187,43 @@ impl MemoRepository {
 
     pub fn archive_directory(&self) -> PathBuf { self.root.join("archive") }
 
+    pub fn purge_archive(&self, id: &str) -> Result<Value> {
+        let _lock = self.lock()?;
+        if !self.read_state()?["pendingArchive"].is_null() { return Err("store_busy".into()); }
+        let source = self.archive_path("archive", id)?;
+        if source.exists() {
+            self.read_archive_at("archive", id)?;
+            fs::remove_file(source).map_err(|_| "write_failed")?;
+        }
+        Ok(json!({"deleted":true}))
+    }
+
+    pub fn export_and_remove(&self, id: &str, directory: &Path) -> Result<Value> {
+        let _lock = self.lock()?;
+        if !self.read_state()?["pendingArchive"].is_null() { return Err("store_busy".into()); }
+        let source = self.archive_path("archive", id)?;
+        let draft = self.read_archive_at("archive", id)?;
+        let text = draft["text"].as_str().ok_or("corrupt_archive")?.as_bytes();
+        let path = directory.join(format!("daybridge-{id}.txt"));
+        fs::create_dir_all(directory).map_err(|_| "export_write_failed")?;
+        if !path.exists() {
+            let temporary = directory.join(format!(".daybridge-{}-{}.tmp", std::process::id(), SEQUENCE.fetch_add(1, Ordering::Relaxed)));
+            let result = (|| -> Result<()> {
+                let mut file = OpenOptions::new().write(true).create_new(true).open(&temporary).map_err(|_| "export_write_failed")?;
+                file.write_all(text).and_then(|_| file.sync_all()).map_err(|_| "export_write_failed")?;
+                drop(file);
+                fs::hard_link(&temporary, &path).map_err(|_| "export_write_failed")?;
+                Ok(())
+            })();
+            let _ = fs::remove_file(&temporary);
+            result?;
+        }
+        let metadata = fs::symlink_metadata(&path).map_err(|_| "export_write_failed")?;
+        if !metadata.file_type().is_file() || metadata.len() != text.len() as u64 || fs::read(&path).map_err(|_| "export_write_failed")? != text { return Err("export_conflict".into()); }
+        let removed = self.fault("before_export_remove").and_then(|_| fs::remove_file(source).map_err(|_| "write_failed".into())).is_ok();
+        Ok(json!({"saved":true,"removed":removed}))
+    }
+
     fn archive_path(&self, folder: &str, id: &str) -> Result<PathBuf> {
         if id.is_empty() || id.len() > 128 || !id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-') { return Err("invalid_id".into()); }
         Ok(self.root.join(folder).join(format!("{id}.md")))
@@ -236,28 +273,7 @@ impl MemoRepository {
         Ok(json!({"items":page,"total":total,"invalidCount":invalid_count,"nextOffset":if end < total { Some(end) } else { None }}))
     }
 
-    pub fn delete_archive(&self, id: &str) -> Result<Value> {
-        let _lock = self.lock()?;
-        if !self.read_state()?["pendingArchive"].is_null() { return Err("store_busy".into()); }
-        let source = self.archive_path("archive", id)?; let trash = self.archive_path("trash", id)?;
-        if !source.exists() { self.read_archive_at("trash", id)?; return Ok(json!({"id":id,"deleted":true})); }
-        self.read_archive_at("archive", id)?;
-        if trash.exists() { return Err("archive_conflict".into()); }
-        fs::create_dir_all(self.root.join("trash")).map_err(|_| "write_failed")?;
-        fs::rename(source, trash).map_err(|_| "write_failed")?;
-        Ok(json!({"id":id,"deleted":true}))
-    }
 
-    pub fn restore_archive(&self, id: &str) -> Result<Value> {
-        let _lock = self.lock()?;
-        if !self.read_state()?["pendingArchive"].is_null() { return Err("store_busy".into()); }
-        let trash = self.archive_path("trash", id)?; let destination = self.archive_path("archive", id)?;
-        if !trash.exists() { self.read_archive_at("archive", id)?; return Ok(json!({"id":id,"restored":true})); }
-        self.read_archive_at("trash", id)?;
-        if destination.exists() { return Err("archive_conflict".into()); }
-        fs::rename(trash, destination).map_err(|_| "write_failed")?;
-        Ok(json!({"id":id,"restored":true}))
-    }
 }
 
 #[cfg(test)]
@@ -272,18 +288,52 @@ mod tests {
     fn id(session: &Value) -> &str { session["draft"]["id"].as_str().unwrap() }
 
     #[test]
-    fn archive_selection_reads_exact_body_and_delete_can_be_undone() {
+    fn direct_export_writes_exact_utf8_then_removes_archive() {
+        let fixture=Fixture::new();let repo=fixture.repo();
+        let session=repo.begin().unwrap();let memo_id=id(&session).to_string();
+        let text="한글 메모\n줄바꿈 그대로\n";
+        repo.finish(&memo_id,1,text).unwrap();
+        let directory=fixture.0.join("downloads");
+        assert_eq!(repo.export_and_remove(&memo_id,&directory).unwrap(),json!({"saved":true,"removed":true}));
+        assert_eq!(fs::read_to_string(directory.join(format!("daybridge-{memo_id}.txt"))).unwrap(),text);
+        assert!(!repo.archive_path("archive",&memo_id).unwrap().exists());
+        assert!(!fixture.0.join("trash").exists());
+    }
+
+    #[test]
+    fn export_failure_conflict_and_remove_failure_preserve_source() {
+        let fixture=Fixture::new();let repo=fixture.repo();
+        let session=repo.begin().unwrap();let memo_id=id(&session).to_string();repo.finish(&memo_id,1,"원본 한글").unwrap();
+        let directory=fixture.0.join("downloads");fs::write(&directory,b"not directory").unwrap();
+        assert!(repo.export_and_remove(&memo_id,&directory).is_err());assert_eq!(repo.read_archive(&memo_id).unwrap()["text"],"원본 한글");
+        fs::remove_file(&directory).unwrap();fs::create_dir_all(&directory).unwrap();
+        let target=directory.join(format!("daybridge-{memo_id}.txt"));fs::write(&target,b"another file").unwrap();
+        assert_eq!(repo.export_and_remove(&memo_id,&directory).unwrap_err(),"export_conflict");assert_eq!(fs::read(&target).unwrap(),b"another file");
+        fs::remove_file(&target).unwrap();repo.fail_at.set(Some("before_export_remove"));
+        assert_eq!(repo.export_and_remove(&memo_id,&directory).unwrap(),json!({"saved":true,"removed":false}));assert!(repo.read_archive(&memo_id).is_ok());
+        repo.fail_at.set(None);
+        assert_eq!(repo.export_and_remove(&memo_id,&directory).unwrap(),json!({"saved":true,"removed":true}));assert_eq!(fs::read_dir(directory).unwrap().count(),1);
+    }
+
+    #[test]
+    fn direct_delete_is_immediate_idempotent_and_keeps_older_trash() {
+        let fixture=Fixture::new();let repo=fixture.repo();let session=repo.begin().unwrap();let memo_id=id(&session).to_string();repo.finish(&memo_id,1,"즉시 삭제").unwrap();
+        fs::create_dir_all(fixture.0.join("trash")).unwrap();fs::write(fixture.0.join("trash/old.md"),b"old original").unwrap();
+        assert_eq!(repo.purge_archive(&memo_id).unwrap()["deleted"],true);assert_eq!(repo.purge_archive(&memo_id).unwrap()["deleted"],true);
+        assert!(repo.read_archive(&memo_id).is_err());assert_eq!(fs::read(fixture.0.join("trash/old.md")).unwrap(),b"old original");assert!(repo.purge_archive("../escape").is_err());
+    }
+
+    #[test]
+    fn archive_selection_reads_exact_body_and_purges() {
         let fixture = Fixture::new(); let repo = fixture.repo(); let session = repo.begin().unwrap();
         let memo_id = id(&session); let text = "한글 메모\n마지막 줄 📝\n";
         repo.finish(memo_id, 1, text).unwrap();
         assert_eq!(repo.read_archive(memo_id).unwrap()["text"], text);
         assert_eq!(repo.list_archives(0).unwrap()["items"][0]["title"], "한글 메모");
-        assert_eq!(repo.delete_archive(memo_id).unwrap()["deleted"], true);
-        assert_eq!(repo.delete_archive(memo_id).unwrap()["deleted"], true);
+        assert_eq!(repo.purge_archive(memo_id).unwrap()["deleted"], true);
+        assert_eq!(repo.purge_archive(memo_id).unwrap()["deleted"], true);
         assert!(repo.read_archive(memo_id).is_err());
-        repo.restore_archive(memo_id).unwrap();
-        assert_eq!(repo.read_archive(memo_id).unwrap()["text"], text);
-        assert_eq!(repo.list_archives(0).unwrap()["items"].as_array().unwrap().len(), 1);
+        assert_eq!(repo.list_archives(0).unwrap()["items"].as_array().unwrap().len(), 0);
     }
 
     #[test]
@@ -301,21 +351,21 @@ mod tests {
         assert_eq!(repo.list_archives(100).unwrap()["items"].as_array().unwrap().len(), 5);
         assert_eq!(fs::read(&bad).unwrap(), b"damaged");
         assert!(repo.read_archive("../state").is_err());
-        assert!(repo.delete_archive("../state").is_err());
+        assert!(repo.purge_archive("../state").is_err());
         let mismatched = repo.archive_directory().join("mismatch.md");
         fs::copy(repo.archive_directory().join("fixture-1.md"), &mismatched).unwrap();
         assert!(repo.read_archive("mismatch").is_err()); assert!(mismatched.exists());
     }
 
     #[test]
-    fn archive_restore_conflict_and_pending_close_never_overwrite_data() {
+    fn archive_corruption_and_pending_close_prevent_deletion() {
         let fixture = Fixture::new(); let repo = fixture.repo(); let session = repo.begin().unwrap(); let memo_id = id(&session);
-        repo.finish(memo_id, 1, "원본").unwrap(); repo.delete_archive(memo_id).unwrap();
+        repo.finish(memo_id, 1, "원본").unwrap();
         let path = repo.archive_directory().join(format!("{memo_id}.md")); fs::write(&path, b"another archive").unwrap();
-        assert!(repo.restore_archive(memo_id).is_err()); assert_eq!(fs::read(&path).unwrap(), b"another archive");
+        assert!(repo.purge_archive(memo_id).is_err()); assert_eq!(fs::read(&path).unwrap(), b"another archive");
         let next = repo.begin().unwrap(); repo.save(id(&next), 1, "대기 중").unwrap();
         repo.fail_at.set(Some("before_archive_write")); assert!(repo.finish(id(&next), 1, "대기 중").is_err());
-        assert!(repo.delete_archive(memo_id).is_err()); assert_eq!(fs::read(&path).unwrap(), b"another archive");
+        assert!(repo.purge_archive(memo_id).is_err()); assert_eq!(fs::read(&path).unwrap(), b"another archive");
     }
 
     #[test]

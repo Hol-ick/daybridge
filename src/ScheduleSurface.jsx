@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
+import MemoArchivePanel from "./memo/MemoArchivePanel.jsx";
 import { useAppActions, useAppState } from "./AppContext.jsx";
 import { bindOverlayMagnet, currentSurface, openDashboardSettings, placeOverlayInCorner } from "./desktopWindow.js";
 import Item from "./todometer/components/Item.jsx";
@@ -78,7 +79,7 @@ export default function ScheduleSurface() {
     if (!isTauri() || surface !== "overlay") return;
     let disposed = false;
     let unlisten = () => {};
-    void listen("memo-archive-open", () => { setSettingsOpen(false); setArchiveOpen(true); }).then(stop => { if (disposed) stop(); else unlisten = stop; });
+    void listen("memo-archive-visibility", event => { setArchiveOpen(event.payload === true); }).then(stop => { if (disposed) stop(); else unlisten = stop; });
     return () => { disposed = true; unlisten(); };
   }, [surface]);
   const [overlayMagnetPulse, setOverlayMagnetPulse] = useState(false);
@@ -148,6 +149,7 @@ export default function ScheduleSurface() {
       setSchedule(result.schedule);
       setNowFocus(result.nowFocus);
       await refresh();
+      if (isTauri()) void emit("daybridge:schedule-changed");
       recordRuntimeEvent("manual_task_added", { date: activityDate, title });
       setNotice(savedNotice(`${title}을 오늘 할 일에 추가했어요`, result));
       return true;
@@ -494,6 +496,14 @@ export default function ScheduleSurface() {
   }, [activityDate, dailyDefaultsDraft, dailyDefaultsLoaded, loadSchedule, scheduleSettingsDraft, storageDirectoryDraft, surface]);
 
   const selectedQuest = useMemo(() => board?.quests?.find((quest) => quest.id === expandedQuestId) || null, [board?.quests, expandedQuestId]);
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed=false;
+    let stop=()=>{};
+    void listen("daybridge:schedule-changed", () => { void loadSchedule({quiet:true}); }).then(unlisten=>{if(disposed)unlisten();else stop=unlisten;});
+    return()=>{disposed=true;stop();};
+  },[loadSchedule]);
+  if (surface === "archive") return <MemoArchivePanel onClose={() => { if(isTauri()) void invoke("close_memo_archive"); else window.close(); }} onAddTask={addManualTask} />;
   if (surface === "overlay") {
     return <NowFocusOverlay
       schedule={schedule}
@@ -506,7 +516,8 @@ export default function ScheduleSurface() {
       settingsOpen={settingsOpen}
       onOpenSettings={openSettings}
       onOpenMemoArchive={() => {
-        setSettingsOpen(false); setArchiveOpen(true);
+        if(isTauri()) { setArchiveOpen(true); void invoke("open_memo_archive_directory").catch(()=>{setArchiveOpen(false);setNotice("메모 보관함을 열지 못했어요");}); }
+        else window.open(`${window.location.pathname}?surface=archive`, 'daybridge-archive', 'width=720,height=680');
       }}
       archiveOpen={archiveOpen}
       onCloseMemoArchive={() => setArchiveOpen(false)}

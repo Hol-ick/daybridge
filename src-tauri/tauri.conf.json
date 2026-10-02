@@ -12,6 +12,21 @@
   "app": {
     "windows": [
       {
+        "label": "archive",
+        "url": "index.html?surface=archive",
+        "title": "Daybridge 메모 보관함",
+        "width": 720,
+        "height": 680,
+        "minWidth": 420,
+        "minHeight": 420,
+        "decorations": false,
+        "resizable": true,
+        "visible": false,
+        "center": true,
+        "skipTaskbar": true,
+        "backgroundColor": "#1b2029"
+      },
+      {
         "label": "memo",
         "url": "index.html?surface=memo",
         "title": "Daybridge 메모",

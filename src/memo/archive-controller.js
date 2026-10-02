@@ -1,7 +1,7 @@
 /** @typedef {{id:string,title:string,preview:string,createdAtUnixMs:number,updatedAtUnixMs:number}} Item */
 /** @typedef {{id:string,text:string,revision:number,createdAtUnixMs:number,updatedAtUnixMs:number}} Memo */
 /** @typedef {{items:Item[],total:number,invalidCount:number,nextOffset:number|null}} Page */
-/** @typedef {{list:(offset:number)=>Promise<Page>,read:(id:string)=>Promise<Memo>,remove:(id:string)=>Promise<unknown>,restore:(id:string)=>Promise<unknown>,export:(id:string)=>Promise<{saved?:boolean,cancelled?:boolean}>}} Api */
+/** @typedef {{list:(offset:number)=>Promise<Page>,read:(id:string)=>Promise<Memo>,remove:(id:string)=>Promise<unknown>,export:(id:string)=>Promise<{saved?:boolean,removed?:boolean}>}} Api */
 /** @typedef {{items:Item[],selected:Memo|null,loading:boolean,busy:boolean,error:string,nextOffset:number|null,invalidCount:number}} View */
 
 /** @param {Api} api @param {(view:View)=>void} changed */
@@ -39,6 +39,10 @@ export function createArchiveController(api, changed) {
     return result;
   }
   /** @param {string} id */
-  async function restore(id) { await perform(async()=>{await api.restore(id);});await load(); }
-  return {load,select,perform,remove,restore,dispose(){disposed=true;++epoch;}};
+  async function exportMemo(id) {
+    const result=await perform(()=>api.export(id));
+    if(result?.removed){++epoch;view.items=view.items.filter(item=>item.id!==id);view.selected=null;await load();}
+    return result;
+  }
+  return {load,select,perform,remove,exportMemo,activate(){disposed=false;},dispose(){disposed=true;++epoch;}};
 }
