@@ -5,6 +5,7 @@ mod bridge_health;
 mod bridge_runtime;
 mod package_validation;
 mod quick_memo;
+mod memo_store;
 mod memo_hotkey;
 use std::fs::OpenOptions;
 use std::io::Write;
