@@ -1,6 +1,7 @@
 import {createHash} from "node:crypto";
 import {execFileSync} from "node:child_process";
-import {copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile} from "node:fs/promises";
+import {copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile} from "node:fs/promises";
+import {renameRuntime as rename} from "./rename-runtime.mjs";
 import {dirname, join, resolve} from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 import {rolldown} from "rolldown";

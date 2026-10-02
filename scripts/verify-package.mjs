@@ -9,8 +9,8 @@ import {pathToFileURL} from "node:url";
 
 function startupValue() {
   const shell = join(process.env.SystemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe");
-  const result = spawnSync(shell, ["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; $key='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'; $value=(Get-ItemProperty -LiteralPath $key -Name Daybridge -ErrorAction SilentlyContinue).Daybridge; ConvertTo-Json -InputObject $value -Compress"], {encoding: "utf8", timeout: 10000, windowsHide: true});
-  if (result.status !== 0) throw new Error("Could not observe the existing Windows startup value");
+  const result = spawnSync(shell, ["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; $key='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'; $value=(Get-ItemProperty -LiteralPath $key -Name Daybridge -ErrorAction SilentlyContinue).Daybridge; ConvertTo-Json -InputObject $value -Compress"], {encoding: "utf8", timeout: 30000, windowsHide: true});
+  if (result.status !== 0) throw new Error(`Could not observe the existing Windows startup value (${result.error?.code || result.status})`);
   return result.stdout.trim();
 }
 

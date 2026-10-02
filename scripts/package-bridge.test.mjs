@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {mkdtemp, mkdir, copyFile, writeFile, readFile, rm, rename as renameRuntime} from "node:fs/promises";
+import {mkdtemp, mkdir, copyFile, writeFile, readFile, rm} from "node:fs/promises";
+import {renameRuntime} from "./rename-runtime.mjs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {spawn, spawnSync} from "node:child_process";

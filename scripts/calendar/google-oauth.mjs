@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { google } from "googleapis";
 
 import { googleCalendarStorage } from "./google-calendar-reader.mjs";
 import { READ_ONLY_SCOPE } from "./googleapis-adapter.mjs";
@@ -81,16 +80,17 @@ async function atomicWrite(path, value, options = {}) {
   await (options.rename || rename)(temporary, path);
 }
 
-function oauthClient(credentials, redirectUri, googleApi = google) {
+async function oauthClient(credentials, redirectUri, googleApi) {
+  googleApi ||= (await import("googleapis")).google;
   return new googleApi.auth.OAuth2(credentials.clientId, credentials.clientSecret, redirectUri);
 }
 
 /** Creates a loopback authorization URL. It never persists the OAuth state or exposes credentials. */
-export async function beginGoogleCalendarAuthorization({ redirectUri, state = randomBytes(24).toString("base64url"), googleApi = google, ...options } = {}) {
+export async function beginGoogleCalendarAuthorization({ redirectUri, state = randomBytes(24).toString("base64url"), googleApi, ...options } = {}) {
   if (typeof redirectUri !== "string" || !redirectUri.startsWith("http://127.0.0.1:")) throw new TypeError("A local loopback redirect URI is required.");
   const credentials = await readClientCredentials(options);
   if (!credentials) return { state: "unconfigured", reason: "oauth_client_missing", authorizationUrl: null };
-  const authorizationUrl = oauthClient(credentials, redirectUri, googleApi).generateAuthUrl({
+  const authorizationUrl = (await oauthClient(credentials, redirectUri, googleApi)).generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: true,
@@ -101,13 +101,13 @@ export async function beginGoogleCalendarAuthorization({ redirectUri, state = ra
 }
 
 /** Exchanges a user-approved loopback code and writes only a DPAPI ciphertext below local app data. */
-export async function finishGoogleCalendarAuthorization({ code, redirectUri, googleApi = google, protectToken = protectTokenWithDpapi, ...options } = {}) {
+export async function finishGoogleCalendarAuthorization({ code, redirectUri, googleApi, protectToken = protectTokenWithDpapi, ...options } = {}) {
   if (typeof code !== "string" || !code.trim()) return { state: "attention", reason: "authorization_code_missing" };
   if (typeof redirectUri !== "string" || !redirectUri.startsWith("http://127.0.0.1:")) throw new TypeError("A local loopback redirect URI is required.");
   const credentials = await readClientCredentials(options);
   if (!credentials) return { state: "unconfigured", reason: "oauth_client_missing" };
   try {
-    const response = await oauthClient(credentials, redirectUri, googleApi).getToken(code.trim());
+    const response = await (await oauthClient(credentials, redirectUri, googleApi)).getToken(code.trim());
     const token = safeToken(response?.tokens);
     if (!token) return { state: "attention", reason: "refresh_token_missing" };
     const storage = googleCalendarStorage(options);

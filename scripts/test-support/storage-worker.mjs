@@ -4,6 +4,17 @@ import { loadSchedule, reportScheduleBlock } from "../schedule-store.mjs";
 import { withDateTransaction } from "../storage/date-transaction.mjs";
 
 const [mode, dataDir, date, extra] = process.argv.slice(2);
+async function compileAfterContention(options) {
+  const deadline = Date.now() + 25000;
+  while (true) {
+    try { return await compile(options); }
+    catch (error) {
+      // Retry only a pre-acquisition busy response; ownership/corruption failures remain fatal.
+      if (error.code !== "storage_conflict" || !error.message.startsWith("Storage is busy") || Date.now() >= deadline) throw error;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  }
+}
 if (mode === "reports") {
   for (const id of JSON.parse(extra)) await reportScheduleBlock(dataDir, date, { blockId: id, status: "completed" });
 } else if (mode === "increment") {
@@ -38,7 +49,7 @@ if (mode === "reports") {
 } else if (mode === "read") {
   console.log(JSON.stringify(await loadSchedule(dataDir, date)));
 } else if (mode === "compile" || mode === "compile-default") {
-  for (let i = 0; i < Number(extra); i += 1) await compile({ maruRoot: dataDir, questPlan: join(dataDir, "plan.json"), sourceDate: date, targetDate: date, ...(mode === "compile" ? { output: join(dataDir, "boards", `${date}.json`) } : {}) });
+  for (let i = 0; i < Number(extra); i += 1) await compileAfterContention({ maruRoot: dataDir, questPlan: join(dataDir, "plan.json"), sourceDate: date, targetDate: date, ...(mode === "compile" ? { output: join(dataDir, "boards", `${date}.json`) } : {}) });
 } else {
   throw new Error("Unknown fixture worker mode.");
 }
