@@ -33,6 +33,7 @@ const OVERLAY_CARD_WIDTH: i32 = 288;
 const OVERLAY_COLLAPSED_HEIGHT: i32 = 64;
 static SETTINGS_MODAL_OPEN: AtomicBool = AtomicBool::new(false);
 static BRIDGE_INITIALIZATION_FINISHED: AtomicBool = AtomicBool::new(false);
+static RUNTIME_LOG_WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 #[cfg(windows)]
 fn configure_windows_startup() -> Result<(), String> {
@@ -498,12 +499,21 @@ fn append_runtime_event(app: &tauri::AppHandle, event: &str, details: &str) -> R
         "occurredAtUnixMs": timestamp,
         "details": details_value,
     });
+    write_runtime_record(&path, &record)
+}
+
+fn write_runtime_record(path: &std::path::Path, record: &serde_json::Value) -> Result<(), String> {
+    let mut bytes = serde_json::to_vec(record).map_err(|error| error.to_string())?;
+    bytes.push(b'\n');
+    // Formatting directly into File performs multiple writes which can interleave
+    // with the hotkey thread. Keep each complete record under one writer guard.
+    let _guard = RUNTIME_LOG_WRITE.lock().map_err(|error| error.to_string())?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
         .map_err(|error| error.to_string())?;
-    writeln!(file, "{record}").map_err(|error| error.to_string())
+    file.write_all(&bytes).map_err(|error| error.to_string())
 }
 
 fn position_is_outside_work_area(
@@ -1185,6 +1195,32 @@ fn main() {
 mod tests {
     use super::{keep_alive_script, position_is_outside_work_area};
     use std::path::Path;
+
+    #[test]
+    fn concurrent_native_events_remain_complete_json_lines() {
+        let root = std::env::temp_dir().join(format!("daybridge-native-log-{}-{}", std::process::id(), super::SystemTime::now().duration_since(super::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("events.ndjson");
+        std::thread::scope(|scope| {
+            for worker in 0..4 {
+                let path = &path;
+                scope.spawn(move || {
+                    for sequence in 0..25 {
+                        super::write_runtime_record(path, &serde_json::json!({"worker":worker,"sequence":sequence})).unwrap();
+                    }
+                });
+            }
+        });
+        let text = std::fs::read_to_string(&path).unwrap();
+        let records: std::collections::HashSet<_> = text.lines().map(|line| {
+            let value: serde_json::Value = serde_json::from_str(line).unwrap();
+            (value["worker"].as_u64().unwrap(), value["sequence"].as_u64().unwrap())
+        }).collect();
+        assert_eq!(text.lines().count(), 100);
+        assert_eq!(records.len(), 100);
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
 
     #[test]
     fn keeps_an_overlay_inside_the_current_work_area() {
