@@ -1,0 +1,11 @@
+:root {
+  --memo-bg: #191e25;
+  --memo-surface: #222932;
+  --memo-hover: #2b343e;
+  --memo-text: #eaf0f3;
+  --memo-muted: #a8b4bf;
+  --memo-accent: #72cfa8;
+  --memo-line: #667684;
+  --memo-font: "Segoe UI", "Malgun Gothic", sans-serif;
+  --memo-ease: cubic-bezier(.2,.8,.2,1);
+}

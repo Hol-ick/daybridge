@@ -1,14 +1,16 @@
-.quick-memo { box-sizing: border-box; height: 100dvh; display: flex; flex-direction: column; background: #252531; color: #f1f0f6; font-family: "Segoe UI", "Malgun Gothic", sans-serif; font-weight: 400; }
-.memo-toolbar { display: flex; flex: 0 0 28px; height: 28px; }
-.memo-drag { flex: 1; min-width: 24px; cursor: move; }
-.quick-memo .memo-close { flex: 0 0 28px; width: 28px; height: 28px; border: 0; border-radius: 0; padding: 0; background: transparent; color: #b6b3c7; font: 22px/28px "Segoe UI", sans-serif; }
-.quick-memo .memo-close:hover { background: #413749; color: #fff; }
-.quick-memo textarea { flex: 1; min-height: 60px; width: 100%; box-sizing: border-box; resize: none; background: transparent; border: 0; border-radius: 0; padding: 4px 16px 16px; font: 16px/1.65 "Segoe UI", "Malgun Gothic", sans-serif; color: #f1f0f6; outline: none; }
-.quick-memo textarea:focus-visible { box-shadow: inset 0 0 0 1px #5a576b; }
-.quick-memo button { color: #f1f0f6; border: 1px solid #80748f; border-radius: 4px; background: #40374f; padding: 5px 8px; cursor: pointer; font: inherit; }
-.quick-memo button:focus-visible { outline: 2px solid #b5a4ec; outline-offset: -2px; }
-.quick-memo button:disabled { cursor: default; opacity: .45; }
-.memo-alert { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; color: #ffcea4; font-size: 12px; line-height: 1.5; }
-.memo-notice { margin: 0; padding: 6px 16px 10px; color: #c1bdd0; font-size: 12px; line-height: 1.5; }
-.memo-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.memo-preview-open { align-self: center; margin: auto; }
+@import './design-tokens.css';
+.quick-memo { box-sizing:border-box; height:100dvh; display:flex; flex-direction:column; background:var(--memo-bg); color:var(--memo-text); font-family:var(--memo-font); font-weight:400; }
+.memo-toolbar { display:flex; flex:0 0 32px; height:32px; }
+.memo-drag { flex:1; min-width:24px; cursor:move; }
+.quick-memo .memo-close { flex:0 0 32px; width:32px; height:32px; border:0; border-radius:0 0 0 8px; padding:0; background:transparent; color:var(--memo-muted); font:22px/32px "Segoe UI",sans-serif; transition:background-color 100ms ease,color 100ms ease; }
+.quick-memo .memo-close:hover { background:var(--memo-hover); color:var(--memo-text); }
+.quick-memo textarea { flex:1; min-height:60px; width:100%; box-sizing:border-box; resize:none; background:transparent; border:0; border-radius:0; padding:4px 20px 20px; font:16px/1.75 var(--memo-font); color:var(--memo-text); outline:none; caret-color:var(--memo-accent); }
+.quick-memo textarea:focus-visible { box-shadow:inset 3px 0 var(--memo-accent); }
+.quick-memo button { color:var(--memo-text); border:1px solid var(--memo-line); border-radius:8px; background:var(--memo-surface); padding:6px 10px; cursor:pointer; font:inherit; }
+.quick-memo button:focus-visible { outline:2px solid var(--memo-accent); outline-offset:-2px; }
+.quick-memo button:disabled { cursor:default; opacity:.45; }
+.memo-alert { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 20px; color:#ffcea4; font-size:12px; line-height:1.5; }
+.memo-notice { margin:0; padding:6px 20px 10px; color:var(--memo-muted); font-size:12px; line-height:1.5; }
+.memo-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
+.memo-preview-open { align-self:center; margin:auto; }
+@media(prefers-reduced-motion:reduce) { .quick-memo * { transition:none!important; } }

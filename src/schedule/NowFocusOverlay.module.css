@@ -209,10 +209,10 @@
 .manualTaskFooter:has([data-testid="manual-task-form"]) { grid-column: 1 / -1; }
 .manualTaskFooter:has([data-testid="manual-task-form"]) ~ .iconAction { display: none; }
 .manualTaskFooter [data-testid="manual-task-add-toggle"],
-.expandedFooter .iconAction { display: grid; width: 100%; min-height: 38px; height: 38px; place-items: center; padding: 0; border-radius: 7px; }
+.expandedFooter .iconAction { display: grid; width: 100%; min-height: 36px; height: 36px; place-items: center; padding: 0; border-radius: 8px; transition: background-color 100ms ease, color 100ms ease; }
 .manualTaskFooter [data-testid="manual-task-add-toggle"] > span { font-size: 27px; line-height: 1; }
-.expandedFooter .iconAction { min-height: 38px; }
-.iconAction svg { width: 20px; height: 20px; }
+.expandedFooter .iconAction { min-height: 36px; }
+.iconAction svg { width: 18px; height: 18px; }
 .manualTaskFooter [data-testid="manual-task-form"] { position: static; z-index: auto; width: 100%; max-width: none; padding: 5px; gap: 4px; border-radius: 6px; }
 .settingsModal {
   --modal-surface: #1b2029;

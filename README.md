@@ -101,3 +101,9 @@ For the separate executable and installer-payload checks, run `pnpm verify:packa
 ## License
 
 No open-source license has been selected yet. Do not reuse or redistribute the source until a license is added.
+
+### 메모 디자인·모션 검증
+
+메모 보관함은 넓은 창에서 목록과 본문을 나란히 표시하고, 560px 미만에서는 목록/상세로 전환한다. 상세에서 Esc를 누르면 목록으로 돌아가고, 목록에서 Esc를 누르면 보관함을 닫는다. 저장과 삭제는 기존 동작을 유지하며, 성공한 뒤에만 항목 퇴장과 목록 재배치를 표시한다. Windows의 움직임 감소 설정을 따른다.
+
+격리 화면 검증은 개발 서버를 켠 뒤 `python scripts/memo-design-smoke.py --base-url http://127.0.0.1:5187`로 실행한다. 가상 메모와 mock 동작만 사용하며 운영 브리지에 연결하지 않는다. 화면, 모션 영상과 결과는 무시된 `test-artifacts/memo-design`에 저장한다. 이 결과는 실제 Windows 운영 UI 확인과 구분한다.
