@@ -52,6 +52,7 @@ impl MemoRepository {
         for key in ["active", "pendingArchive"] {
             if !state[key].is_null() { Self::validate_draft(&state[key])?; }
         }
+        if !state["pendingArchive"].is_null() && state["pendingArchive"] != state["active"] { return Err("corrupt_state".into()); }
         Ok(state)
     }
 
@@ -307,5 +308,15 @@ mod tests {
         fs::create_dir(fixture.0.join("state.tmp")).unwrap();
         assert_eq!(repo.save(id(&session), 2, "실패한 입력").unwrap_err(), "write_failed");
         assert_eq!(fixture.repo().begin().unwrap()["draft"]["text"], "이전 저장");
+    }
+
+    #[test]
+    fn inconsistent_archive_intent_cannot_clear_another_draft() {
+        let fixture = Fixture::new(); let repo = fixture.repo(); let session = repo.begin().unwrap();
+        repo.save(id(&session), 1, "현재 초안").unwrap();
+        let mut state = repo.read_state().unwrap(); state["pendingArchive"] = state["active"].clone(); state["pendingArchive"]["text"] = json!("다른 내용");
+        repo.persist(&state).unwrap(); let bytes = fs::read(fixture.0.join("state.json")).unwrap();
+        assert_eq!(repo.begin().unwrap_err(), "corrupt_state");
+        assert_eq!(fs::read(fixture.0.join("state.json")).unwrap(), bytes);
     }
 }

@@ -985,10 +985,9 @@ fn record_runtime_event(
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle, reason: Option<String>) {
     let reason = reason.unwrap_or_else(|| "unspecified".to_string());
-    request_explicit_exit(&app, &reason);
     let details = json!({ "reason": reason }).to_string();
     let _ = append_runtime_event(&app, "app_exit_requested", &details);
-    app.exit(0);
+    quick_memo::request_exit(&app, &reason);
 }
 
 fn main() {
@@ -1003,7 +1002,7 @@ fn main() {
         }
     }
     tauri::Builder::default()
-        .manage(quick_memo::MemoStore(std::sync::Mutex::new(())))
+        .manage(quick_memo::MemoStore::default())
         .setup(|app| {
             app.manage(memo_hotkey::MemoHotkey::start(app.handle().clone()));
             clear_explicit_exit_marker(app.handle());
@@ -1082,7 +1081,8 @@ fn main() {
             let hide = MenuItem::with_id(app, "hide", "숨기기", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
             let memo = MenuItem::with_id(app, "memo", "메모 열기 (Ctrl+D)", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&memo, &show, &show_overlay_item, &hide, &quit])?;
+            let archive = MenuItem::with_id(app, "memo_archive", "메모 보관함", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&memo, &archive, &show, &show_overlay_item, &hide, &quit])?;
 
             TrayIconBuilder::with_id("daybridge-tray")
                 .icon(
@@ -1094,6 +1094,7 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "memo" => { let _ = quick_memo::show(app); }
+                    "memo_archive" => { let _ = quick_memo::open_archive(app); }
                     "show" => {
                         let _ = show_dashboard(app);
                     }
@@ -1106,9 +1107,8 @@ fn main() {
                         }
                     }
                     "quit" => {
-                        request_explicit_exit(app, "tray_quit");
                         let _ = append_runtime_event(app, "tray_quit_requested", "{}");
-                        app.exit(0);
+                        quick_memo::request_exit(app, "tray_quit");
                     }
                     _ => {}
                 })
@@ -1128,9 +1128,12 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             quick_memo::open_quick_memo,
-            quick_memo::read_quick_memo,
-            quick_memo::save_quick_memo,
+            quick_memo::begin_memo_session,
+            quick_memo::save_memo_draft,
+            quick_memo::finalize_memo_session,
             quick_memo::hide_quick_memo,
+            quick_memo::open_memo_archive_directory,
+            quick_memo::complete_memo_exit,
             memo_hotkey::memo_shortcut_status,
             open_dashboard,
             open_dashboard_settings,
@@ -1156,7 +1159,7 @@ fn main() {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "memo" {
                     api.prevent_close();
-                    let _ = window.hide();
+                    let _ = window.emit("memo-close-request", json!({"exit":false}));
                     return;
                 }
                 let _ = append_runtime_event(
@@ -1172,8 +1175,7 @@ fn main() {
                     "window_close_requested_exit",
                     &json!({ "window": window.label() }).to_string(),
                 );
-                request_explicit_exit(&app, &reason);
-                app.exit(0);
+                quick_memo::request_exit(&app, &reason);
             }
             if let WindowEvent::Destroyed = event {
                 let _ = append_runtime_event(
