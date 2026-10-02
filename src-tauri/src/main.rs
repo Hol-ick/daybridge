@@ -1169,13 +1169,12 @@ fn main() {
                 );
                 api.prevent_close();
                 let app = window.app_handle();
-                let reason = format!("{}_close_requested", window.label());
-                let _ = append_runtime_event(
-                    &app,
-                    "window_close_requested_exit",
-                    &json!({ "window": window.label() }).to_string(),
-                );
-                quick_memo::request_exit(&app, &reason);
+                // Window dismissal must leave the tray and global memo shortcut alive.
+                // Only an explicit quit action ends the background application.
+                match window.hide() {
+                    Ok(()) => { let _ = append_runtime_event(&app, "window_close_requested_hidden", &json!({ "window": window.label() }).to_string()); }
+                    Err(_) => { let _ = append_runtime_event(&app, "window_close_hide_failed", &json!({ "window": window.label() }).to_string()); }
+                }
             }
             if let WindowEvent::Destroyed = event {
                 let _ = append_runtime_event(

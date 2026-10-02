@@ -132,7 +132,7 @@ function TimelineBlock({ block, nowFocus, onOpenQuest, onCompleteBlock, onDeferB
  * The full management surface. The host passes already-derived schedule data
  * and retains ownership of loading, command handling and persistence.
  */
-/** @param {{schedule?: import("./ui-types").UiSchedule | null, nowFocus?: import("./ui-types").NowFocus | null, onOpenQuest?: (id: string) => void, onCompleteBlock?: (id: string) => void, onDeferBlock?: (id: string) => void, onOpenSettings?: () => void, calendarCoverage?: string | {state?: string}, calendarConnection?: {state: string, reason?: string}, onConnectCalendar?: () => void, onAddManualTask?: import("./ui-types").AddManualTask}} props */
+/** @param {{schedule?: import("./ui-types").UiSchedule | null, nowFocus?: import("./ui-types").NowFocus | null, onOpenQuest?: (id: string) => void, onCompleteBlock?: (id: string) => void, onDeferBlock?: (id: string) => void, onOpenSettings?: () => void, onOpenMemoArchive?: (() => void) | undefined, calendarCoverage?: string | {state?: string}, calendarConnection?: {state: string, reason?: string}, onConnectCalendar?: () => void, onAddManualTask?: import("./ui-types").AddManualTask}} props */
 export default function ScheduleDashboard({
   schedule,
   nowFocus,
@@ -140,6 +140,7 @@ export default function ScheduleDashboard({
   onCompleteBlock,
   onDeferBlock,
   onOpenSettings,
+  onOpenMemoArchive,
   calendarCoverage,
   calendarConnection,
   onConnectCalendar,
@@ -174,6 +175,7 @@ export default function ScheduleDashboard({
         <div className={styles.headerActions}>
           <span className={styles.coverage} data-testid="calendar-coverage" aria-label={coverageLabel} title={coverageLabel} data-state={coverageState} />
           <button type="button" onClick={onConnectCalendar} data-testid="calendar-connect">캘린더</button>
+          {onOpenMemoArchive ? <button type="button" onClick={onOpenMemoArchive} data-testid="memo-archive">메모 보관함</button> : null}
           <button type="button" onClick={onOpenSettings} data-testid="schedule-settings" aria-label="시간표 설정">설정</button>
         </div>
       </header>
