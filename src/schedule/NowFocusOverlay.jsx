@@ -772,7 +772,9 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
           ) : null}
           <footer className={styles.expandedFooter} aria-label="시간표 도구">
             <div className={styles.manualTaskFooter}><ManualTaskForm compact iconOnly resetSignal={taskResetSignal} onOpenChange={setTaskOpen} onSubmit={onAddManualTask} /></div>
-            <button type="button" className={styles.memoArchive} onClick={onOpenMemoArchive} data-testid="now-focus-overlay-memo-archive" data-tauri-drag-region="false">메모 보관함</button>
+            <button type="button" className={styles.iconAction} onClick={onOpenMemoArchive} data-testid="now-focus-overlay-memo-archive" data-tauri-drag-region="false" aria-label="메모 보관함" title="메모 보관함">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5h16v4H4zM5 9v11h14V9M9 13h6" /></svg>
+            </button>
             <button type="button" className={styles.iconAction} onClick={onOpenSettings} disabled={!onOpenSettings} data-tauri-drag-region="false" data-testid="now-focus-overlay-settings" aria-label="시간표 설정">
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9.8 3.7 10.4 2h3.2l.6 1.7 1.6.9 1.7-.5 2.2 2.2-.5 1.7.9 1.6 1.7.6v3.2l-1.7.6-.9 1.6.5 1.7-2.2 2.2-1.7-.5-1.6.9-.6 1.7h-3.2l-.6-1.7-1.6-.9-1.7.5-2.2-2.2.5-1.7-.9-1.6-1.7-.6v-3.2l1.7-.6.9-1.6-.5-1.7 2.2-2.2 1.7.5 1.6-.9Z" /><circle cx="12" cy="12" r="3.1" /></svg>
             </button>

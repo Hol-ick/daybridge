@@ -65,3 +65,9 @@ Real Windows Ctrl+D/IME/X/Esc/Alt+F4/tray quit and reopen; archive contents and 
 - TypeScript/frontend build, Windows release/NSIS and payload independent checks10 passed. Updated installed executable from the verified payload with an owned-process guard and private backup, preserving the memo file and owned bundled bridge. A first attempt detected an active memo and deferred; after the draft closed, the guarded update completed.
 - New installed payload SHA256 d4804e3db8122669a65f2c9e097d376a2049b2ab7810d05d62adff611cb8cf21. NSIS SHA256 f787a3f0d21491b480ac2c0b4916da3bf947fdf335eb375fe983b6025d34934f. Actual archive button/native folder opening awaits user confirmation.
 - Previous close-repair source5f2af44 CI36971691923 failed1 of178: rapid cross-process lock handover worker reached its25s fixture deadline. Logs identify the failure; do not classify it as an environment-only issue or claim the whole CI passed. No unrelated storage implementation was changed. Follow the final placement revision CI independently.
+
+### Equal icon buttons
+
+- The user saw the expanded-widget archive entry and requested an icon matching the adjacent add/settings controls. Replaced the text with an outlined archive box SVG and accessible name/tooltip; all three columns now share equal width and38px height. Manual form expansion still hides both utility icons.
+- Browser checks at100/150/200% verify equal button bounds, archive callback, preserved manual form and zero page errors; the rendered screenshot was inspected. TypeScript/frontend, Windows release/NSIS build and installer payload independent checks passed. Native archive opening still requires direct confirmation; no Computer Use actions resumed after interruption.
+- The previously failing cross-process handover test passed a fresh local reproduction in6.23s. This does not explain the remote25s deadline failure or prove that it was fixed. Keep remote final-source status separate.
