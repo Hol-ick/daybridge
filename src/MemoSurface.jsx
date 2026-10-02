@@ -16,7 +16,6 @@ export default function MemoSurface() {
   const [recovered, setRecovered] = useState(false);
   const [logHealthy, setLogHealthy] = useState(true);
   const [status, setStatus] = useState("saved");
-  const [shortcut, setShortcut] = useState("");
   /** @type {import('react').RefObject<HTMLTextAreaElement | null>} */ const input = useRef(null);
   const composing = useRef(false);
   /** @type {import('react').RefObject<(() => void)[]>} */ const compositionWaiters = useRef([]);
@@ -70,7 +69,6 @@ export default function MemoSurface() {
       listeners.push(listen("memo-focus", focus));
       listeners.push(listen("memo-close-request", () => { if (alive) void close("native"); }));
       void Promise.all(listeners).then(async () => { if (alive && await getCurrentWindow().isVisible()) await open(); }).catch(() => { if (alive) setError("메모창을 준비하지 못했습니다. 다시 시도해 주세요."); });
-      void invoke("memo_shortcut_status").then(value => { if (alive) setShortcut(String(value)); }).catch(() => { if (alive) setShortcut("unavailable"); });
     } else { void open(); }
     return () => { alive = false; window.removeEventListener("focus", focus); for (const listener of listeners) void listener.then(stop => stop()).catch(() => {}); };
     // The stable session keeps its draft across native focus and close events.
@@ -93,7 +91,6 @@ export default function MemoSurface() {
     {(error || status === "error") && <div className="memo-alert" role="alert"><span>{error || "저장하지 못했습니다. 내용을 유지하고 있습니다."}</span><button onClick={() => { void retry(); }}>{closeError ? "다시 닫기" : !ready ? "다시 불러오기" : "다시 저장"}</button></div>}
     {recovered && !error && <p className="memo-notice">작성 중이던 메모를 복구했습니다.</p>}
     {!logHealthy && <p className="memo-notice" role="alert">메모는 저장됐지만 동작 기록을 남기지 못했습니다.</p>}
-    {shortcut === "unavailable" && <p className="memo-notice" role="alert">Ctrl+D를 사용할 수 없습니다. 트레이에서 메모를 열어 주세요.</p>}
     <span className="memo-sr-only" role="status">{status === "saving" ? "저장 중…" : status === "error" ? "저장하지 못했습니다" : "자동 저장됨"}</span>
   </section>;
 }
