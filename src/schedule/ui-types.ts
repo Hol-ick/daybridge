@@ -67,6 +67,7 @@ export interface OverlayProps extends Omit<SettingsProps, "onClose" | "onSubmit"
   onDiscardBlock?: (blockId: string) => unknown | Promise<unknown>;
   settingsOpen?: boolean;
   onOpenSettings?: () => void;
+  onOpenMemoArchive?: () => void;
   onCloseSettings?: () => void;
   onSaveSettings?: SettingsProps["onSubmit"];
   magnetPulse?: boolean;

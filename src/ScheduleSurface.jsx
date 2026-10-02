@@ -497,6 +497,10 @@ export default function ScheduleSurface() {
       onDiscardBlock={discardBlock}
       settingsOpen={settingsOpen}
       onOpenSettings={openSettings}
+      onOpenMemoArchive={() => {
+        if (!isTauri()) { setNotice("메모 보관함은 Windows 앱에서 열 수 있어요"); return; }
+        void invoke("open_memo_archive_directory").catch(() => setNotice("메모 보관함을 열지 못했어요"));
+      }}
       onCloseSettings={() => setSettingsOpen(false)}
       onSaveSettings={saveSettings}
       onRefreshWidget={refreshWidget}
@@ -528,7 +532,6 @@ export default function ScheduleSurface() {
       onDeferBlock={(blockId) => { void reportBlock(blockId, "deferred"); }}
       onOpenSettings={openSettings}
       onConnectCalendar={connectCalendar}
-      onOpenMemoArchive={isTauri() ? () => { void invoke("open_memo_archive_directory").catch(() => setNotice("메모 보관함을 열지 못했어요")); } : undefined}
       onAddManualTask={addManualTask}
     />
     <p className={styles.notice} role="status" data-visible={notice ? "true" : "false"}>{notice}</p>
