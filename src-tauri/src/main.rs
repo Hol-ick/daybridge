@@ -8,6 +8,7 @@ mod quick_memo;
 mod memo_store;
 mod memo_hotkey;
 mod memo_archive;
+mod startup_identity;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -98,6 +99,11 @@ try {{
   Write-DaybridgeEvent 'process_watchdog_started' @{{ executable = $ExecutablePath; intervalSeconds = 3 }}
   $missingChecks = 0
   while ($true) {{
+    $registered = (Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name Daybridge -ErrorAction Stop).Daybridge
+    if (-not [string]::Equals($registered, ('"' + $ExecutablePath + '"'), [System.StringComparison]::OrdinalIgnoreCase)) {{
+      Write-DaybridgeEvent 'process_watchdog_stopped' @{{ reason = 'startup_owner_changed' }}
+      break
+    }}
     if (Test-Path -LiteralPath $ExitMarkerPath) {{
       Write-DaybridgeEvent 'process_watchdog_stopped' @{{ reason = 'explicit_exit' }}
       break
@@ -1002,20 +1008,39 @@ fn main() {
             }
         }
     }
+    let role = if cfg!(debug_assertions) {
+        startup_identity::LaunchRole::Standalone
+    } else {
+        let current = std::env::current_exe().expect("Daybridge executable path");
+        let installed = startup_identity::installed_executable();
+        startup_identity::launch_role(&current, installed.as_deref())
+    };
+    if let startup_identity::LaunchRole::Redirect(ref installed) = role {
+        match Command::new(installed).spawn() {
+            Ok(_) => return,
+            Err(error) => { eprintln!("Daybridge 설치본 실행 실패: {error}"); std::process::exit(2); }
+        }
+    }
+    let _instance = match startup_identity::acquire_instance() {
+        Ok(Some(guard)) => guard,
+        Ok(None) => return,
+        Err(error) => { eprintln!("{error}"); std::process::exit(2); }
+    };
+    let installed_launch = role == startup_identity::LaunchRole::Installed;
     tauri::Builder::default()
         .manage(quick_memo::MemoStore::default())
-        .setup(|app| {
+        .setup(move |app| {
             app.manage(memo_hotkey::MemoHotkey::start(app.handle().clone()));
             clear_explicit_exit_marker(app.handle());
             let _ = append_runtime_event(
                 app.handle(),
                 "app_started",
-                &json!({ "debug": cfg!(debug_assertions) }).to_string(),
+                &json!({ "debug": cfg!(debug_assertions), "revision": env!("DAYBRIDGE_BUILD_REVISION"), "startupOwner": installed_launch }).to_string(),
             );
             // Only the packaged application registers itself. Development
             // builds depend on the local Vite server and must not become a
             // stale Windows startup entry after a reboot.
-            if !cfg!(debug_assertions) {
+            if installed_launch {
                 if let Err(error) = configure_windows_startup() {
                     eprintln!("Daybridge 자동 시작 등록 실패: {error}");
                     let _ = append_runtime_event(
@@ -1265,5 +1290,6 @@ mod tests {
         assert!(script.contains("$missingChecks -ge 3"));
         assert!(script.contains("consecutiveMisses"));
         assert!(script.contains("process_relaunch_requested"));
+        assert!(script.contains("startup_owner_changed"));
     }
 }
