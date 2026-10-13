@@ -310,6 +310,9 @@ fn start_local_bridge(app: &tauri::AppHandle) -> Result<(), String> {
                 "bridge_autostart_existing_unmanaged",
                 &json!({ "port": LOCAL_BRIDGE_PORT }).to_string(),
             );
+            if !cfg!(debug_assertions) {
+                return Err("다른 실행 경로의 Daybridge 브리지가 남아 있습니다. 기존 앱을 종료한 뒤 설치본을 다시 실행해 주세요.".to_string());
+            }
             return Ok(());
         }
         // The port can remain reserved for a moment after Node exits. Wait for
