@@ -11,9 +11,9 @@
 body { font-weight:400; }
 ::selection { background:var(--db-accent); color:var(--db-onAccent); }
 .palette-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:8px; }
-.palette-card { position:relative; display:flex; flex-direction:column; gap:10px; padding:8px; border:1px solid var(--db-line); border-radius:12px; background:var(--db-surface); color:var(--db-ink); font:inherit; cursor:pointer; text-align:left; transition:border-color 140ms ease,transform 140ms ease; }
-.palette-card:hover { border-color:var(--db-accent); transform:translateY(-2px); }
-.palette-card[aria-pressed=true] { border-color:var(--db-accent); box-shadow:0 0 0 2px var(--db-tint); }
+.palette-card { position:relative; display:flex; flex-direction:column; gap:10px; padding:8px; border:1px solid var(--db-line); border-radius:6px; background:transparent; color:var(--db-ink); font:inherit; cursor:pointer; text-align:left; transition:border-color 120ms ease; }
+.palette-card:hover { border-color:var(--db-accent);  }
+.palette-card[aria-pressed=true] { border-color:var(--db-accent); box-shadow:none; }
 .palette-card:focus-visible { outline:2px solid var(--db-accent); outline-offset:3px; }
 .palette-preview { display:grid; grid-template-columns:28% 1fr; gap:5px; height:62px; padding:8px; box-sizing:border-box; border-radius:7px; background:var(--preview-canvas); border:1px solid color-mix(in srgb,var(--preview-ink) 12%,transparent); }
 .palette-preview-sidebar { display:flex; flex-direction:column; gap:5px; padding-top:4px; }
@@ -21,7 +21,7 @@ body { font-weight:400; }
 .palette-preview-sidebar i:first-child { background:var(--preview-accent); opacity:1; }
 .palette-preview-paper { border-radius:4px; background:var(--preview-paper); padding:9px; }
 .palette-preview-paper i { display:block; width:65%; height:3px; background:var(--preview-paper-ink); opacity:.35; margin-bottom:5px; border-radius:2px; }
-.palette-name { display:flex; align-items:center; justify-content:space-between; gap:4px; font-size:12px; font-weight:600; white-space:nowrap; }
+.palette-name { display:flex; align-items:center; justify-content:space-between; gap:4px; font-size:12px; font-weight:400; white-space:nowrap; }
 .palette-name svg { width:15px; height:15px; fill:none; stroke:var(--db-accent); stroke-width:2; }
 .palette-feedback { margin:8px 0 0; color:var(--db-muted); font-size:11px; }
 .palette-error { color:var(--db-danger); }

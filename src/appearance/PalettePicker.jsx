@@ -8,5 +8,5 @@ export default function PalettePicker({ appearance, onChange }) {
       <span className="palette-preview" aria-hidden="true" style={{"--preview-canvas":p.canvas,"--preview-ink":p.ink,"--preview-accent":p.accent,"--preview-paper":p.paper,"--preview-paper-ink":p.paperInk}}><span className="palette-preview-sidebar"><i/><i/><i/></span><span className="palette-preview-paper"><i/><i/></span></span>
       <span className="palette-name">{p.label}{appearance?.paletteId===p.id?<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-8"/></svg>:null}</span>
     </button>)}
-  </div><p className={`palette-feedback${error?" palette-error":""}`} role={error?"alert":"status"}>{error||"선택한 색상은 바로 적용되고 저장됩니다."}</p></>;
+  </div>{error?<p className="palette-feedback palette-error" role="alert">{error}</p>:<span className="palette-feedback">자동 저장</span>}</>;
 }

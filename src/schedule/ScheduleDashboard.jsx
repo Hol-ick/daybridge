@@ -168,7 +168,6 @@ export default function ScheduleDashboard({
     <main className={styles.dashboard} data-testid="schedule-dashboard">
       <header className={styles.header}>
         <div>
-          <p className={styles.kicker}>DAYBRIDGE</p>
           <h1>{scheduleLabel}</h1>
         </div>
         <div className={styles.headerActions}>
@@ -178,7 +177,7 @@ export default function ScheduleDashboard({
         </div>
       </header>
 
-      <section className={styles.nowCard} aria-labelledby="now-focus-title" data-testid="schedule-now-focus">
+      {!listMode ? <section className={styles.nowCard} aria-labelledby="now-focus-title" data-testid="schedule-now-focus">
         <p id="now-focus-title">{listMode ? "오늘 할 일" : "지금 할 일"}</p>
         <div className={styles.nowContent}>
           <div>
@@ -195,7 +194,7 @@ export default function ScheduleDashboard({
               완료
             </button> : null}
         </div>
-      </section>
+      </section> : null}
 
       <section className={styles.timelineSection} aria-labelledby="timeline-title">
         <div className={styles.sectionHeading}>
@@ -220,7 +219,7 @@ export default function ScheduleDashboard({
             ))}
           </ol>
         ) : (
-          <div className={styles.empty} data-testid="schedule-empty">{listMode ? "오늘 할 일이 없습니다." : "시간표를 만들면 오늘의 집중 시간이 여기에 놓입니다."}</div>
+          <div className={styles.empty} data-testid="schedule-empty">{listMode ? "오늘 할 일 없음" : "등록된 시간표 없음"}</div>
         )}
       </section>
     </main>

@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+BASE_URL = os.environ.get("DAYBRIDGE_PREVIEW_URL", "http://127.0.0.1:5173")
 
 DEFAULT_SETTINGS = json.dumps({
     "settings": {
@@ -271,9 +272,10 @@ def check_dashboard(browser) -> None:
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
 
-    page.goto("http://127.0.0.1:5173", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "", wait_until="domcontentloaded")
+    page.get_by_test_id("schedule-empty").get_by_text("오늘 할 일 없음", exact=True).wait_for()
     assert page.locator('[data-testid="schedule-dashboard"]').count() == 1
-    assert page.locator('[data-testid="schedule-now-focus"]').count() == 1
+    assert page.locator('[data-testid="schedule-now-focus"]').count() == 0
     assert page.locator('[data-testid="schedule-timeline"]').count() == 0
     assert page.locator('[data-testid="schedule-empty"]').count() == 1
     assert page.locator('[data-testid="quest-item"]').count() == 0
@@ -287,11 +289,11 @@ def check_dashboard(browser) -> None:
 
     page.locator('[data-testid="schedule-settings"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-settings-sheet"]')
-    page.get_by_role("button", name="표시·색상").click()
-    assert page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
+    page.get_by_role("button", name="화면", exact=True).click()
+    assert page.get_by_label("위젯에서 작업명 숨기기").is_visible()
     settings_box = page.locator('[data-testid="now-focus-overlay-settings-sheet"]').bounding_box()
     assert settings_box and round(settings_box["width"]) == page.viewport_size["width"]
-    assert page.get_by_text("위젯 설정", exact=True).is_visible()
+    assert page.get_by_role("dialog", name="위젯 설정", exact=True).is_visible()
     page.get_by_role("button", name="반복 일정").click()
     page.get_by_label("새 매일 기본 일정").fill("오전 메일 확인")
     page.get_by_role("button", name="＋ 추가").click()
@@ -303,10 +305,10 @@ def check_dashboard(browser) -> None:
     refresh_button = page.locator('[data-testid="now-focus-overlay-refresh"]')
     assert refresh_button.is_visible()
     refresh_button.click()
-    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('위젯을 새로고침했어요')")
+    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('위젯 새로고침 완료')")
     assert refresh_button.inner_text() == "위젯 새로고침"
     page.get_by_role("button", name="저장", exact=True).click()
-    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('설정을 저장했어요')")
+    page.wait_for_function("document.querySelector('[role=status]').textContent.includes('설정 저장됨')")
     assert daily_defaults_calls and daily_defaults_calls[0]["dailyDefaults"]["routines"][-1]["title"] == "오전 메일 확인"
     assert_no_page_errors(errors)
     close_fixture_context(context)
@@ -355,7 +357,7 @@ def check_dashboard_actions(browser) -> None:
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "", wait_until="domcontentloaded")
     page.wait_for_selector('[data-testid="schedule-timeline"]')
     assert page.get_by_text("리눅스 학습", exact=True).count() >= 1
 
@@ -408,7 +410,7 @@ def check_overlay(browser) -> None:
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
 
-    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/?surface=overlay", wait_until="domcontentloaded")
     overlay = page.locator('[data-testid="now-focus-overlay"]')
     assert overlay.count() == 1
     surface = page.locator('[data-testid="now-focus-overlay-surface"]')
@@ -527,8 +529,8 @@ def check_overlay(browser) -> None:
     }""")
     settings_box = settings_sheet.bounding_box()
     assert settings_box and round(settings_box["width"]) == 720 and round(settings_box["height"]) == 680
-    settings_page.get_by_role("button", name="표시·색상").click()
-    assert settings_page.get_by_label("오버레이에서 작업명 숨기기").is_visible()
+    settings_page.get_by_role("button", name="화면", exact=True).click()
+    assert settings_page.get_by_label("위젯에서 작업명 숨기기").is_visible()
     settings_page.get_by_role("button", name="반복 일정").click()
     assert settings_page.get_by_label("영양제 먹기 기본 일정").input_value() == "영양제 먹기"
     settings_page.screenshot(path="test-artifacts/daybridge-schedule-overlay-settings.png", full_page=True)
@@ -576,7 +578,7 @@ def check_overlay_todo_items(browser) -> None:
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/?surface=overlay", wait_until="domcontentloaded")
     page.wait_for_function("(() => { const value = document.querySelector('[data-testid=now-focus-overlay-title]')?.textContent?.trim() || ''; return value && value !== '오늘 할 일'; })()")
     title = page.locator('[data-testid="now-focus-overlay-title"]')
     assert (title.text_content() or "").strip() == "문서 검토"
@@ -659,7 +661,7 @@ def check_overlay_auto_starts_next_todo(browser) -> None:
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/?surface=overlay", wait_until="domcontentloaded")
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     with page.expect_response(lambda response: response.url.endswith("/api/schedule/block-report")):
         page.locator('[data-testid="now-focus-overlay-block-todo-docs"]').click()
@@ -690,7 +692,7 @@ def check_overlay_shows_empty_summary_after_completion(browser) -> None:
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/?surface=overlay", wait_until="domcontentloaded")
     page.wait_for_selector('[data-testid="now-focus-overlay-leave-time"]')
     summary = page.locator('[data-testid="now-focus-overlay-title"]')
     assert summary.count() == 1
@@ -724,7 +726,7 @@ def check_overlay_compact_expansion(browser) -> None:
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/?surface=overlay", wait_until="domcontentloaded")
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().height) === Number(surface.dataset.expandedHeight); })()")
     page.wait_for_timeout(350)
@@ -766,7 +768,7 @@ def check_overlay_scrolls_only_at_maximum_height(browser) -> None:
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/?surface=overlay", wait_until="domcontentloaded")
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().height) === Number(surface.dataset.expandedHeight); })()")
     surface = page.locator('[data-testid="now-focus-overlay-surface"]')
@@ -793,7 +795,7 @@ def check_overlay_long_title(browser) -> None:
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/?surface=overlay", wait_until="domcontentloaded")
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-block-focus-1"]')
     page.wait_for_selector('[data-testid="now-focus-overlay-block-focus-1"] [class*=compactBlockTitle]')
@@ -850,7 +852,7 @@ def check_overlay_reorder(browser) -> None:
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/?surface=overlay", wait_until="domcontentloaded")
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_function("document.querySelector('[data-testid=now-focus-overlay-expanded]').getAttribute('aria-hidden') === 'false'")
     page.wait_for_function("(() => { const surface = document.querySelector('[data-testid=now-focus-overlay-surface]'); return Math.round(surface.getBoundingClientRect().height) === Number(surface.dataset.expandedHeight) && Number(surface.dataset.expandedHeight) < 520; })()")
@@ -962,7 +964,7 @@ def check_overlay_stale_card_is_not_reported_to_today(browser) -> None:
     page = context.new_page()
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/?surface=overlay", wait_until="domcontentloaded")
     page.locator('[data-testid="now-focus-overlay-open"]').click()
     page.wait_for_selector('[data-testid="now-focus-overlay-block-drag-a"]')
     missing_today_board = True
@@ -1002,9 +1004,9 @@ def check_settings_contract(browser) -> None:
     context.route("http://127.0.0.1:39393/api/schedule-settings", settings_route)
     page = context.new_page()
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/?surface=dashboard")
+    page.goto(BASE_URL + "/?surface=dashboard")
     page.locator('[data-testid="schedule-settings"]').click()
-    buffer = page.get_by_label("완충시간 (분)")
+    buffer = page.get_by_label("작업 사이 간격")
     buffer.wait_for()
     page.wait_for_function("document.querySelector('input[type=number][max=\"30\"]').value === '30'")
     assert page.get_by_label("점심", exact=False).is_checked() is False
@@ -1025,25 +1027,27 @@ def check_settings_contract(browser) -> None:
     assert all(not meal["enabled"] for meal in calls[0]["meals"].values())
     assert buffer.input_value() == "0"
     toast_box = page.get_by_test_id("daybridge-settings-toast").bounding_box()
-    close_box = page.get_by_role("button", name="설정 닫기").bounding_box()
+    close_box = page.get_by_role("button", name="관리 창 닫기", exact=True).bounding_box()
     assert toast_box["x"] + toast_box["width"] <= close_box["x"]
     page.screenshot(path="test-artifacts/daybridge-settings-contract-error.png", full_page=True)
     buffer.fill("30")
     page.get_by_role("button", name="저장", exact=True).click()
-    page.get_by_test_id("daybridge-settings-toast").filter(has_text="설정을 저장했어요").wait_for()
+    page.get_by_test_id("daybridge-settings-toast").filter(has_text="설정 저장됨").wait_for()
     assert len(calls) == 2 and calls[-1]["bufferMinutes"] == 30 and calls[-1]["breaks"] == []
-    page.get_by_text("저녁시간", exact=True).scroll_into_view_if_needed()
-    assert page.get_by_text("저녁시간", exact=True).is_visible()
+    page.get_by_text("저녁", exact=True).scroll_into_view_if_needed()
+    assert page.get_by_text("저녁", exact=True).is_visible()
     assert not page.get_by_label("저녁", exact=False).is_checked()
     page.screenshot(path="test-artifacts/daybridge-settings-contract-saved.png", full_page=True)
     stored_invalid = True
     page.reload()
     page.locator('[data-testid="schedule-settings"]').click()
     page.get_by_test_id("daybridge-settings-toast").filter(has_text="올바른 값으로 저장하면").wait_for()
+    page.get_by_role("checkbox", name="시간표 사용", exact=True).focus()
+    page.get_by_role("checkbox", name="시간표 사용", exact=True).press("Space")
     assert len(calls) == 2
-    page.get_by_label("완충시간 (분)").fill("30")
+    page.get_by_label("작업 사이 간격").fill("30")
     page.get_by_role("button", name="저장", exact=True).click()
-    page.get_by_test_id("daybridge-settings-toast").filter(has_text="설정을 저장했어요").wait_for()
+    page.get_by_test_id("daybridge-settings-toast").filter(has_text="설정 저장됨").wait_for()
     assert len(calls) == 3 and calls[-1]["bufferMinutes"] == 30
     assert_no_page_errors(errors)
     close_fixture_context(context)
@@ -1058,7 +1062,7 @@ def check_native_canvas_coordinates(browser) -> None:
     page = context.new_page()
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/?surface=overlay", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/?surface=overlay", wait_until="domcontentloaded")
     surface = page.get_by_test_id("now-focus-overlay-surface")
     box = surface.bounding_box()
     assert box and [round(box[key]) for key in ["x", "y", "width", "height"]] == [472, 656, 288, 64], box
@@ -1096,7 +1100,7 @@ def check_slow_initial_board(browser) -> None:
     page = context.new_page()
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5173/", wait_until="domcontentloaded")
+    page.goto(BASE_URL + "/", wait_until="domcontentloaded")
     page.wait_for_function("JSON.parse(localStorage.getItem('daybridge.quest-board.v4') || '{}').activityDate === '2026-08-24'", timeout=10000)
     assert not [event for event in events if event.get("event") == "board_refresh_error"], events
     assert_no_page_errors(errors)

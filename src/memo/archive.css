@@ -5,7 +5,7 @@
 .memo-archive-header { cursor:move; user-select:none; }
 .memo-archive-heading { display:flex; align-items:center; gap:12px; }
 .memo-archive-header h2 { margin:0; font-size:18px; font-weight:600; letter-spacing:-.025em; }
-.memo-archive-heading>span { font-size:12px; color:var(--memo-accent); padding:2px 8px; border-radius:12px; background:var(--db-tint); }
+.memo-archive-heading>span { font-size:12px; color:var(--memo-muted); font-variant-numeric:tabular-nums; }
 .memo-archive-panel button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:36px; border:1px solid transparent; border-radius:8px; padding:8px 10px; color:inherit; background:transparent; cursor:pointer; font:inherit; transition:background-color 100ms ease,color 100ms ease; }
 .memo-archive-panel button:hover { background:var(--memo-hover); }
 .memo-archive-panel button:active { background:var(--db-raised); }
@@ -33,7 +33,7 @@
 .memo-archive-detail { display:flex; flex-direction:column; min-height:0; min-width:0; gap:16px; container: memo-detail / inline-size; }
 .memo-archive-detail pre { flex:1; min-height:80px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font:15px/1.75 var(--memo-font); margin:0; padding:22px; background:var(--memo-surface); border-radius:10px; scrollbar-width:thin; scrollbar-color:var(--db-line) transparent; animation:memo-content-enter 120ms ease-out both; }
 .memo-archive-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)) auto; align-items:center; gap:10px; }
-.memo-archive-actions button { min-height:48px; padding:12px 14px; gap:9px; border-radius:12px; font-size:14px; font-weight:600; white-space:nowrap; }
+.memo-archive-actions button { min-height:48px; padding:12px 14px; gap:9px; border-radius:6px; font-size:14px; font-weight:500; white-space:nowrap; }
 .memo-archive-actions svg { width:20px; height:20px; }
 .memo-archive-actions .memo-save { background:var(--memo-accent); color:var(--db-onAccent); }
 .memo-archive-actions .memo-save:hover { background:var(--db-accent); }

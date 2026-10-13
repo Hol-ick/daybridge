@@ -35,7 +35,7 @@ with sync_playwright() as p:
     expect(settings.get_by_role('button',name='설정 닫기',exact=True)).to_have_count(0)
     expect(settings.get_by_role('button',name='관리 창 닫기',exact=True)).to_have_count(1)
     expect(settings.get_by_role('dialog',name='위젯 설정',exact=True)).to_have_attribute('aria-modal','false')
-    settings.get_by_role('button',name='표시·색상').click()
+    settings.get_by_role('button',name='화면',exact=True).click()
     expect(settings.get_by_role('group',name='앱 색상 팔레트')).to_be_visible()
     archive=context.new_page();archive.on('pageerror',lambda e:errors.append(str(e)))
     archive.goto('http://127.0.0.1:5187/test-artifacts/palette.html?view=archive&compose=1')
@@ -58,7 +58,7 @@ with sync_playwright() as p:
         assert close['width']==40 and close['height']==40
         results.append({'palette':palette['id'],'synced':True,'draftPreserved':True,'close40':True})
     settings.reload();settings.wait_for_function("document.documentElement.dataset.palette==='rose'")
-    settings.get_by_role('button',name='표시·색상').click()
+    settings.get_by_role('button',name='화면',exact=True).click()
     expect(settings.get_by_role('button',name='로즈 팔레트',exact=True)).to_have_attribute('aria-pressed','true')
     settings.evaluate("()=>{window.write=Storage.prototype.setItem;Storage.prototype.setItem=()=>{throw Error('fixture_disk_failure')};}")
     settings.get_by_role('button',name='세이지 팔레트',exact=True).click()

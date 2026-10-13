@@ -1,13 +1,13 @@
-.editor { display: grid; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--db-line); border-radius: 9px; background:var(--db-surface); }
+.editor { display:grid; gap:16px; min-width:0; padding:0; background:transparent; }
 .heading { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
 .heading div { display: grid; gap: 3px; }
-.heading strong { color:var(--db-ink); font-size: 15px; font-weight: 780; letter-spacing: -.045em; }
+.heading strong { color:var(--db-ink); font-size:14px; font-weight:500; letter-spacing:normal; }
 .heading small { color:var(--db-muted); font-size: 11px; font-weight: 560; line-height: 1.4; }
 .list { display: grid; gap: 6px; max-height: 190px; overflow-y: auto; scrollbar-color:var(--db-line) transparent; scrollbar-width: thin; }
 .item { display: grid; grid-template-columns: 44px minmax(0, 1fr) 28px; gap: 6px; align-items: center; min-width: 0; }
-.item input { min-width: 0; min-height: 33px; box-sizing: border-box; padding: 0 9px; border: 1px solid var(--db-line); border-radius: 7px; background:var(--db-surface); color:var(--db-ink); font: inherit; font-size: 12px; font-weight: 680; outline: none; }
+.item input { min-width: 0; min-height: 33px; box-sizing: border-box; padding: 0 9px; border: 1px solid var(--db-line); border-radius: 5px; background:var(--db-surface); color:var(--db-ink); font: inherit; font-size: 12px; font-weight: 400; outline: none; }
 .item input:focus { border-color: var(--db-accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--db-accent) 14%,transparent); }
-.toggle, .remove, .add { min-height: 33px; border: 1px solid var(--db-line); border-radius: 7px; background:var(--db-surface); color:var(--db-muted); cursor: pointer; font: inherit; font-size: 10px; font-weight: 780; letter-spacing: -.025em; transition: background-color .14s ease, border-color .14s ease, color .14s ease; }
+.toggle, .remove, .add { min-height: 33px; border: 1px solid var(--db-line); border-radius: 5px; background:var(--db-surface); color:var(--db-muted); cursor: pointer; font: inherit; font-size: 10px; font-weight: 500; letter-spacing: -.025em; transition: background-color .14s ease, border-color .14s ease, color .14s ease; }
 .toggle { border-color:var(--db-line); background:var(--db-surface); color:var(--db-ink); }
 .toggle:hover, .add:hover { border-color: var(--db-accent); background:var(--db-surface); color:var(--db-ink); }
 .disabled .toggle { border-color:var(--db-line); background:var(--db-surface); color:var(--db-muted); }
@@ -15,8 +15,8 @@
 .remove { background: transparent; color:var(--db-muted); font-size: 18px; font-weight: 300; line-height: 1; }
 .remove:hover { border-color:var(--db-line); background:var(--db-surface); color:var(--db-ink); }
 .addRow { display: grid; grid-template-columns: minmax(0, 1fr) 64px; gap: 6px; min-width: 0; }
-.addRow input { min-width: 0; min-height: 34px; box-sizing: border-box; padding: 0 9px; border: 1px solid var(--db-line); border-radius: 7px; background:var(--db-surface); color:var(--db-ink); font: inherit; font-size: 12px; outline: none; }
+.addRow input { min-width: 0; min-height: 34px; box-sizing: border-box; padding: 0 9px; border: 1px solid var(--db-line); border-radius: 5px; background:var(--db-surface); color:var(--db-ink); font: inherit; font-size: 12px; outline: none; }
 .addRow input:focus { border-color: var(--db-accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--db-accent) 14%,transparent); }
 .add { width: 100%; min-height: 34px; }
 .add:disabled { cursor: default; opacity: .45; }
-.empty { margin: 0; padding: 12px 8px; border: 1px dashed var(--db-line); border-radius: 7px; color:var(--db-muted); font-size: 11px; text-align: center; }
+.empty { margin:0; padding:8px 0; color:var(--db-muted); font-size:13px; }

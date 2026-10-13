@@ -148,7 +148,7 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
     const fromList=!!listRef.current?.contains(document.activeElement);
     await act(async()=>{if(await controller.remove(id)){
       setEditing(false);
-      setNotice('메모를 삭제했어요');
+      setNotice('삭제됨');
       if(fromList)requestAnimationFrame(()=>{
         const next=listRef.current?.querySelector('button[aria-pressed=true]');
         const closeButton=panelRef.current?.querySelector('.memo-icon-button');
@@ -181,11 +181,11 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
         {compact&&compactPage==='detail'?<button ref={backRef} className="memo-archive-back" type="button" onClick={returnToList}><Icon kind="back"/>목록으로</button>:null}
         <div className="memo-compose" hidden={!editing}><MemoSurface embedded controllerRef={editor}/></div>
         {!editing&&memo?<><pre key={`${opening}-${memo.id}`} tabIndex={0}>{memo.text}</pre><div className="memo-archive-actions">
-          <button className="memo-save" type="button" disabled={view.busy} onClick={()=>void act(async()=>{const result=await controller.exportMemo(memo.id);setNotice(result?.removed?'다운로드 폴더에 저장했어요':result?.saved?'파일은 저장했지만 메모를 제거하지 못했어요. 다시 눌러 주세요':'');})}><Icon kind="save"/>로컬에 저장</button>
+          <button className="memo-save" type="button" disabled={view.busy} onClick={()=>void act(async()=>{const result=await controller.exportMemo(memo.id);setNotice(result?.removed?'다운로드에 저장됨':result?.saved?'파일은 저장됐지만 메모 삭제에 실패했습니다. 다시 눌러 주세요.':'');})}><Icon kind="save"/>로컬에 저장</button>
           <button className="memo-schedule" type="button" disabled={view.busy} onClick={()=>{setScheduleTitle(memo.text.split('\n').find(line=>line.trim())?.slice(0,180)||'메모 작업');setScheduleOpen(true);requestAnimationFrame(()=>panelRef.current?.querySelector('input')?.focus());}}><Icon kind="calendar"/>일정에 등록</button>
           <button className="memo-delete" type="button" disabled={view.busy} onClick={()=>void remove(memo.id)}><Icon kind="trash"/>삭제</button>
         </div>
-        {scheduleOpen?<form onSubmit={event=>{event.preventDefault();void act(async()=>{const result=await controller.perform(async()=>{if(!onAddTask)throw Error('schedule_unavailable');const saved=await onAddTask({title:scheduleTitle.trim()});if(saved===false)throw Error('schedule_failed');return true;});if(result){setScheduleOpen(false);setNotice('오늘 일정에 등록했어요');}});}}><label>오늘 일정 제목<input value={scheduleTitle} maxLength={180} disabled={view.busy} onChange={event=>setScheduleTitle(event.target.value)}/></label><button disabled={view.busy||!scheduleTitle.trim()}>등록</button><button type="button" disabled={view.busy} onClick={()=>setScheduleOpen(false)}>취소</button></form>:null}</>:!editing?<p className="memo-empty">{reading?'메모를 읽는 중…':'목록에서 메모를 선택하세요.'}</p>:null}
+        {scheduleOpen?<form onSubmit={event=>{event.preventDefault();void act(async()=>{const result=await controller.perform(async()=>{if(!onAddTask)throw Error('schedule_unavailable');const saved=await onAddTask({title:scheduleTitle.trim()});if(saved===false)throw Error('schedule_failed');return true;});if(result){setScheduleOpen(false);setNotice('오늘 일정에 등록됨');}});}}><label>오늘 일정 제목<input value={scheduleTitle} maxLength={180} disabled={view.busy} onChange={event=>setScheduleTitle(event.target.value)}/></label><button disabled={view.busy||!scheduleTitle.trim()}>등록</button><button type="button" disabled={view.busy} onClick={()=>setScheduleOpen(false)}>취소</button></form>:null}</>:!editing?<p className="memo-empty">{reading?'메모를 읽는 중…':'메모를 선택하세요.'}</p>:null}
       </article>
     </div>
     <div key={notice} role="status" className="memo-archive-notice">{notice?<><Icon kind="check"/><span>{notice}</span></>:null}</div>

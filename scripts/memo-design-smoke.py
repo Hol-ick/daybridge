@@ -49,7 +49,7 @@ with sync_playwright() as p:
    page.set_viewport_size({'width':720,'height':680});expect(panel.locator('pre')).to_be_visible()
    page.set_viewport_size({'width':width,'height':680});expect(panel.locator('pre')).to_be_visible()
   page.evaluate('fixture.failure=true');panel.get_by_role('button',name='로컬에 저장',exact=True).click();expect(panel.get_by_role('alert')).to_contain_text('처리를 확인하지 못했어요');expect(panel.locator('pre')).to_contain_text('회의 준비');assert page.locator('.memo-archive-ghost').count()==0
-  page.screenshot(path=str(out/f'failure-{name}.png'));page.evaluate('fixture.failure=false;fixture.partial=true');panel.get_by_role('button',name='로컬에 저장',exact=True).click();expect(panel.get_by_role('status')).to_contain_text('제거하지 못했어요');expect(panel.locator('pre')).to_contain_text('회의 준비');page.evaluate('fixture.partial=false')
+  page.screenshot(path=str(out/f'failure-{name}.png'));page.evaluate('fixture.failure=false;fixture.partial=true');panel.get_by_role('button',name='로컬에 저장',exact=True).click();expect(panel.get_by_role('status')).to_contain_text('메모 삭제에 실패했습니다');expect(panel.locator('pre')).to_contain_text('회의 준비');page.evaluate('fixture.partial=false')
   panel.get_by_role('button',name='일정에 등록',exact=True).click();expect(panel.get_by_role('textbox',name='오늘 일정 제목')).to_be_focused();panel.get_by_role('textbox',name='오늘 일정 제목').fill('메모에서 등록한 일정');page.screenshot(path=str(out/f'schedule-{name}.png'));panel.get_by_role('button',name='등록',exact=True).click();expect(host.get_by_test_id('now-focus-overlay-block-added').get_by_text('메모에서 등록한 일정',exact=True)).to_be_visible()
   with page.expect_download() as dl:panel.get_by_role('button',name='로컬에 저장',exact=True).click()
   target=out/f'export-{name}.txt';dl.value.save_as(str(target))

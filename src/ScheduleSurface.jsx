@@ -397,7 +397,6 @@ export default function ScheduleSurface() {
     if (surface === "overlay") {
       try { localStorage.setItem(OPEN_SETTINGS_KEY, "true"); } catch {}
       void openDashboardSettings();
-      setNotice("Daybridge 설정 창을 열었어요");
       return;
     }
     setSettingsOpen(true);
@@ -417,7 +416,7 @@ export default function ScheduleSurface() {
       ]);
       if (!scheduleResult || !calendarResult) throw new Error("refresh data unavailable");
       recordRuntimeEvent("overlay_manual_refresh", { source: "settings", surface });
-      setNotice("위젯을 새로고침했어요");
+      setNotice("위젯 새로고침 완료");
     } catch (error) {
       recordRuntimeEvent("overlay_manual_refresh_error", { source: "settings", surface, error: errorMessage(error) });
       setNotice("위젯을 새로고침하지 못했어요");
@@ -482,7 +481,7 @@ export default function ScheduleSurface() {
         setSchedule(result.schedule);
         setNowFocus(result.nowFocus);
       }
-      setNotice(savedNotice("설정을 저장했어요", result));
+      setNotice(savedNotice("설정 저장됨", result));
     } catch (error) {
       recordRuntimeEvent("daily_defaults_save_error", { error: errorMessage(error), surface });
       setNotice(error instanceof TypeError || errorCode(error) === "invalid_settings" ? errorMessage(error) : "설정을 저장하지 못했어요");

@@ -11,12 +11,12 @@
   min-height: 34px;
   padding: 0 11px;
   border: 1px solid color-mix(in srgb,var(--db-accent) 34%,transparent);
-  border-radius: 8px;
-  background: linear-gradient(90deg, color-mix(in srgb,var(--db-accent) 15%,transparent), color-mix(in srgb,var(--db-accent) 6%,transparent));
+  border-radius: 5px;
+  background: transparent;
   color:var(--db-ink);
   cursor: pointer;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 500;
   letter-spacing: -.035em;
 }
 
@@ -38,7 +38,7 @@
   box-sizing: border-box;
   border: 1px solid color-mix(in srgb,var(--db-accent) 45%,transparent);
   border-radius: 9px;
-  background: linear-gradient(145deg, color-mix(in srgb,var(--db-accent) 12%,transparent), var(--db-surface) 55%);
+  background: var(--db-surface);
   box-shadow: 0 5px 18px rgb(0 0 0 / 14%);
 }
 
@@ -49,23 +49,22 @@
   border-color: color-mix(in srgb,var(--db-accent) 50%,transparent);
   border-radius: 11px;
   background:
-    radial-gradient(circle at 0 0, color-mix(in srgb,var(--db-accent) 13%,transparent), transparent 42%),
-    linear-gradient(145deg,var(--db-raised),var(--db-surface));
+    var(--db-surface);
   box-shadow: 0 13px 28px rgb(0 0 0 / 38%), 0 0 0 1px color-mix(in srgb,var(--db-ink) 5%,transparent) inset;
   animation: manual-form-in .2s cubic-bezier(.22, 1, .36, 1);
 }
 .formTop { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.titleInput { min-width: 0; flex: 1; height: 32px; padding: 0 9px; border: 1px solid color-mix(in srgb,var(--db-ink) 22%,transparent); border-radius: 6px; outline: none; background: var(--db-field); color:var(--db-ink); font-size: 13px; font-weight: 750; letter-spacing: -.04em; }
+.titleInput { min-width: 0; flex: 1; height: 32px; padding: 0 9px; border: 1px solid color-mix(in srgb,var(--db-ink) 22%,transparent); border-radius: 6px; outline: none; background: var(--db-field); color:var(--db-ink); font-size: 13px; font-weight: 500; letter-spacing: -.04em; }
 .compact .formTop { gap: 7px; }
-.compact .titleInput { height: 33px; padding: 0 11px; border-color: color-mix(in srgb,var(--db-ink) 21%,transparent); border-radius: 8px; background: var(--db-field); color:var(--db-ink); font-size: 13px; font-weight: 800; }
+.compact .titleInput { height: 33px; padding: 0 11px; border-color: color-mix(in srgb,var(--db-ink) 21%,transparent); border-radius: 5px; background: var(--db-field); color:var(--db-ink); font-size: 13px; font-weight: 500; }
 .titleInput::placeholder { color:var(--db-muted); }
 .compact .titleInput::placeholder { color:var(--db-muted); font-weight: 700; }
 .titleInput:focus { border-color: color-mix(in srgb,var(--db-accent) 70%,transparent); box-shadow: 0 0 0 2px color-mix(in srgb,var(--db-accent) 12%,transparent); }
 .compact .cancel { display: grid; flex: 0 0 29px; width: 29px; height: 29px; place-items: center; padding: 0; border: 1px solid color-mix(in srgb,var(--db-ink) 17%,transparent); border-radius: 50%; background: color-mix(in srgb,var(--db-ink) 6%,transparent); color:var(--db-muted); font-size: 18px; line-height: 1; transition: border-color .15s ease, background-color .15s ease, color .15s ease, transform .15s ease; }
-.cancel:hover { border-color: rgb(255 141 141 / 55%); background: rgb(255 141 141 / 12%); color:var(--db-ink); transform: rotate(90deg); }
-.error { margin: 0; color:var(--db-muted); font-size: 10px; font-weight: 750; letter-spacing: -.02em; line-height: 1; }
+.cancel:hover { border-color: rgb(255 141 141 / 55%); background: rgb(255 141 141 / 12%); color:var(--db-ink);  }
+.error { margin: 0; color:var(--db-muted); font-size: 10px; font-weight: 500; letter-spacing: -.02em; line-height: 1; }
 .submit { flex: 0 0 48px; min-height: 31px; padding: 0 7px; border: 1px solid var(--db-line); border-radius: 7px; background:var(--db-raised); color:var(--db-muted); cursor: pointer; font-size: 11px; font-weight: 850; transition: background-color .15s ease, transform .15s ease; }
-.compact .submit { flex-basis: 48px; min-height: 29px; border-radius: 8px; box-shadow: 0 5px 12px color-mix(in srgb,var(--db-accent) 16%,transparent); white-space: nowrap; }
+.compact .submit { flex-basis: 48px; min-height: 29px; border-radius: 5px; box-shadow: 0 5px 12px color-mix(in srgb,var(--db-accent) 16%,transparent); white-space: nowrap; }
 .submit:hover:not(:disabled) { background:var(--db-raised); transform: translateY(-1px); }
 .submit:disabled, .cancel:disabled { cursor: wait; opacity: .5; }
 .compact .submit:disabled { border-color: color-mix(in srgb,var(--db-accent) 28%,transparent); background: color-mix(in srgb,var(--db-accent) 11%,transparent); color:var(--db-muted); opacity: 1; box-shadow: none; }
