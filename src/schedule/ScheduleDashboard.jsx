@@ -219,7 +219,7 @@ export default function ScheduleDashboard({
             ))}
           </ol>
         ) : (
-          <div className={styles.empty} data-testid="schedule-empty">{listMode ? "오늘 할 일 없음" : "등록된 시간표 없음"}</div>
+          <span className="memo-sr-only" data-testid="schedule-empty">{listMode ? "오늘 할 일 없음" : "등록된 시간표 없음"}</span>
         )}
       </section>
     </main>

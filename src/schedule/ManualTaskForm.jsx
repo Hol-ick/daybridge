@@ -60,7 +60,6 @@ export default function ManualTaskForm({ onSubmit, compact = false, iconOnly = f
           className={styles.titleInput}
           value={title}
           onChange={(event) => { setTitle(event.target.value); setError(""); }}
-          placeholder="할 일 입력"
           name="title"
           type="text"
           autoComplete="off"

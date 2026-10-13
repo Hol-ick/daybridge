@@ -261,16 +261,15 @@ export function OverlaySettingsModal({ privateMode, onClose, showCloseButton = t
                   <input className={styles.settingsToggleInput} type="checkbox" checked={timeConfigured} onChange={(event) => updateSettings({ timeConfigured: event.target.checked, dayStart: event.target.checked ? (settings.dayStart || "09:00") : "", dayEnd: event.target.checked ? (settings.dayEnd || "18:00") : "" })} />
                   <span className={styles.settingsToggleTrack} aria-hidden="true" />
                 </label>
-                {!timeConfigured ? <small className={styles.settingsHint}>시간 지정 없이 할 일 목록으로 표시합니다.</small> : <><div className={styles.settingsRow}>
+                {timeConfigured ? <><div className={styles.settingsRow}>
                   <label className={styles.settingsField}><span>출근</span><input type="time" disabled={!timeConfigured} value={settings.dayStart ?? "09:00"} onChange={(event) => updateSettings({ dayStart: event.target.value })} /></label>
                   <label className={styles.settingsField}><span>퇴근</span><input type="time" disabled={!timeConfigured} value={settings.dayEnd ?? "18:00"} onChange={(event) => updateSettings({ dayEnd: event.target.value })} /></label>
                 </div>
-                <label className={`${styles.settingsField} ${styles.settingsInterval}`}><span>작업 사이 간격</span><span className={styles.intervalValue}><input type="number" min="0" max="30" step="1" value={settings.bufferMinutes ?? 10} onChange={(event) => updateSettings({ bufferMinutes: event.target.value })} disabled={scheduleSettingsLoading} /><span>분</span></span></label></>}
+                <label className={`${styles.settingsField} ${styles.settingsInterval}`}><span>작업 사이 간격</span><span className={styles.intervalValue}><input type="number" min="0" max="30" step="1" value={settings.bufferMinutes ?? 10} onChange={(event) => updateSettings({ bufferMinutes: event.target.value })} disabled={scheduleSettingsLoading} /><span>분</span></span></label></> : null}
               </section>
               <section className={styles.settingsSection} aria-label="식사 시간">
                 <span className={styles.settingsSectionLabel}>식사 시간</span>
-                <small className={styles.settingsHint}>시간표에서 제외할 시간</small>
-                {!settings.meals && settings.breaks?.length ? <small className={styles.settingsHint}>휴식: {settings.breaks.map(item => `${item.label} ${item.start}–${item.end}`).join(", ")}</small> : null}
+                {!settings.meals && settings.breaks?.length ? <span className="memo-sr-only">휴식: {settings.breaks.map(item => `${item.label} ${item.start}–${item.end}`).join(", ")}</span> : null}
                 {(/** @type {import("./types").MealKey[]} */ (Object.keys(DEFAULT_MEALS))).map((key) => <div className={styles.mealSettingRow} key={key}>
                   <label className={styles.settingsCheckbox}><span><strong>{MEAL_LABELS[key]}</strong></span><input className={styles.settingsToggleInput} type="checkbox" checked={meals[key].enabled === true} onChange={(event) => updateMeal(key, { enabled: event.target.checked })} /><span className={styles.settingsToggleTrack} aria-hidden="true" /></label>
                   {meals[key].enabled ? <div className={styles.settingsRow}><label className={styles.settingsField}><span>시작</span><input type="time" value={meals[key].start ?? DEFAULT_MEALS[key].start} onChange={(event) => updateMeal(key, { start: event.target.value })} /></label><label className={styles.settingsField}><span>종료</span><input type="time" value={meals[key].end ?? DEFAULT_MEALS[key].end} onChange={(event) => updateMeal(key, { end: event.target.value })} /></label></div> : null}
@@ -283,7 +282,7 @@ export function OverlaySettingsModal({ privateMode, onClose, showCloseButton = t
             </> : null}
             {activeTab === "defaults" ? <>
               <DailyDefaultsEditor value={dailyDefaults} onChange={onDailyDefaultsChange} loading={dailyDefaultsLoading} />
-              <details className={styles.storageDetails}><summary>저장 폴더</summary><label className={styles.settingsField}><span>일정·설정·활동 로그 경로</span><input type="text" value={storageDirectory || ""} placeholder="폴더 경로" onChange={(event) => onStorageDirectoryChange?.(event.target.value)} disabled={storageDirectoryLoading} /></label></details>
+              <details className={styles.storageDetails}><summary>저장 폴더</summary><label className={styles.settingsField}><span>경로</span><input type="text" aria-label="일정·설정·활동 로그 경로" value={storageDirectory || ""} onChange={(event) => onStorageDirectoryChange?.(event.target.value)} disabled={storageDirectoryLoading} /></label></details>
             </> : null}
           </main>
         </div>
@@ -755,7 +754,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
                 />
               ))}
             </ol>
-          ) : <p className={styles.compactEmpty}>{todoListMode ? "오늘 할 일이 없습니다." : "오늘 배치된 일정이 없습니다."}</p>}
+          ) : <span className="memo-sr-only">{todoListMode ? "오늘 할 일이 없습니다." : "오늘 배치된 일정이 없습니다."}</span>}
           {dragPreview ? (
             <div
               className={[styles.compactBlock, styles.focus, styles.dragPreview].join(" ")}

@@ -273,7 +273,7 @@ def check_dashboard(browser) -> None:
     page.on("pageerror", lambda error: errors.append(str(error)))
 
     page.goto(BASE_URL + "", wait_until="domcontentloaded")
-    page.get_by_test_id("schedule-empty").get_by_text("오늘 할 일 없음", exact=True).wait_for()
+    page.wait_for_function("document.querySelector('[data-testid=schedule-empty]')?.textContent === '오늘 할 일 없음'")
     assert page.locator('[data-testid="schedule-dashboard"]').count() == 1
     assert page.locator('[data-testid="schedule-now-focus"]').count() == 0
     assert page.locator('[data-testid="schedule-timeline"]').count() == 0

@@ -47,13 +47,12 @@ export default function DailyDefaultsEditor({ value = [], onChange, loading = fa
             </div>
           ))}
         </div>
-      ) : <p className={styles.empty}>반복 일정 없음</p>}
+      ) : <span className="memo-sr-only">반복 일정 없음</span>}
       <div className={styles.addRow}>
         <input
           value={newTitle}
           onChange={(event) => setNewTitle(event.target.value.slice(0, 120))}
           onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addRoutine(); } }}
-          placeholder="예: 오전 메일 확인"
           aria-label="새 매일 기본 일정"
           disabled={loading}
         />

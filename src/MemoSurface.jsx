@@ -92,7 +92,7 @@ export default function MemoSurface({embedded=false,controllerRef}={}) {
           if (event.ctrlKey && event.key.toLowerCase() === "s") { event.preventDefault(); void retry(); }
         }} />}
     {(error || status === "error") && <div className="memo-alert" role="alert"><span>{error || "저장하지 못했습니다. 내용을 유지하고 있습니다."}</span><button onClick={() => { void retry(); }}>{closeError ? "다시 닫기" : !ready ? "다시 불러오기" : "다시 저장"}</button></div>}
-    {recovered && !error && <p className="memo-notice">작성 중이던 메모를 복구했습니다.</p>}
+    {recovered && !error && <span className="memo-sr-only">작성 중이던 메모를 복구했습니다.</span>}
     {!logHealthy && <p className="memo-notice" role="alert">메모는 저장됐지만 동작 기록을 남기지 못했습니다.</p>}
     <span className="memo-sr-only" role="status">{status === "saving" ? "저장 중…" : status === "error" ? "저장하지 못했습니다" : "자동 저장됨"}</span>
   </section>;

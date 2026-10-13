@@ -34,6 +34,8 @@ with sync_playwright() as p:
         assert page.locator('input[type=time]').count()==2  # enabled lunch only
         assert '필요할 때 켜세요' not in dialog.inner_text()
         assert '표시 방식과 매일 반복할 일을 관리합니다.' not in dialog.inner_text()
+        assert '시간 지정 없이' not in dialog.inner_text()
+        assert '시간표에서 제외할 시간' not in dialog.inner_text()
         page.screenshot(path=str(out/f'schedule-off-{width}-{palette}.png'))
         checkbox=page.get_by_role('checkbox',name='시간표 사용',exact=True)
         checkbox.focus();checkbox.press('Space');expect(checkbox).to_be_checked()
@@ -46,6 +48,7 @@ with sync_playwright() as p:
         meal.press('Space');expect(breakfast.get_by_label('시작',exact=True)).to_have_value('07:00')
         page.screenshot(path=str(out/f'schedule-on-{width}-{palette}.png'))
         page.get_by_role('button',name='화면',exact=True).click()
+        assert '자동 저장' not in dialog.inner_text()
         private=page.get_by_role('checkbox',name='위젯에서 작업명 숨기기',exact=True);private.focus();private.press('Space')
         expect(private).to_be_checked()
         page.screenshot(path=str(out/f'display-{width}-{palette}.png'))

@@ -173,8 +173,8 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
           <strong>{item.title}</strong><span>{item.preview}</span><time title={new Date(item.createdAtUnixMs).toLocaleString('ko-KR')}>{formatArchiveTime(item.createdAtUnixMs)}</time>
           </button><button className="memo-row-delete" type="button" disabled={view.busy} aria-label={`${item.title} 삭제`} title="메모 삭제" onClick={()=>void remove(item.id)}><Icon kind="trash"/></button>
         </div>)}
-        {!view.items.length&&!view.loading?<p className="memo-empty">보관한 메모가 없습니다.</p>:null}
-        {view.loading?<p className="memo-empty" role="status">불러오는 중…</p>:null}
+        {!view.items.length&&!view.loading?<span className="memo-sr-only">보관한 메모가 없습니다.</span>:null}
+        {view.loading?<span className="memo-sr-only" role="status">불러오는 중…</span>:null}
         {view.nextOffset!==null?<button type="button" onClick={()=>void controller.load(true)}>더 보기</button>:null}
       </nav>
       <article className="memo-archive-detail">
@@ -185,7 +185,7 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
           <button className="memo-schedule" type="button" disabled={view.busy} onClick={()=>{setScheduleTitle(memo.text.split('\n').find(line=>line.trim())?.slice(0,180)||'메모 작업');setScheduleOpen(true);requestAnimationFrame(()=>panelRef.current?.querySelector('input')?.focus());}}><Icon kind="calendar"/>일정에 등록</button>
           <button className="memo-delete" type="button" disabled={view.busy} onClick={()=>void remove(memo.id)}><Icon kind="trash"/>삭제</button>
         </div>
-        {scheduleOpen?<form onSubmit={event=>{event.preventDefault();void act(async()=>{const result=await controller.perform(async()=>{if(!onAddTask)throw Error('schedule_unavailable');const saved=await onAddTask({title:scheduleTitle.trim()});if(saved===false)throw Error('schedule_failed');return true;});if(result){setScheduleOpen(false);setNotice('오늘 일정에 등록됨');}});}}><label>오늘 일정 제목<input value={scheduleTitle} maxLength={180} disabled={view.busy} onChange={event=>setScheduleTitle(event.target.value)}/></label><button disabled={view.busy||!scheduleTitle.trim()}>등록</button><button type="button" disabled={view.busy} onClick={()=>setScheduleOpen(false)}>취소</button></form>:null}</>:!editing?<p className="memo-empty">{reading?'메모를 읽는 중…':'메모를 선택하세요.'}</p>:null}
+        {scheduleOpen?<form onSubmit={event=>{event.preventDefault();void act(async()=>{const result=await controller.perform(async()=>{if(!onAddTask)throw Error('schedule_unavailable');const saved=await onAddTask({title:scheduleTitle.trim()});if(saved===false)throw Error('schedule_failed');return true;});if(result){setScheduleOpen(false);setNotice('오늘 일정에 등록됨');}});}}><label>오늘 일정 제목<input value={scheduleTitle} maxLength={180} disabled={view.busy} onChange={event=>setScheduleTitle(event.target.value)}/></label><button disabled={view.busy||!scheduleTitle.trim()}>등록</button><button type="button" disabled={view.busy} onClick={()=>setScheduleOpen(false)}>취소</button></form>:null}</>:!editing&&reading?<span className="memo-sr-only">메모를 읽는 중…</span>:null}
       </article>
     </div>
     <div key={notice} role="status" className="memo-archive-notice">{notice?<><Icon kind="check"/><span>{notice}</span></>:null}</div>
