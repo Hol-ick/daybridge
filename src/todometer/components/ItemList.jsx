@@ -27,7 +27,7 @@ function ItemList() {
     <Group title="다음" items={next} group="next" defaultOpen />
     <Group title="대기" items={waiting} group="waiting" />
     <Group title="완료" items={completed} group="completed" />
-    {!now.length && !next.length && !waiting.length && !completed.length && <div className={styles.alldone}>오늘의 퀘스트가 없습니다.</div>}
+    {!now.length && !next.length && !waiting.length && !completed.length && <span className="memo-sr-only">오늘의 퀘스트가 없습니다.</span>}
   </div>;
 }
 

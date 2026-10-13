@@ -125,7 +125,7 @@ export default function ScheduleSurface() {
         setNowFocus({ state: "todo_list", block: null, nextFocus: null });
         setCalendarCoverage("attention");
         if (!quiet) recordRuntimeEvent("schedule_cleared_for_missing_date", { date: requestDate, rebuild });
-        if (!quiet) setNotice("오늘 일정이 없습니다. + 버튼으로 추가할 수 있어요");
+        if (!quiet) setNotice("");
         return { schedule: emptyTodoSchedule(requestDate), nowFocus: { state: "todo_list", block: null, nextFocus: null } };
       }
       if (!quiet) setNotice("시간표를 불러오지 못했어요");
