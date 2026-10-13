@@ -21,6 +21,8 @@ with sync_playwright() as p:
         if width<560:page.get_by_role('button',name='목록으로',exact=True).click()
         page.get_by_role('button',name='이전 메모',exact=True).click()
         expect(page.locator('pre')).to_contain_text('기존 보관함 내용')
+        page.get_by_role('button',name='일정에 등록',exact=True).click()
+        expect(page.get_by_role('textbox',name='오늘 일정 제목')).to_be_visible()
         assert page.evaluate("JSON.parse(localStorage.getItem('daybridge.memo.preview.sessions.v2')).active.text").startswith('회의에서')
         if width<560:page.get_by_role('button',name='목록으로',exact=True).click()
         page.get_by_role('button',name='＋ 새 메모',exact=True).click()
