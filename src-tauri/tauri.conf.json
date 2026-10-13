@@ -27,20 +27,6 @@
         "backgroundColor": "#1b2029"
       },
       {
-        "label": "memo",
-        "url": "index.html?surface=memo",
-        "title": "Daybridge 메모",
-        "width": 360,
-        "height": 360,
-        "minWidth": 280,
-        "minHeight": 220,
-        "decorations": false,
-        "resizable": true,
-        "visible": false,
-        "center": true,
-        "backgroundColor": "#252531"
-      },
-      {
         "label": "overlay",
         "title": "Daybridge",
         "width": 760,

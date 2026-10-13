@@ -9,7 +9,7 @@ struct Lifecycle { active: bool, window_label: String, closed: Option<Value>, ex
 pub struct MemoStore { pub(super) gate: Mutex<()>, lifecycle: Mutex<Lifecycle> }
 
 fn memo_window(window: &tauri::WebviewWindow) -> Result<(), String> {
-    if !matches!(window.label(),"memo"|"archive") { return Err("메모창에서만 사용할 수 있습니다.".into()); }
+    if window.label() != "archive" { return Err("메모창에서만 사용할 수 있습니다.".into()); }
     Ok(())
 }
 

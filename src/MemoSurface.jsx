@@ -65,7 +65,7 @@ export default function MemoSurface({embedded=false,controllerRef}={}) {
 
   useEffect(() => {
     let alive = true;
-    const focus = () => { if (alive) void open(); };
+    const focus = () => { if (alive&&(!isTauri()||embedded)) void open(); };
     window.addEventListener("focus", focus);
     /** @type {Promise<() => void>[]} */ const listeners = [];
     if (isTauri()) {
