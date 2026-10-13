@@ -8,6 +8,7 @@ import './archive.css';
 import {isTauri} from '@tauri-apps/api/core';
 import {listen} from '@tauri-apps/api/event';
 import {getCurrentWindow} from '@tauri-apps/api/window';
+import MemoSurface from '../MemoSurface.jsx';
 
 /** @param {{kind:'close'|'back'|'save'|'calendar'|'trash'|'check'}} props */
 function Icon({kind}) {
@@ -15,7 +16,7 @@ function Icon({kind}) {
   return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={paths[kind]}/></svg>;
 }
 
-/** @param {{onClose?:()=>void,onAddTask?:import('../schedule/ui-types').AddManualTask,archiveApi?:import('./archive-controller.js').Api}} props */
+/** @param {{onClose?:()=>void|Promise<void>,onAddTask?:import('../schedule/ui-types').AddManualTask,archiveApi?:import('./archive-controller.js').Api}} props */
 export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
   const [view,setView]=useState(/** @type {import('./archive-controller.js').View} */({items:[],selected:null,loading:false,busy:false,error:'',nextOffset:null,invalidCount:0}));
   const [api]=useState(()=>archiveApi||createArchiveApi());
@@ -24,6 +25,8 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
   const [compact,setCompact]=useState(()=>window.matchMedia('(max-width: 559px)').matches);
   const [compactPage,setCompactPage]=useState('list');
   const [reading,setReading]=useState(false),[opening,setOpening]=useState(0),[closing,setClosing]=useState(false);
+  const [editing,setEditing]=useState(true),[switching,setSwitching]=useState(false),[closeFailure,setCloseFailure]=useState('');
+  const editor=useRef(/** @type {{open:()=>Promise<void>,close:(reason:string)=>Promise<void>,isComposing:()=>boolean}|null} */(null));
   const listRef=useRef(/** @type {HTMLElement|null} */(null));
   const panelRef=useRef(/** @type {HTMLElement|null} */(null));
   const backRef=useRef(/** @type {HTMLButtonElement|null} */(null));
@@ -31,6 +34,7 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
   const rows=useRef(/** @type {Map<string,{rect:DOMRect,top:number,node:HTMLElement}>} */(new Map()));
   const animations=useRef(new AbortController());
   const closeMotion=useRef(/** @type {AbortController|null} */(null));
+  const nativeClose=useRef(/** @type {()=>Promise<void>} */(async()=>{}));
   const reduced=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** @param {import('react').MouseEvent<HTMLElement>} event */
   const drag=event=>{
@@ -43,10 +47,26 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
     if(target instanceof HTMLElement)target.focus();
   });};
   const close=async()=>{
-    if(view.busy||closing)return;
+    if(view.busy||closing||switching)return;
     setClosing(true);const abort=new AbortController();closeMotion.current=abort;
-    await runMemoMotion(panelRef.current,[{opacity:1},{opacity:0}],{duration:100,reducedMotion:reduced(),signal:abort.signal});
-    if(!abort.signal.aborted){onClose?.();setClosing(false);}
+    try {
+      await editor.current?.close('archive-close');
+      if(abort.signal.aborted)return;
+      await runMemoMotion(panelRef.current,[{opacity:1},{opacity:0}],{duration:100,reducedMotion:reduced(),signal:abort.signal});
+      if(!abort.signal.aborted){await onClose?.();setClosing(false);setCloseFailure('');}
+    } catch {setClosing(false);setEditing(true);setCompactPage('detail');setCloseFailure('보관하지 못했습니다. 내용을 유지하고 있습니다. 다시 닫아 주세요.');}
+  };
+  const compose=async()=>{
+    closeMotion.current?.abort();setClosing(false);setEditing(true);setCompactPage('detail');setCloseFailure('');setNotice('');
+    await editor.current?.open();void controller.load();
+  };
+  nativeClose.current=close;
+  const newMemo=async()=>{
+    if(view.busy||switching||closing)return;
+    setSwitching(true);
+    try {await editor.current?.close('new-memo');await compose();}
+    catch {setEditing(true);setCompactPage('detail');setCloseFailure('보관하지 못했습니다. 내용을 유지하고 있습니다.');}
+    finally {setSwitching(false);}
   };
   useEffect(()=>{
     const query=window.matchMedia('(max-width: 559px)');
@@ -54,11 +74,13 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
     return()=>query.removeEventListener('change',changed);
   },[]);
   useEffect(()=>{
-    controller.activate();animations.current=new AbortController();void controller.load();let disposed=false;let stop=()=>{};
-    if(isTauri())void listen('memo-archive-open',()=>{
-      closeMotion.current?.abort();setClosing(false);setOpening(n=>n+1);setNotice('');setCompactPage('list');void controller.load();
-    }).then(unlisten=>{if(disposed)unlisten();else stop=unlisten;});
-    return()=>{disposed=true;stop();controller.dispose();closeMotion.current?.abort();animations.current.abort();rows.current.clear();};
+    controller.activate();animations.current=new AbortController();void controller.load();let disposed=false;const stops=/** @type {(()=>void)[]} */([]);
+    if(isTauri()){
+      const subscriptions=[listen('memo-archive-open',()=>{setOpening(n=>n+1);void compose();}),listen('memo-focus',()=>void compose()),listen('memo-close-request',()=>void nativeClose.current())];
+      for(const subscription of subscriptions)void subscription.then(unlisten=>{if(disposed)unlisten();else stops.push(unlisten);});
+      void Promise.all(subscriptions).then(async()=>{if(!disposed&&await getCurrentWindow().isVisible())await compose();}).catch(()=>{});
+    }else {void editor.current?.open();if(location.search.includes('compose=1'))setCompactPage('detail');}
+    return()=>{disposed=true;for(const stop of stops)stop();controller.dispose();closeMotion.current?.abort();animations.current.abort();rows.current.clear();};
   },[controller]);
   useEffect(()=>{
     const abort=new AbortController();
@@ -74,9 +96,9 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
   useEffect(()=>{
     /** @param {KeyboardEvent} event */
     const dismiss=event=>{
-      if(event.key!=='Escape'||event.isComposing||view.busy)return;
+      if(event.key!=='Escape'||event.isComposing||editor.current?.isComposing()||view.busy||switching)return;
       event.preventDefault();if(scheduleOpen){setScheduleOpen(false);return;}
-      if(compact&&compactPage==='detail')returnToList();else void close();
+      if(!editing&&compact&&compactPage==='detail')returnToList();else void close();
     };
     window.addEventListener('keydown',dismiss);return()=>window.removeEventListener('keydown',dismiss);
   });
@@ -106,22 +128,25 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
   const memo=view.selected;
   useEffect(()=>{if(memo)selectedId.current=memo.id;},[memo?.id]);
   const choose=async(/** @type {string} */ id)=>{
+    if(switching||closing)return;
+    setEditing(false);
     selectedId.current=id;listScroll.current=listRef.current?.scrollTop||0;setNotice('');setCompactPage('detail');setReading(true);
     try{await controller.select(id);}finally{setReading(false);if(compact)requestAnimationFrame(()=>backRef.current?.focus());}
   };
   useEffect(()=>{
-    if(!view.busy&&!reading&&!memo&&compactPage==='detail'&&!view.error){
+    if(!editing&&!view.busy&&!reading&&!memo&&compactPage==='detail'&&!view.error){
       setCompactPage('list');requestAnimationFrame(()=>{
         const first=listRef.current?.querySelector('button');
         if(first instanceof HTMLElement)first.focus();else panelRef.current?.querySelector('button')?.focus();
       });
     }
-  },[view.busy,reading,memo,compactPage,view.error]);
+  },[editing,view.busy,reading,memo,compactPage,view.error]);
   /** @param {()=>Promise<unknown>} action */
   const act=async action=>{try{await action();}catch{}};
   const remove=async(/** @type {string} */ id)=>{
     const fromList=!!listRef.current?.contains(document.activeElement);
     await act(async()=>{if(await controller.remove(id)){
+      setEditing(false);
       setNotice('메모를 삭제했어요');
       if(fromList)requestAnimationFrame(()=>{
         const next=listRef.current?.querySelector('button[aria-pressed=true]');
@@ -134,14 +159,16 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
     <div className="memo-archive-top-drag" onMouseDown={drag} aria-hidden="true"/>
     <header className="memo-archive-header" onMouseDown={drag}>
       <div className="memo-archive-heading"><h2>메모 보관함</h2><span aria-label={`보관한 메모 ${view.items.length}개`}>{view.items.length}</span></div>
-      <button className="memo-icon-button" type="button" onClick={()=>void close()} disabled={view.busy} aria-label="메모 보관함 닫기"><Icon kind="close"/></button>
+      <button className="memo-icon-button" type="button" onClick={()=>void close()} disabled={view.busy||switching} aria-label="메모 보관함 닫기"><Icon kind="close"/></button>
     </header>
     {view.error?<div role="alert" className="memo-archive-alert">{view.error}<button onClick={()=>void controller.load()}>다시 불러오기</button></div>:null}
+    {closeFailure?<div role="alert" className="memo-archive-alert">{closeFailure}</div>:null}
     {view.invalidCount?<p className="memo-archive-warning" role="status">읽을 수 없는 메모 {view.invalidCount}개를 원본 그대로 보존했습니다.</p>:null}
     <div className="memo-archive-layout">
       <nav ref={listRef} aria-label="보관한 메모 목록" className="memo-archive-list">
-        {view.items.map(item=><div key={item.id} className="memo-archive-row" data-archive-row={item.id} data-selected={memo?.id===item.id}>
-          <button className="memo-archive-select" data-memo-id={item.id} type="button" disabled={view.busy} aria-label={item.title} aria-pressed={memo?.id===item.id} onClick={()=>void choose(item.id)}>
+        <button className="memo-new" type="button" disabled={view.busy||switching||closing} onClick={()=>void newMemo()}>＋ 새 메모</button>
+        {view.items.map(item=><div key={item.id} className="memo-archive-row" data-archive-row={item.id} data-selected={!editing&&memo?.id===item.id}>
+          <button className="memo-archive-select" data-memo-id={item.id} type="button" disabled={view.busy||switching} aria-label={item.title} aria-pressed={!editing&&memo?.id===item.id} onClick={()=>void choose(item.id)}>
           <strong>{item.title}</strong><span>{item.preview}</span><time title={new Date(item.createdAtUnixMs).toLocaleString('ko-KR')}>{formatArchiveTime(item.createdAtUnixMs)}</time>
           </button><button className="memo-row-delete" type="button" disabled={view.busy} aria-label={`${item.title} 삭제`} title="메모 삭제" onClick={()=>void remove(item.id)}><Icon kind="trash"/></button>
         </div>)}
@@ -151,12 +178,13 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
       </nav>
       <article className="memo-archive-detail">
         {compact&&compactPage==='detail'?<button ref={backRef} className="memo-archive-back" type="button" onClick={returnToList}><Icon kind="back"/>목록으로</button>:null}
-        {memo?<><pre key={`${opening}-${memo.id}`} tabIndex={0}>{memo.text}</pre><div className="memo-archive-actions">
+        <div className="memo-compose" hidden={!editing}><MemoSurface embedded controllerRef={editor}/></div>
+        {!editing&&memo?<><pre key={`${opening}-${memo.id}`} tabIndex={0}>{memo.text}</pre><div className="memo-archive-actions">
           <button className="memo-save" type="button" disabled={view.busy} onClick={()=>void act(async()=>{const result=await controller.exportMemo(memo.id);setNotice(result?.removed?'다운로드 폴더에 저장했어요':result?.saved?'파일은 저장했지만 메모를 제거하지 못했어요. 다시 눌러 주세요':'');})}><Icon kind="save"/>로컬에 저장</button>
           <button className="memo-schedule" type="button" disabled={view.busy} onClick={()=>{setScheduleTitle(memo.text.split('\n').find(line=>line.trim())?.slice(0,180)||'메모 작업');setScheduleOpen(true);requestAnimationFrame(()=>panelRef.current?.querySelector('input')?.focus());}}><Icon kind="calendar"/>일정에 등록</button>
           <button className="memo-delete" type="button" disabled={view.busy} onClick={()=>void remove(memo.id)}><Icon kind="trash"/>삭제</button>
         </div>
-        {scheduleOpen?<form onSubmit={event=>{event.preventDefault();void act(async()=>{const result=await controller.perform(async()=>{if(!onAddTask)throw Error('schedule_unavailable');const saved=await onAddTask({title:scheduleTitle.trim()});if(saved===false)throw Error('schedule_failed');return true;});if(result){setScheduleOpen(false);setNotice('오늘 일정에 등록했어요');}});}}><label>오늘 일정 제목<input value={scheduleTitle} maxLength={180} disabled={view.busy} onChange={event=>setScheduleTitle(event.target.value)}/></label><button disabled={view.busy||!scheduleTitle.trim()}>등록</button><button type="button" disabled={view.busy} onClick={()=>setScheduleOpen(false)}>취소</button></form>:null}</>:<p className="memo-empty">{reading?'메모를 읽는 중…':'목록에서 메모를 선택하세요.'}</p>}
+        {scheduleOpen?<form onSubmit={event=>{event.preventDefault();void act(async()=>{const result=await controller.perform(async()=>{if(!onAddTask)throw Error('schedule_unavailable');const saved=await onAddTask({title:scheduleTitle.trim()});if(saved===false)throw Error('schedule_failed');return true;});if(result){setScheduleOpen(false);setNotice('오늘 일정에 등록했어요');}});}}><label>오늘 일정 제목<input value={scheduleTitle} maxLength={180} disabled={view.busy} onChange={event=>setScheduleTitle(event.target.value)}/></label><button disabled={view.busy||!scheduleTitle.trim()}>등록</button><button type="button" disabled={view.busy} onClick={()=>setScheduleOpen(false)}>취소</button></form>:null}</>:!editing?<p className="memo-empty">{reading?'메모를 읽는 중…':'목록에서 메모를 선택하세요.'}</p>:null}
       </article>
     </div>
     <div key={notice} role="status" className="memo-archive-notice">{notice?<><Icon kind="check"/><span>{notice}</span></>:null}</div>

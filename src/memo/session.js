@@ -74,5 +74,5 @@ export function createMemoSession(api, options = {}) {
     try { await closing; } catch (error) { options.report?.("error"); throw error; }
     finally { closing = null; }
   }
-  return {open, edit, close, flush, get closing() { return closing !== null; }, get finalizing() { return finalizing; }, get draft() { return current?.draft ?? null; }, dispose() { cancelTimers(); writer?.dispose(); }};
+  return {open, edit, close, flush, get opening() { return opening !== null; }, get closing() { return closing !== null; }, get finalizing() { return finalizing; }, get draft() { return current?.draft ?? null; }, dispose() { cancelTimers(); writer?.dispose(); }};
 }

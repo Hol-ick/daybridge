@@ -4,12 +4,12 @@ use tauri::{Emitter, Manager};
 use super::memo_store::MemoRepository;
 
 #[derive(Default)]
-struct Lifecycle { active: bool, closed: Option<Value>, exit_reason: Option<String>, log_failures: u64 }
+struct Lifecycle { active: bool, window_label: String, closed: Option<Value>, exit_reason: Option<String>, log_failures: u64 }
 #[derive(Default)]
 pub struct MemoStore { pub(super) gate: Mutex<()>, lifecycle: Mutex<Lifecycle> }
 
 fn memo_window(window: &tauri::WebviewWindow) -> Result<(), String> {
-    if window.label() != "memo" { return Err("메모창에서만 사용할 수 있습니다.".into()); }
+    if !matches!(window.label(),"memo"|"archive") { return Err("메모창에서만 사용할 수 있습니다.".into()); }
     Ok(())
 }
 
@@ -64,6 +64,7 @@ fn operation(app: &tauri::AppHandle, kind: &str, id: Option<&str>, revision: u64
 pub async fn begin_memo_session(window: tauri::WebviewWindow, app: tauri::AppHandle) -> Result<Value, String> {
     memo_window(&window)?;
     let worker_app = app.clone();
+    let window_label=window.label().to_owned();
     let session = tauri::async_runtime::spawn_blocking(move || {
         let store = worker_app.state::<MemoStore>();
         let _guard = store.gate.lock().map_err(|_| "store_busy")?;
@@ -74,7 +75,7 @@ pub async fn begin_memo_session(window: tauri::WebviewWindow, app: tauri::AppHan
         let healthy = log(&worker_app, if session["recovered"] == true { "memo_draft_recovered" } else { "memo_session_opened" }, json!({"id":session["draft"]["id"],"revision":session["draft"]["revision"],"outcome":"success"}));
         session["logHealthy"] = json!(healthy);
         let mut life = store.lifecycle.lock().map_err(|_| "store_busy")?;
-        life.active = true; life.closed = None;
+        life.active = true; life.window_label=window_label; life.closed = None;
         Ok::<Value, String>(session)
     }).await.map_err(|_| "write_failed")?;
     let session = match session {
@@ -103,11 +104,8 @@ pub async fn finalize_memo_session(window: tauri::WebviewWindow, app: tauri::App
 }
 
 pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
-    let window = app.get_webview_window("memo").ok_or("window_failed")?;
-    if !window.is_visible().map_err(|_| "window_failed")? { window.center().map_err(|_| "window_failed")?; }
-    window.unminimize().map_err(|_| "window_failed")?;
-    window.show().map_err(|_| "window_failed")?;
-    window.set_focus().map_err(|_| "window_failed")?;
+    open_archive(app)?;
+    let window = app.get_webview_window("archive").ok_or("window_failed")?;
     window.emit("memo-focus", ()).map_err(|_| "window_failed".into())
 }
 
@@ -115,11 +113,11 @@ pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
 pub fn open_quick_memo(app: tauri::AppHandle) -> Result<(), String> { show(&app) }
 
 #[tauri::command]
-pub fn hide_quick_memo(window: tauri::WebviewWindow, store: tauri::State<MemoStore>) -> Result<(), String> {
+pub fn hide_quick_memo(window: tauri::WebviewWindow, store: tauri::State<MemoStore>, hide_window: Option<bool>) -> Result<(), String> {
     memo_window(&window)?;
     let mut life = store.lifecycle.lock().map_err(|_| "store_busy")?;
     if life.closed.is_none() { return Err("close_not_finalized".into()); }
-    window.hide().map_err(|_| "window_failed")?;
+    if hide_window.unwrap_or(true) { window.hide().map_err(|_| "window_failed")?; }
     life.active = false;
     Ok(())
 }
@@ -131,12 +129,16 @@ pub fn open_archive(app: &tauri::AppHandle) -> Result<(), String> {
             if let Ok(size) = window.outer_size() {
                 let area = monitor.work_area();
                 let gap = (304.0 * monitor.scale_factor()) as i32;
+                let bounded=archive_size_within_work_area((size.width,size.height),(area.size.width,area.size.height),monitor.scale_factor());
+                let size=tauri::PhysicalSize::new(bounded.0,bounded.1);
+                window.set_size(size).map_err(|_| "archive_open_failed")?;
                 let x = (area.position.x + area.size.width as i32 - gap - size.width as i32).max(area.position.x);
                 let y = area.position.y + (area.size.height.saturating_sub(size.height) / 2) as i32;
                 let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
             }
         }
     }
+    window.unminimize().map_err(|_| "archive_open_failed")?;
     window.emit("memo-archive-open", ()).map_err(|_| "archive_open_failed")?;
     app.emit("memo-archive-visibility", true).map_err(|_| "archive_open_failed")?;
     window.show().map_err(|_| "archive_open_failed")?;
@@ -144,20 +146,30 @@ pub fn open_archive(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn archive_size_within_work_area(size:(u32,u32),area:(u32,u32),scale:f64)->(u32,u32) {
+    let beside_widget=area.0.saturating_sub((304.0*scale) as u32);
+    let width_limit=if beside_widget>=(420.0*scale) as u32 {beside_widget}else{area.0};
+    (size.0.min(width_limit),size.1.min(area.1))
+}
+
 #[tauri::command]
 pub fn open_memo_archive_directory(app: tauri::AppHandle) -> Result<(), String> { open_archive(&app) }
 
 pub fn request_exit(app: &tauri::AppHandle, reason: &str) {
     let store = app.state::<MemoStore>();
-    let active = store.lifecycle.lock().map(|life| life.active).unwrap_or(true);
+    let (active,label) = store.lifecycle.lock().map(|life| (life.active,life.window_label.clone())).unwrap_or((true,"archive".into()));
     if active {
         if let Ok(mut life) = store.lifecycle.lock() { life.exit_reason = Some(reason.to_string()); }
-        if let Some(window) = app.get_webview_window("memo") {
+        if let Some(window) = app.get_webview_window(&label) {
             let _ = window.emit("memo-close-request", json!({"exit":true}));
             let _ = window.show(); let _ = window.set_focus();
         }
         // No renderer ACK means no exit; the saved draft remains intact.
     } else { super::request_explicit_exit(app, reason); app.exit(0); }
+}
+
+pub fn has_active_session(app: &tauri::AppHandle) -> bool {
+    app.state::<MemoStore>().lifecycle.lock().map(|life| life.active).unwrap_or(true)
 }
 
 #[tauri::command]
@@ -173,6 +185,15 @@ pub fn complete_memo_exit(window: tauri::WebviewWindow, app: tauri::AppHandle) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn archive_keeps_its_large_size_when_the_monitor_has_room() {
+        assert_eq!(archive_size_within_work_area((900,720),(1920,1040),1.0),(900,720));
+    }
+    #[test]
+    fn archive_stays_inside_high_dpi_and_small_work_areas() {
+        assert_eq!(archive_size_within_work_area((1350,1080),(1920,1040),1.5),(1350,1040));
+        assert_eq!(archive_size_within_work_area((900,720),(1024,700),1.0),(720,700));
+    }
     #[test]
     fn diagnostics_exclude_untrusted_ids_and_raw_errors() {
         let details = event_details(Some("개인 메모 본문 C:\\private"), 4, 20, 3, Some("permission denied C:\\private"));

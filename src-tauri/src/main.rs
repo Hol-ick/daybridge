@@ -1191,7 +1191,7 @@ fn main() {
                 }
             }
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "memo" {
+                if matches!(window.label(),"memo"|"archive") {
                     api.prevent_close();
                     let _ = window.emit("memo-close-request", json!({"exit":false}));
                     return;

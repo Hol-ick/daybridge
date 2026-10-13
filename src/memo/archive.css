@@ -13,7 +13,12 @@
 .memo-archive-panel button:focus-visible,.memo-archive-panel pre:focus-visible { outline:2px solid var(--memo-accent); outline-offset:-2px; }
 .memo-archive-panel svg,.memo-archive-ghost svg { flex:none; width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
 .memo-archive-panel .memo-icon-button { width:36px; padding:8px; color:var(--memo-muted); }
-.memo-archive-layout { display:grid; grid-template-columns:200px minmax(0,1fr); gap:20px; flex:1; min-height:0; }
+.memo-archive-layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:20px; flex:1; min-height:0; }
+.memo-archive-list .memo-new { flex:none; justify-content:flex-start; width:100%; margin-bottom:8px; color:var(--memo-accent); border:1px solid var(--memo-line); min-height:44px; font-weight:600; }
+.memo-compose { flex:1; min-height:0; display:flex; border-radius:12px; overflow:hidden; }
+.memo-compose[hidden] { display:none; }
+.memo-compose .memo-embedded { height:auto; width:100%; min-height:0; }
+.memo-compose .memo-embedded textarea { min-height:80px; padding:24px; }
 .memo-archive-list { position:relative; overflow:auto; display:flex; flex-direction:column; gap:4px; padding:2px; scrollbar-width:thin; scrollbar-color:#667684 transparent; }
 .memo-archive-row { position:relative; flex:none; border-radius:8px; }
 .memo-archive-row[data-selected=true] { background:#72cfa812; }

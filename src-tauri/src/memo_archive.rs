@@ -47,6 +47,7 @@ pub async fn export_memo_archive(app: tauri::AppHandle, window: tauri::WebviewWi
 #[tauri::command]
 pub fn close_memo_archive(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
     if window.label() != "archive" { return Err("archive_access_denied".into()); }
+    if super::quick_memo::has_active_session(&app) { return Err("close_not_finalized".into()); }
     window.hide().map_err(|_| "archive_close_failed")?;
     use tauri::Emitter;
     app.emit("memo-archive-visibility", false).map_err(|_| "archive_close_failed")?;

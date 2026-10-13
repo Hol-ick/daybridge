@@ -503,7 +503,7 @@ export default function ScheduleSurface() {
     void listen("daybridge:schedule-changed", () => { void loadSchedule({quiet:true}); }).then(unlisten=>{if(disposed)unlisten();else stop=unlisten;});
     return()=>{disposed=true;stop();};
   },[loadSchedule]);
-  if (surface === "archive") return <MemoArchivePanel onClose={() => { if(isTauri()) void invoke("close_memo_archive"); else window.close(); }} onAddTask={addManualTask} />;
+  if (surface === "archive") return <MemoArchivePanel onClose={async() => { if(isTauri()) await invoke("close_memo_archive"); else window.close(); }} onAddTask={addManualTask} />;
   if (surface === "overlay") {
     return <NowFocusOverlay
       schedule={schedule}
