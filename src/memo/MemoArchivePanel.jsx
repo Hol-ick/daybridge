@@ -57,7 +57,7 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
     } catch {setClosing(false);setEditing(true);setCompactPage('detail');setCloseFailure('보관하지 못했습니다. 내용을 유지하고 있습니다. 다시 닫아 주세요.');}
   };
   const compose=async()=>{
-    closeMotion.current?.abort();setClosing(false);setEditing(true);setCompactPage('detail');setCloseFailure('');setNotice('');
+    closeMotion.current?.abort();setClosing(false);setEditing(true);setCompactPage('detail');setScheduleOpen(false);setCloseFailure('');setNotice('');
     await editor.current?.open();void controller.load();
   };
   nativeClose.current=close;
