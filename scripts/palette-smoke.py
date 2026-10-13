@@ -21,7 +21,7 @@ const schedule={date:'2099-01-02',mode:'todo',timeConfigured:false,blocks:[{id:'
 document.body.dataset.surface=view==='overlay'?'overlay':view==='archive'?'archive':'dashboard';
 if(view==='archive')return <MemoArchivePanel onClose={()=>{window.fixture.closed=true;}} onAddTask={async()=>true}/>;
 if(view==='overlay')return <NowFocusOverlay schedule={schedule} nowFocus={{state:'todo_list'}} appearance={appearance} onOpenSettings={()=>{}} onOpenMemoArchive={()=>{}}/>;
-return <><WindowChrome/><ScheduleDashboard schedule={schedule} nowFocus={{state:'todo_list'}} onOpenSettings={()=>{}}/>{view==='dashboard'?null:<OverlaySettingsModal appearance={appearance} onAppearanceChange={setAppearance} onClose={()=>{window.fixture.closed=true;}} onSubmit={e=>e.preventDefault()} dailyDefaults={[]} scheduleSettings={{timeConfigured:false}}/>}</>;}
+return <>{view==='standalone'?null:<WindowChrome/>}<ScheduleDashboard schedule={schedule} nowFocus={{state:'todo_list'}} onOpenSettings={()=>{}}/>{view==='dashboard'?null:<OverlaySettingsModal showCloseButton={view==='standalone'} appearance={appearance} onAppearanceChange={setAppearance} onClose={()=>{window.fixture.closed=true;}} onSubmit={e=>e.preventDefault()} dailyDefaults={[]} scheduleSettings={{timeConfigured:false}}/>}</>;}
 createRoot(document.getElementById('root')).render(<Host/>);
 ''',encoding='utf-8')
 results=[]
@@ -32,6 +32,9 @@ with sync_playwright() as p:
     settings=context.new_page();errors=[]
     settings.on('pageerror',lambda e:errors.append(str(e)))
     settings.goto('http://127.0.0.1:5187/test-artifacts/palette.html')
+    expect(settings.get_by_role('button',name='설정 닫기',exact=True)).to_have_count(0)
+    expect(settings.get_by_role('button',name='관리 창 닫기',exact=True)).to_have_count(1)
+    expect(settings.get_by_role('dialog',name='위젯 설정',exact=True)).to_have_attribute('aria-modal','false')
     settings.get_by_role('button',name='표시·색상').click()
     expect(settings.get_by_role('group',name='앱 색상 팔레트')).to_be_visible()
     archive=context.new_page();archive.on('pageerror',lambda e:errors.append(str(e)))
@@ -51,7 +54,7 @@ with sync_playwright() as p:
             page.wait_for_timeout(180)
             page.screenshot(path=str(out/f"{palette['id']}-{['settings','archive','overlay'][[settings,archive,overlay].index(page)]}.png"))
         expect(editor).to_have_value('색상을 바꿔도 작성 중인 한글 메모가 유지됩니다.\n다음 회의를 준비합니다.')
-        close=settings.get_by_role('button',name='설정 닫기',exact=True).bounding_box()
+        close=archive.get_by_role('button',name='메모 보관함 닫기',exact=True).bounding_box()
         assert close['width']==40 and close['height']==40
         results.append({'palette':palette['id'],'synced':True,'draftPreserved':True,'close40':True})
     settings.reload();settings.wait_for_function("document.documentElement.dataset.palette==='rose'")
@@ -71,6 +74,12 @@ with sync_playwright() as p:
     archive.get_by_role('button',name='메모 보관함 닫기',exact=True).click();archive.wait_for_function('fixture.closed')
     state=archive.evaluate("JSON.parse(localStorage.getItem('daybridge.memo.preview.sessions.v2'))")
     assert state['active'] is None and any(x['text'].startswith('색상을') for x in state['archives'])
+    standalone=context.new_page();standalone.on('pageerror',lambda e:errors.append(str(e)))
+    standalone.goto('http://127.0.0.1:5187/test-artifacts/palette.html?view=standalone')
+    expect(standalone.get_by_role('button',name='관리 창 닫기',exact=True)).to_have_count(0)
+    expect(standalone.get_by_role('button',name='설정 닫기',exact=True)).to_have_count(1)
+    expect(standalone.get_by_role('dialog',name='위젯 설정',exact=True)).to_have_attribute('aria-modal','true')
+    standalone.get_by_role('button',name='설정 닫기',exact=True).click();standalone.wait_for_function('fixture.closed')
     assert not errors,errors
     context.close();browser.close()
 (out/'result.json').write_text(json.dumps({'passed':True,'scenarios':results,'reload':True,'failedSavePreserved':True,'pageErrors':errors,'nativeVerified':False},ensure_ascii=False,indent=2),encoding='utf-8')

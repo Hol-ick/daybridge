@@ -42,6 +42,7 @@ export type AddManualTask = (input: {title: string}) => unknown | Promise<unknow
 export interface SettingsProps {
   privateMode?: boolean;
   onClose?: () => void;
+  showCloseButton?: boolean;
   onSubmit?: (event: SubmitEvent<HTMLFormElement>) => void | Promise<void>;
   onRefreshWidget?: () => void | Promise<void>;
   refreshingWidget?: boolean;

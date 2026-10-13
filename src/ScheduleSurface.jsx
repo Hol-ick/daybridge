@@ -551,6 +551,7 @@ export default function ScheduleSurface() {
     <p className={styles.notice} role="status" data-visible={notice ? "true" : "false"}>{notice}</p>
     {selectedQuest ? <section className={styles.questDetail} aria-label="선택한 작업 상세"><Item quest={selectedQuest} /></section> : null}
     {settingsOpen ? <OverlaySettingsModal
+      showCloseButton={false}
       privateMode={privateMode}
       onClose={() => setSettingsOpen(false)}
       onSubmit={saveSettings}

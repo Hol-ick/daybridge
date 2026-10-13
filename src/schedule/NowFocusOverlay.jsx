@@ -221,7 +221,7 @@ function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, o
 const MEAL_LABELS = { breakfast: "아침시간", lunch: "점심시간", dinner: "저녁시간" };
 
 /** @param {import("./ui-types").SettingsProps} props */
-export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading, scheduleSettings, onScheduleSettingsChange, scheduleSettingsLoading, appearance, onAppearanceChange, storageDirectory, onStorageDirectoryChange, storageDirectoryLoading, notice = "" }) {
+export function OverlaySettingsModal({ privateMode, onClose, showCloseButton = true, onSubmit, onRefreshWidget, refreshingWidget, dailyDefaults, onDailyDefaultsChange, dailyDefaultsLoading, scheduleSettings, onScheduleSettingsChange, scheduleSettingsLoading, appearance, onAppearanceChange, storageDirectory, onStorageDirectoryChange, storageDirectoryLoading, notice = "" }) {
   /** @type {import("./ui-types").SettingsDraft} */
   const settings = scheduleSettings || { dayStart: "", dayEnd: "", timeConfigured: false, breaks: [], meals: DEFAULT_MEALS };
   const meals = settings.meals || { breakfast: {...DEFAULT_MEALS.breakfast, enabled: false}, lunch: {...DEFAULT_MEALS.lunch, enabled: false}, dinner: {...DEFAULT_MEALS.dinner, enabled: false} };
@@ -235,7 +235,7 @@ export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefresh
   };
   const timeConfigured = settings.timeConfigured === true;
   return (
-    <div className={`${styles.settingsModal} ${closing ? styles.settingsModalClosing : ""}`} role="dialog" aria-modal="true" aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
+    <div className={`${styles.settingsModal} ${closing ? styles.settingsModalClosing : ""}`} role="dialog" aria-modal={showCloseButton} aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
       {notice ? <div className={styles.overlayToast} role="status" aria-live="polite" data-testid="daybridge-settings-toast">{notice}</div> : null}
       <form className={styles.settingsForm} onSubmit={onSubmit} data-testid="now-focus-overlay-settings-sheet">
         <header className={styles.settingsHeader} data-tauri-drag-region="true">
@@ -243,7 +243,7 @@ export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefresh
             <strong>위젯 설정</strong>
             <p>표시 방식과 매일 반복할 일을 관리합니다.</p>
           </div>
-          <CloseButton label="설정 닫기" onClick={requestClose}/>
+          {showCloseButton ? <CloseButton label="설정 닫기" onClick={requestClose}/> : null}
         </header>
         {activeTab !== "display" ? <input type="checkbox" name="privateOverlay" defaultChecked={privateMode} hidden /> : null}
         <div className={styles.settingsLayout}>
