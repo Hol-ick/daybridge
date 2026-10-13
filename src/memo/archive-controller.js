@@ -33,16 +33,36 @@ export function createArchiveController(api, changed) {
     finally{view.busy=false;publish();}
   }
   /** @param {string} id */
+  async function advanceAfterRemoval(id) {
+    const index=view.items.findIndex(item=>item.id===id);
+    const visibleCount=view.items.length;
+    const preferred=view.items[index+1]?.id||view.items[index-1]?.id;
+    const request=++epoch;
+    view.items=view.items.filter(item=>item.id!==id);
+    view.selected=null;
+    view.loading=true;publish();
+    try {
+      let page=await api.list(0);const items=[...page.items],offsets=new Set([0]);
+      while(preferred&&!items.some(item=>item.id===preferred)&&page.nextOffset!==null&&items.length<visibleCount){
+        if(offsets.has(page.nextOffset))break;
+        offsets.add(page.nextOffset);page=await api.list(page.nextOffset);items.push(...page.items);
+      }
+      view.items=items.filter(item=>item.id!==id);view.nextOffset=page.nextOffset;view.invalidCount=page.invalidCount;
+    }
+    catch {view.error="메모 목록을 불러오지 못했어요";}
+    finally {view.loading=false;}
+    const next=preferred&&view.items.some(item=>item.id===preferred)?preferred:view.items[0]?.id;
+    if(!next){view.selected=null;return;}
+    try {const memo=await api.read(next);if(request===epoch&&!disposed)view.selected=memo;}
+    catch {if(request===epoch)view.error="메모를 읽지 못했어요";}
+  }
+  /** @param {string} id */
   async function remove(id) {
-    const result=await perform(async()=>{await api.remove(id);++epoch;view.items=view.items.filter(item=>item.id!==id);view.selected=null;return true;});
-    if(result) await load();
-    return result;
+    return perform(async()=>{await api.remove(id);await advanceAfterRemoval(id);return true;});
   }
   /** @param {string} id */
   async function exportMemo(id) {
-    const result=await perform(()=>api.export(id));
-    if(result?.removed){++epoch;view.items=view.items.filter(item=>item.id!==id);view.selected=null;await load();}
-    return result;
+    return perform(async()=>{const result=await api.export(id);if(result?.removed)await advanceAfterRemoval(id);return result;});
   }
   return {load,select,perform,remove,exportMemo,activate(){disposed=false;},dispose(){disposed=true;++epoch;}};
 }

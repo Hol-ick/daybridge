@@ -33,12 +33,14 @@ with sync_playwright() as p:
   with host.expect_popup() as popup:host.get_by_role('button',name='메모 보관함',exact=True).click()
   page=popup.value;page.on('pageerror',lambda e:errors.append(str(e)));page.set_viewport_size({'width':width,'height':680});page.wait_for_timeout(250)
   panel=page.get_by_role('dialog',name='메모 보관함');expect(panel).to_be_visible();page.screenshot(path=str(out/f'list-{name}.png'))
-  panel.get_by_role('button',name='회의 준비').click();expect(panel.locator('pre')).to_contain_text('한글 본문');page.wait_for_timeout(150)
+  expect(panel.locator('.memo-row-delete')).to_have_count(2)
+  assert page.evaluate("document.elementFromPoint(innerWidth/2,3)?.classList.contains('memo-archive-top-drag')")
+  panel.get_by_role('button',name='회의 준비',exact=True).click();expect(panel.locator('pre')).to_contain_text('한글 본문');page.wait_for_timeout(150)
   assert panel.evaluate('(e)=>e.scrollWidth<=e.clientWidth')
   if width<560:
    expect(panel.get_by_role('button',name='목록으로')).to_be_visible()
-   page.keyboard.press('Escape');expect(panel.get_by_role('button',name='회의 준비')).to_be_focused()
-   panel.get_by_role('button',name='회의 준비').click();expect(panel.locator('pre')).to_be_visible()
+   page.keyboard.press('Escape');expect(panel.get_by_role('button',name='회의 준비',exact=True)).to_be_focused()
+   panel.get_by_role('button',name='회의 준비',exact=True).click();expect(panel.locator('pre')).to_be_visible()
   page.wait_for_timeout(220);page.screenshot(path=str(out/f'detail-{name}.png'))
   if width<560:
    page.set_viewport_size({'width':720,'height':680});expect(panel.locator('pre')).to_be_visible()
@@ -51,8 +53,11 @@ with sync_playwright() as p:
   assert target.read_text(encoding='utf-8').startswith('회의 준비\n검토할 항목')
   # Sample success motion; ghosts are never interactive or in the accessible tree.
   page.screenshot(path=str(out/f'exit-{name}.png'));page.wait_for_timeout(260)
-  expect(panel.get_by_role('button',name='회의 준비')).to_have_count(0);assert page.locator('.memo-archive-ghost').count()==0
-  panel.get_by_role('button',name='다운로드 보관').click();panel.get_by_role('button',name='삭제',exact=True).click();expect(panel.get_by_text('보관한 메모가 없습니다.')).to_be_visible();page.wait_for_timeout(250);page.screenshot(path=str(out/f'empty-{name}.png'))
+  expect(panel.get_by_role('button',name='회의 준비',exact=True)).to_have_count(0);assert page.locator('.memo-archive-ghost').count()==0
+  expect(panel.locator('pre')).to_contain_text('다운로드 보관')
+  if width<560:panel.get_by_role('button',name='목록으로',exact=True).click()
+  page.evaluate('fixture.failure=true');panel.get_by_role('button',name='다운로드 보관 삭제',exact=True).click();expect(panel.get_by_role('alert')).to_contain_text('처리를 확인하지 못했어요');expect(panel.get_by_role('button',name='다운로드 보관',exact=True)).to_have_count(1)
+  page.evaluate('fixture.failure=false');panel.get_by_role('button',name='다운로드 보관 삭제',exact=True).click();expect(panel.get_by_text('보관한 메모가 없습니다.')).to_be_visible();page.wait_for_timeout(250);page.screenshot(path=str(out/f'empty-{name}.png'))
   assert page.evaluate("JSON.parse(localStorage.getItem('daybridge.memo.preview.sessions.v2')).archives.length")==0
   expect(panel.get_by_role('button',name='삭제 확인')).to_have_count(0);expect(panel.get_by_role('button',name='삭제 되돌리기')).to_have_count(0)
   page.keyboard.press('Escape');page.wait_for_timeout(250);assert page.evaluate('fixture.closed')
