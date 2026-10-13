@@ -310,7 +310,7 @@
 }
 
 .subquestCompleted {
-	background: rgb(98 220 165 / 8%);
+	background: color-mix(in srgb,var(--db-accent) 8%,transparent);
 	color: var(--gray);
 	text-decoration: line-through;
 }

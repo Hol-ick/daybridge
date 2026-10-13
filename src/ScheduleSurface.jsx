@@ -12,11 +12,11 @@ import { recordRuntimeEvent } from "./runtime-log.js";
 import styles from "./ScheduleSurface.module.css";
 import { fetchBridge, savedNotice } from "./bridge-client.js";
 import { DEFAULT_SCHEDULE_SETTINGS, normalizeScheduleSettings } from "./schedule/settings-contract.js";
+import { setAppearance, useAppearance } from "./appearance/theme-store.js";
+import WindowChrome from "./appearance/WindowChrome.jsx";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
 const OVERLAY_PRIVACY_KEY = "daybridge.overlay-private.v1";
-const APPEARANCE_KEY = "daybridge.appearance.v1";
-const DEFAULT_APPEARANCE = { accent: "#62dca5" };
 const OPEN_SETTINGS_KEY = "daybridge.open-settings.v1";
 
 function kstDate() {
@@ -25,12 +25,6 @@ function kstDate() {
 
 function initialPrivateMode() {
   try { return localStorage.getItem(OVERLAY_PRIVACY_KEY) === "true"; } catch { return false; }
-}
-function initialAppearance() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || "null");
-    return { ...DEFAULT_APPEARANCE, ...(parsed && typeof parsed === "object" ? parsed : {}) };
-  } catch { return { ...DEFAULT_APPEARANCE }; }
 }
 
 /** @param {unknown} error */
@@ -92,7 +86,7 @@ export default function ScheduleSurface() {
   const [scheduleSettingsDraft, setScheduleSettingsDraft] = useState(/** @type {import("./schedule/ui-types").SettingsDraft} */ (DEFAULT_SCHEDULE_SETTINGS));
   const [scheduleSettingsLoaded, setScheduleSettingsLoaded] = useState(false);
   const [scheduleSettingsLoading, setScheduleSettingsLoading] = useState(false);
-  const [appearance, setAppearance] = useState(initialAppearance);
+  const appearance = useAppearance();
   const [storageDirectoryDraft, setStorageDirectoryDraft] = useState("");
   const [storageDirectoryLoaded, setStorageDirectoryLoaded] = useState(false);
   const [storageDirectoryLoading, setStorageDirectoryLoading] = useState(false);
@@ -532,7 +526,7 @@ export default function ScheduleSurface() {
       onScheduleSettingsChange={setScheduleSettingsDraft}
       scheduleSettingsLoading={scheduleSettingsLoading}
       appearance={appearance}
-      onAppearanceChange={(next) => { const value = { ...DEFAULT_APPEARANCE, ...next }; setAppearance(value); try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(value)); } catch {} }}
+      onAppearanceChange={setAppearance}
       notice={notice}
       storageDirectory={storageDirectoryDraft}
       onStorageDirectoryChange={setStorageDirectoryDraft}
@@ -541,7 +535,7 @@ export default function ScheduleSurface() {
     />;
   }
 
-  return <div className={styles.shell}>
+  return <><WindowChrome/><div className={styles.shell}>
     <ScheduleDashboard
       schedule={schedule}
       nowFocus={nowFocus}
@@ -569,11 +563,11 @@ export default function ScheduleSurface() {
       onScheduleSettingsChange={setScheduleSettingsDraft}
       scheduleSettingsLoading={scheduleSettingsLoading}
       appearance={appearance}
-      onAppearanceChange={(next) => { const value = { ...DEFAULT_APPEARANCE, ...next }; setAppearance(value); try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(value)); } catch {} }}
+      onAppearanceChange={setAppearance}
       storageDirectory={storageDirectoryDraft}
       onStorageDirectoryChange={setStorageDirectoryDraft}
       storageDirectoryLoading={storageDirectoryLoading || !storageDirectoryLoaded}
       notice={notice}
     /> : null}
-  </div>;
+  </div></>;
 }

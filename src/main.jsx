@@ -7,6 +7,10 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { mountAfterBridgeReady } from "./desktop-bootstrap.js";
 import "./todometer/styles/variables.css";
 import "./todometer/index.css";
+import "./appearance/theme.css";
+import { initializeAppearance } from "./appearance/theme-store.js";
+
+initializeAppearance();
 
 window.addEventListener("error", (event) => {
   recordRuntimeEvent("window_error", { message: event.error?.message || event.message || "unknown error" });

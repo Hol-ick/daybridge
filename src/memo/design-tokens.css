@@ -1,11 +1,11 @@
 :root {
-  --memo-bg: #191e25;
-  --memo-surface: #222932;
-  --memo-hover: #2b343e;
-  --memo-text: #eaf0f3;
-  --memo-muted: #a8b4bf;
-  --memo-accent: #72cfa8;
-  --memo-line: #667684;
+  --memo-bg: var(--db-canvas);
+  --memo-surface: var(--db-surface);
+  --memo-hover: var(--db-hover);
+  --memo-text: var(--db-ink);
+  --memo-muted: var(--db-muted);
+  --memo-accent: var(--db-accent);
+  --memo-line: var(--db-line);
   --memo-font: "Segoe UI", "Malgun Gothic", sans-serif;
   --memo-ease: cubic-bezier(.2,.8,.2,1);
 }

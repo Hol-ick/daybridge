@@ -796,6 +796,7 @@ fn dashboard_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
         WebviewUrl::App("index.html?surface=dashboard".into()),
     )
     .title("Daybridge 관리")
+    .decorations(false)
     .inner_size(960.0, 760.0)
     .min_inner_size(660.0, 540.0)
     .resizable(true)

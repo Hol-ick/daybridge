@@ -6,6 +6,8 @@ import ManualTaskForm from "./ManualTaskForm.jsx";
 import DailyDefaultsEditor from "./DailyDefaultsEditor.jsx";
 import { DEFAULT_MEALS } from "./settings-contract.js";
 import { recordRuntimeEvent } from "../runtime-log.js";
+import CloseButton from "../appearance/CloseButton.jsx";
+import PalettePicker from "../appearance/PalettePicker.jsx";
 
 /** @param {Date | string | number | undefined} value */
 function asDate(value) {
@@ -214,12 +216,6 @@ function OverlayScheduleItem({ block, privateMode, onMove, canDiscard = false, o
   );
 }
 
-const THEME_PRESETS = [
-  { id: "mint", label: "민트", accent: "#62dca5" },
-  { id: "blue", label: "블루", accent: "#7c9cff" },
-  { id: "amber", label: "앰버", accent: "#f4b860" },
-  { id: "violet", label: "바이올렛", accent: "#dd8aff" },
-];
 
 /** @type {Record<import("./types").MealKey, string>} */
 const MEAL_LABELS = { breakfast: "아침시간", lunch: "점심시간", dinner: "저녁시간" };
@@ -247,7 +243,7 @@ export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefresh
             <strong>위젯 설정</strong>
             <p>표시 방식과 매일 반복할 일을 관리합니다.</p>
           </div>
-          <button type="button" className={styles.settingsClose} onClick={requestClose} aria-label="설정 닫기" data-tauri-drag-region="false">×</button>
+          <CloseButton label="설정 닫기" onClick={requestClose}/>
         </header>
         {activeTab !== "display" ? <input type="checkbox" name="privateOverlay" defaultChecked={privateMode} hidden /> : null}
         <div className={styles.settingsLayout}>
@@ -283,7 +279,7 @@ export function OverlaySettingsModal({ privateMode, onClose, onSubmit, onRefresh
             </> : null}
             {activeTab === "display" ? <>
               <section className={styles.settingsSection} aria-label="표시 옵션"><span className={styles.settingsSectionLabel}>표시</span><label className={styles.settingsCheckbox}><span><strong>오버레이에서 작업명 숨기기</strong><small>위젯에는 집중 상태만 표시합니다.</small></span><input className={styles.settingsToggleInput} name="privateOverlay" type="checkbox" defaultChecked={privateMode} /><span className={styles.settingsToggleTrack} aria-hidden="true" /></label></section>
-              <section className={styles.settingsSection} aria-label="색상 테마"><span className={styles.settingsSectionLabel}>색상</span><div className={styles.themeChoices} role="group" aria-label="강조 색상">{THEME_PRESETS.map((preset) => <button key={preset.id} type="button" className={styles.themeSwatch} style={{ "--swatch": preset.accent }} aria-label={`${preset.label} 테마`} aria-pressed={appearance?.accent === preset.accent} onClick={() => onAppearanceChange?.({ accent: preset.accent })}><span aria-hidden="true" /></button>)}<label className={styles.themeCustom}><span>직접 선택</span><input type="color" value={appearance?.accent || "#62dca5"} onChange={(event) => onAppearanceChange?.({ accent: event.target.value })} aria-label="강조 색상 직접 선택" /></label></div><small className={styles.settingsHint}>텍스트 대비를 해치지 않도록 강조 색상은 버튼·상태 표시 중심으로 사용합니다.</small></section>
+              <section className={styles.settingsSection} aria-label="색상 테마"><span className={styles.settingsSectionLabel}>앱 색상</span><PalettePicker appearance={appearance} onChange={onAppearanceChange}/></section>
             </> : null}
             {activeTab === "defaults" ? <>
               <DailyDefaultsEditor value={dailyDefaults} onChange={onDailyDefaultsChange} loading={dailyDefaultsLoading} />
@@ -724,7 +720,7 @@ export default function NowFocusOverlay({ schedule, nowFocus, onReportBlock, onA
   const surfaceClassName = [styles.surface, expanded ? styles.expanded : "", modalOpen ? styles.settingsMode : "", taskOpen ? styles.taskOpen : "", magnetPulse ? styles.magnetPulse : ""].filter(Boolean).join(" ");
 
   return (
-    <aside className={styles.overlay} style={{ "--green": appearance?.accent || "#62dca5", "--modal-accent": appearance?.accent || "#839eff" }} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
+    <aside className={styles.overlay} aria-label="Daybridge 현재 할 일" data-testid="now-focus-overlay">
       {!modalOpen && notice ? <div className={styles.overlayToast} role="status" aria-live="polite" data-testid="daybridge-toast">{notice}</div> : null}
       <div
         className={surfaceClassName}

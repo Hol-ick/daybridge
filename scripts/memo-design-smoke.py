@@ -11,9 +11,12 @@ fixtures=Path('test-artifacts');fixtures.mkdir(exist_ok=True)
 (fixtures/'memo-design.html').write_text('<!doctype html><html lang="ko"><meta charset="UTF-8"><div id="root"></div><script type="module" src="/test-artifacts/memo-design-host.jsx"></script></html>',encoding='utf-8')
 (fixtures/'memo-design-host.jsx').write_text('''import React from 'react';
 import {createRoot} from 'react-dom/client';
+import '/src/appearance/theme.css';
+import {initializeAppearance} from '/src/appearance/theme-store.js';
 import MemoArchivePanel from '/src/memo/MemoArchivePanel.jsx';
 import {createArchiveApi} from '/src/memo/archive-api.js';
 import NowFocusOverlay from '/src/schedule/NowFocusOverlay.jsx';
+initializeAppearance();
 window.fixture={failure:false,partial:false,added:[],closed:false};
 const api=createArchiveApi();const guarded={...api,export:async id=>{if(window.fixture.failure)throw Error('fixture_write_failure');if(window.fixture.partial)return {saved:true,removed:false};return api.export(id);},remove:async id=>{if(window.fixture.failure)throw Error('fixture_delete_failure');return api.remove(id);}};
 function Host(){const [schedule,setSchedule]=React.useState({mode:'todo',timeConfigured:false,blocks:[]});const[open,setOpen]=React.useState(false);React.useEffect(()=>{const update=e=>{if(e.data?.title){setSchedule({mode:'todo',timeConfigured:false,blocks:[{id:'added',kind:'focus',title:e.data.title,status:'planned',questId:'added'}]});}};window.addEventListener('message',update);return()=>window.removeEventListener('message',update);},[]);return <NowFocusOverlay schedule={schedule} nowFocus={{state:'todo_list'}} archiveOpen={open} onOpenMemoArchive={()=>{setOpen(true);window.open('/test-artifacts/memo-design.html?panel=1','design-fixture','width=720,height=680');}} onOpenSettings={()=>{}} onAddManualTask={async()=>true}/>;}

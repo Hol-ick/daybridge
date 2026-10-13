@@ -9,6 +9,7 @@ import {isTauri} from '@tauri-apps/api/core';
 import {listen} from '@tauri-apps/api/event';
 import {getCurrentWindow} from '@tauri-apps/api/window';
 import MemoSurface from '../MemoSurface.jsx';
+import CloseButton from '../appearance/CloseButton.jsx';
 
 /** @param {{kind:'close'|'back'|'save'|'calendar'|'trash'|'check'}} props */
 function Icon({kind}) {
@@ -159,7 +160,7 @@ export default function MemoArchivePanel({onClose,onAddTask,archiveApi}) {
     <div className="memo-archive-top-drag" onMouseDown={drag} aria-hidden="true"/>
     <header className="memo-archive-header" onMouseDown={drag}>
       <div className="memo-archive-heading"><h2>메모 보관함</h2><span aria-label={`보관한 메모 ${view.items.length}개`}>{view.items.length}</span></div>
-      <button className="memo-icon-button" type="button" onClick={()=>void close()} disabled={view.busy||switching} aria-label="메모 보관함 닫기"><Icon kind="close"/></button>
+      <CloseButton className="memo-icon-button" label="메모 보관함 닫기" onClick={()=>void close()} disabled={view.busy||switching}/>
     </header>
     {view.error?<div role="alert" className="memo-archive-alert">{view.error}<button onClick={()=>void controller.load()}>다시 불러오기</button></div>:null}
     {closeFailure?<div role="alert" className="memo-archive-alert">{closeFailure}</div>:null}

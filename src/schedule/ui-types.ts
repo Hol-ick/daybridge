@@ -34,7 +34,7 @@ export interface NowFocus extends Partial<UiBlock> {
   nextFocus?: UiBlock | null;
   blockId?: string;
 }
-export type Appearance = {accent?: string};
+export type Appearance = {paletteId?: string};
 export type SettingsDraft = Omit<ScheduleSettingsInput, "meals"> & {meals?: Record<"breakfast" | "lunch" | "dinner", Meal>};
 export type MoveBlock = (blockId: string, targetId: string, position: "before" | "after") => unknown | Promise<unknown>;
 export type ReportBlock = (blockId: string, status: string) => unknown | Promise<unknown>;
