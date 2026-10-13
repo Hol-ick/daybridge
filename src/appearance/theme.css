@@ -1,10 +1,11 @@
 :root {
   --db-canvas:#18212b; --db-surface:#202c38; --db-raised:#2a3947; --db-field:#121b24;
   --db-ink:#e9f0f5; --db-muted:#a7b9c8; --db-line:#405365; --db-accent:#9ac9ef;
-  --db-onAccent:#142536; --db-paper:#e6eef4; --db-paperInk:#253c50; --db-danger:#ffb0b9;
+  --db-onAccent:#142536; --db-paper:#e6eef4; --db-paperInk:#253c50; --db-danger:#ffb0b9; --db-warning:#e8cf92;
   --db-tint:color-mix(in srgb,var(--db-accent) 12%,transparent);
   --db-hover:color-mix(in srgb,var(--db-accent) 10%,var(--db-surface));
   --bg:var(--db-canvas); --font-color:var(--db-ink); --green:var(--db-accent);
+  --yellow:var(--db-warning); --red:var(--db-danger);
   --gray:var(--db-muted); --highlight:var(--db-tint); --input-color:var(--db-field); --item-color:var(--db-raised);
 }
 body { font-weight:400; }

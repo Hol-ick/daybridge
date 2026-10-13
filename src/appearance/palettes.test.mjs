@@ -14,6 +14,7 @@ test('every palette keeps normal text, muted text, paper and action labels reada
   for(const p of PALETTES)for(const [a,b] of [['ink','canvas'],['ink','surface'],['muted','surface'],['accent','surface'],['onAccent','accent'],['paperInk','paper']]){
     assert.ok(contrast(p[a],p[b])>=4.5,`${p.id}: ${a}/${b} ${contrast(p[a],p[b])}`);
   }
+  for(const p of PALETTES)assert.ok(contrast(p.mode==='dark'?'#e8cf92':'#806029',p.surface)>=4.5);
 });
 test('management chrome has one app title bar and keeps native dismissal semantics',()=>{
   const config=JSON.parse(readFileSync(new URL('../../src-tauri/tauri.conf.json',import.meta.url)));

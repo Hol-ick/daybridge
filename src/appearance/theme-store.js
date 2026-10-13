@@ -20,6 +20,7 @@ function apply(next) {
     root.style.setProperty(`--db-${name}`, p[/** @type {keyof typeof p} */ (name)]);
   }
   root.style.setProperty("--db-danger", p.mode === "dark" ? "#ffb0b9" : "#a53149");
+  root.style.setProperty("--db-warning", p.mode === "dark" ? "#e8cf92" : "#806029");
   if (appearance.paletteId !== value.paletteId) {
     appearance = value;
     subscribers.forEach(fn => fn());
