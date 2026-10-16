@@ -1,51 +1,23 @@
 use std::path::{Path, PathBuf};
+#[path = "../../scripts/startup-target.rs"]
+mod startup_target;
+pub use startup_target::installed_executable;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum LaunchRole {
     Installed,
     Standalone,
+    Unavailable,
     Redirect(PathBuf),
 }
 
 pub fn launch_role(current: &Path, installed: Option<&Path>) -> LaunchRole {
     match installed {
-        Some(installed) if same_file(current, installed) => LaunchRole::Installed,
+        Some(installed) if startup_target::same_file(current, installed) => LaunchRole::Installed,
         Some(installed) => LaunchRole::Redirect(installed.to_path_buf()),
-        None => LaunchRole::Standalone,
+        None => LaunchRole::Unavailable,
     }
 }
-
-fn same_file(a: &Path, b: &Path) -> bool {
-    let a = std::fs::canonicalize(a).unwrap_or_else(|_| a.to_path_buf());
-    let b = std::fs::canonicalize(b).unwrap_or_else(|_| b.to_path_buf());
-    if cfg!(windows) {
-        a.to_string_lossy().eq_ignore_ascii_case(&b.to_string_lossy())
-    } else {
-        a == b
-    }
-}
-
-#[cfg(windows)]
-pub fn installed_executable() -> Option<PathBuf> {
-    use winreg::{enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE}, RegKey};
-    for hive in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
-        let key = RegKey::predef(hive)
-            .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Daybridge");
-        if let Ok(key) = key {
-            if let Ok(location) = key.get_value::<String, _>("InstallLocation") {
-                let root = PathBuf::from(location.trim_matches('"'));
-                let executable = root.join("daybridge.exe");
-                if root.is_absolute() && executable.is_file() && root.join("uninstall.exe").is_file() {
-                    return Some(executable);
-                }
-            }
-        }
-    }
-    None
-}
-
-#[cfg(not(windows))]
-pub fn installed_executable() -> Option<PathBuf> { None }
 
 #[cfg(windows)]
 pub struct InstanceGuard(windows::Win32::Foundation::HANDLE);
@@ -90,7 +62,7 @@ mod tests {
     fn only_the_registered_installation_owns_startup() {
         let installed = Path::new("installed/daybridge.exe");
         assert_eq!(launch_role(installed, Some(installed)), LaunchRole::Installed);
-        assert_eq!(launch_role(installed, None), LaunchRole::Standalone);
+        assert_ne!(launch_role(installed, None), LaunchRole::Standalone, "A release without installation identity must not start its own UI");
     }
     #[cfg(windows)]
     #[test]

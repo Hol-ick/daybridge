@@ -2,10 +2,12 @@ import {spawnSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {join} from "node:path";
 import {prepareTauriBridgeRuntime} from "./package-bridge.mjs";
+import {buildStartupLauncher} from "./build-startup-launcher.mjs";
 
 const pnpm = process.env.npm_execpath;
 if (!pnpm) throw new Error("Run this build through pnpm build:widget");
 const root = fileURLToPath(new URL("../", import.meta.url));
+await buildStartupLauncher(root);
 await prepareTauriBridgeRuntime({nodeExecutable: process.execPath});
 const result = spawnSync(process.execPath, [pnpm, "exec", "tauri", "build", "--config", "src-tauri/tauri.release.conf.json", ...process.argv.slice(2), "--", "--locked"], {
   cwd: root, stdio: "inherit", env: {...process.env, CARGO_TARGET_DIR: join(root, "src-tauri/target/package")},

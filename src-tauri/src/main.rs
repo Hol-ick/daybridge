@@ -1025,6 +1025,10 @@ fn main() {
             Err(error) => { eprintln!("Daybridge 설치본 실행 실패: {error}"); std::process::exit(2); }
         }
     }
+    if role == startup_identity::LaunchRole::Unavailable {
+        eprintln!("Daybridge 설치본을 확인할 수 없습니다. 설치된 Daybridge를 복구해 주세요.");
+        std::process::exit(2);
+    }
     let _instance = match startup_identity::acquire_instance() {
         Ok(Some(guard)) => guard,
         Ok(None) => return,
