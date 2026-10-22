@@ -14,6 +14,7 @@ import { fetchBridge, savedNotice } from "./bridge-client.js";
 import { DEFAULT_SCHEDULE_SETTINGS, normalizeScheduleSettings } from "./schedule/settings-contract.js";
 import { setAppearance, useAppearance } from "./appearance/theme-store.js";
 import WindowChrome from "./appearance/WindowChrome.jsx";
+import { saveRecoveryPreferences } from "./overlay-recovery/preferences.mjs";
 
 const BRIDGE_URL = "http://127.0.0.1:39393";
 const OVERLAY_PRIVACY_KEY = "daybridge.overlay-private.v1";
@@ -264,30 +265,6 @@ export default function ScheduleSurface() {
   }, []);
   useEffect(() => { if (surface === "overlay") void placeOverlayInCorner(); }, [surface]);
   useEffect(() => {
-    if (surface !== "overlay" || !isTauri() || import.meta.env.DEV) return undefined;
-    let disposed = false;
-    const ensureVisible = async () => {
-      try {
-        await invoke("show_overlay");
-      } catch (error) {
-        if (!disposed) {
-          recordRuntimeEvent("overlay_visibility_check_error", { error: errorMessage(error) });
-        }
-      }
-    };
-    // A transparent always-on-top window can be covered by a display or
-    // full-screen transition without the process or WebView terminating.
-    // Reassert visibility/z-order without taking focus from the active app.
-    void ensureVisible();
-    const intervalId = window.setInterval(ensureVisible, 15_000);
-    document.addEventListener("visibilitychange", ensureVisible);
-    return () => {
-      disposed = true;
-      window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", ensureVisible);
-    };
-  }, [surface]);
-  useEffect(() => {
     if (surface !== "overlay") return undefined;
     let disposed = false;
     /** @type {(() => void) | undefined} */
@@ -446,6 +423,10 @@ export default function ScheduleSurface() {
   const saveSettings = useCallback(async (/** @type {import("react").SubmitEvent<HTMLFormElement>} */ event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    if (form.has("overlayRecoveryEnabled")) {
+      try { await saveRecoveryPreferences({enabled:form.get("overlayRecoveryEnabled")==="true",delaySeconds:Number(form.get("overlayRecoveryDelaySeconds"))}); }
+      catch (error) { setNotice(errorMessage(error)); return; }
+    }
     const nextPrivateMode = form.get("privateOverlay") === "on";
     setPrivateMode(nextPrivateMode);
     try { localStorage.setItem(OVERLAY_PRIVACY_KEY, String(nextPrivateMode)); } catch { /* local privacy preference is optional */ }

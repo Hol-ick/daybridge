@@ -9,6 +9,7 @@ mod memo_store;
 mod memo_hotkey;
 mod memo_archive;
 mod startup_identity;
+mod overlay_recovery;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -34,7 +35,6 @@ const OVERLAY_CANVAS_WIDTH: i32 = 760;
 const OVERLAY_CANVAS_HEIGHT: i32 = 720;
 const OVERLAY_CARD_WIDTH: i32 = 288;
 const OVERLAY_COLLAPSED_HEIGHT: i32 = 64;
-const OVERLAY_VISIBILITY_INTERVAL_SECONDS: u64 = 10;
 static SETTINGS_MODAL_OPEN: AtomicBool = AtomicBool::new(false);
 static BRIDGE_INITIALIZATION_FINISHED: AtomicBool = AtomicBool::new(false);
 static RUNTIME_LOG_WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -750,35 +750,58 @@ fn ensure_overlay_visible(app: &tauri::AppHandle, source: &str) -> Result<bool, 
     Ok(!was_visible || was_minimized || repositioned)
 }
 
-/// Keep the recovery independent from the transparent WebView's JavaScript
-/// lifecycle. When Windows covers, hides, or relocates that WebView, browser
-/// timers may be suspended even though the native process is still alive.
+fn overlay_is_off_screen(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<bool, String> {
+    let position = window.outer_position().map_err(|e| e.to_string())?;
+    let size = window.outer_size().map_err(|e| e.to_string())?;
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?
+        .or(app.primary_monitor().map_err(|e| e.to_string())?);
+    Ok(monitor.is_some_and(|monitor| {
+        let work = monitor.work_area();
+        position_is_outside_work_area((position.x, position.y), (size.width, size.height),
+            (work.position.x, work.position.y), (work.size.width, work.size.height))
+    }))
+}
+
+fn automatic_overlay_recovery(app: &tauri::AppHandle, policy: &mut overlay_recovery::Policy, now_ms: u64) -> Result<(), String> {
+    let config = *app.state::<overlay_recovery::Settings>().0.lock().map_err(|_| "위젯 복구 설정 잠금 오류")?;
+    if !config.enabled { policy.tick(now_ms, config, overlay_recovery::Observation::default()); return Ok(()); }
+    let window = app.get_webview_window("overlay").ok_or("위젯 창 없음")?;
+    #[cfg(windows)]
+    {
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+        let observation = overlay_recovery::native::observe(hwnd, overlay_is_off_screen(app, &window)?, SETTINGS_MODAL_OPEN.load(Ordering::Relaxed))?;
+        if policy.tick(now_ms, config, observation) {
+            let latest = *app.state::<overlay_recovery::Settings>().0.lock().map_err(|_| "위젯 복구 설정 잠금 오류")?;
+            let current = overlay_recovery::native::observe(hwnd, overlay_is_off_screen(app, &window)?, SETTINGS_MODAL_OPEN.load(Ordering::Relaxed))?;
+            if latest != config || current.blocked || !current.needs_repair || current.activity != observation.activity { return Ok(()); }
+            if overlay_recovery::native::restore(hwnd)? {
+                let repositioned = restore_overlay_if_off_screen(app, &window)?;
+                apply_overlay_taskbar_style(&window)?;
+                let _ = append_runtime_event(app, "overlay_automatic_recovery", &json!({"delaySeconds":config.delay_seconds,"repositioned":repositioned}).to_string());
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = (policy, now_ms, config, window);
+    Ok(())
+}
+
 fn start_overlay_visibility_watchdog(app: tauri::AppHandle) {
-    let _ = append_runtime_event(
-        &app,
-        "overlay_watchdog_started",
-        &json!({ "intervalSeconds": OVERLAY_VISIBILITY_INTERVAL_SECONDS }).to_string(),
-    );
+    let config = *app.state::<overlay_recovery::Settings>().0.lock().unwrap();
+    let _ = append_runtime_event(&app, "overlay_watchdog_started",
+        &json!({"mode":"contextual","pollIntervalSeconds":1,"recoveryDelaySeconds":config.delay_seconds,"enabled":config.enabled}).to_string());
     thread::spawn(move || {
-        let mut consecutive_failures = 0_u32;
+        let start = Instant::now();
+        let mut policy = overlay_recovery::Policy::default();
+        let mut consecutive_failures = 0u32;
         loop {
-            thread::sleep(Duration::from_secs(OVERLAY_VISIBILITY_INTERVAL_SECONDS));
-            match ensure_overlay_visible(&app, "native_watchdog") {
-                Ok(_) => consecutive_failures = 0,
+            thread::sleep(Duration::from_secs(1));
+            match automatic_overlay_recovery(&app, &mut policy, start.elapsed().as_millis() as u64) {
+                Ok(()) => consecutive_failures = 0,
                 Err(error) => {
                     consecutive_failures = consecutive_failures.saturating_add(1);
-                    // Preserve the first error and periodic repeats without
-                    // turning a long-running recovery into log noise.
-                    if consecutive_failures == 1 || consecutive_failures % 20 == 0 {
-                        let _ = append_runtime_event(
-                            &app,
-                            "overlay_watchdog_error",
-                            &json!({
-                                "consecutiveFailures": consecutive_failures,
-                                "error": error,
-                            })
-                            .to_string(),
-                        );
+                    if consecutive_failures == 1 || consecutive_failures % 60 == 0 {
+                        let _ = append_runtime_event(&app, "overlay_watchdog_error", &json!({"consecutiveFailures":consecutive_failures,"error":error}).to_string());
                     }
                 }
             }
@@ -986,6 +1009,20 @@ fn set_overlay_settings_mode(open: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_overlay_recovery_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    Ok(app.state::<overlay_recovery::Settings>().0.lock().map_err(|_| "위젯 복구 설정 잠금 오류")?.json())
+}
+
+#[tauri::command]
+fn set_overlay_recovery_settings(app: tauri::AppHandle, settings: serde_json::Value) -> Result<serde_json::Value, String> {
+    let path = app_data_file(&app, overlay_recovery::FILE_NAME)?;
+    let next = app.state::<overlay_recovery::Settings>().save(&path, &settings)?;
+    let _ = app.emit("daybridge:overlay-recovery-changed", next.json());
+    let _ = append_runtime_event(&app, "overlay_recovery_settings_saved", &next.json().to_string());
+    Ok(next.json())
+}
+
+#[tauri::command]
 fn record_runtime_event(
     app: tauri::AppHandle,
     event: String,
@@ -1038,6 +1075,7 @@ fn main() {
     let installed_launch = role == startup_identity::LaunchRole::Installed;
     tauri::Builder::default()
         .manage(quick_memo::MemoStore::default())
+        .manage(overlay_recovery::Settings::default())
         .setup(move |app| {
             app.manage(memo_hotkey::MemoHotkey::start(app.handle().clone()));
             clear_explicit_exit_marker(app.handle());
@@ -1108,6 +1146,10 @@ fn main() {
                         &json!({ "error": error }).to_string(),
                     );
                 }
+            }
+            match app_data_file(app.handle(), overlay_recovery::FILE_NAME).and_then(|path| overlay_recovery::Config::load(&path)) {
+                Ok(config) => *app.state::<overlay_recovery::Settings>().0.lock().unwrap() = config,
+                Err(error) => { let _ = append_runtime_event(app.handle(), "overlay_recovery_settings_load_error", &json!({"error":error}).to_string()); }
             }
             start_overlay_visibility_watchdog(app.handle().clone());
             let show = MenuItem::with_id(app, "show", "Daybridge 열기", true, None::<&str>)?;
@@ -1183,6 +1225,8 @@ fn main() {
             save_overlay_position,
             set_overlay_interaction_region,
             set_overlay_settings_mode,
+            get_overlay_recovery_settings,
+            set_overlay_recovery_settings,
             record_runtime_event,
             wait_for_initial_bridge,
             ensure_local_bridge,

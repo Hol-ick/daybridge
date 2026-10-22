@@ -8,6 +8,7 @@ import { DEFAULT_MEALS } from "./settings-contract.js";
 import { recordRuntimeEvent } from "../runtime-log.js";
 import CloseButton from "../appearance/CloseButton.jsx";
 import PalettePicker from "../appearance/PalettePicker.jsx";
+import { loadRecoveryPreferences } from "../overlay-recovery/preferences.mjs";
 
 /** @param {Date | string | number | undefined} value */
 function asDate(value) {
@@ -228,6 +229,14 @@ export function OverlaySettingsModal({ privateMode, onClose, showCloseButton = t
   const [activeTab, setActiveTab] = useState("schedule");
   const [privateDraft, setPrivateDraft] = useState(privateMode === true);
   useEffect(() => setPrivateDraft(privateMode === true), [privateMode]);
+  const [recovery, setRecovery] = useState(/** @type {{enabled: boolean, delaySeconds: string} | null} */ (null));
+  const [recoveryError, setRecoveryError] = useState("");
+  useEffect(() => {
+    let alive = true;
+    void loadRecoveryPreferences().then(value => { if (alive) setRecovery({...value, delaySeconds: String(value.delaySeconds)}); })
+      .catch(error => { if (alive) setRecoveryError(String(error)); });
+    return () => { alive = false; };
+  }, []);
   const [closing, setClosing] = useState(false);
   const requestClose = () => { if (closing) return; setClosing(true); window.setTimeout(() => onClose?.(), 180); };
   const updateSettings = (/** @type {Partial<import("./ui-types").SettingsDraft>} */ patch) => onScheduleSettingsChange?.({ ...settings, ...patch });
@@ -240,6 +249,7 @@ export function OverlaySettingsModal({ privateMode, onClose, showCloseButton = t
     <div className={`${styles.settingsModal} ${closing ? styles.settingsModalClosing : ""}`} role="dialog" aria-modal={showCloseButton} aria-label="위젯 설정" data-testid="now-focus-overlay-settings-modal" data-tauri-drag-region="false">
       {notice ? <div className={styles.overlayToast} role="status" aria-live="polite" data-testid="daybridge-settings-toast">{notice}</div> : null}
       <form className={styles.settingsForm} onSubmit={onSubmit} data-testid="now-focus-overlay-settings-sheet">
+        {recovery ? <><input type="hidden" name="overlayRecoveryEnabled" value={String(recovery.enabled)}/><input type="hidden" name="overlayRecoveryDelaySeconds" value={recovery.delaySeconds}/></> : null}
         <header className={styles.settingsHeader} data-tauri-drag-region="true">
           <div>
             <strong>설정</strong>
@@ -278,6 +288,11 @@ export function OverlaySettingsModal({ privateMode, onClose, showCloseButton = t
             </> : null}
             {activeTab === "display" ? <>
               <section className={styles.settingsSection} aria-label="표시 옵션"><label className={styles.settingsCheckbox}><span><strong>위젯에서 작업명 숨기기</strong></span><input className={styles.settingsToggleInput} name="privateOverlay" type="checkbox" checked={privateDraft} onChange={event=>setPrivateDraft(event.target.checked)} /><span className={styles.settingsToggleTrack} aria-hidden="true" /></label></section>
+              <section className={styles.settingsSection} aria-label="위젯 자동 복구">
+                {recovery ? <><label className={styles.settingsCheckbox}><span><strong>자동 전면 복구</strong></span><input className={styles.settingsToggleInput} type="checkbox" checked={recovery.enabled} onChange={event=>setRecovery({...recovery,enabled:event.target.checked})}/><span className={styles.settingsToggleTrack} aria-hidden="true"/></label>
+                  <label className={`${styles.settingsField} ${styles.settingsInterval}`}><span>복구 대기</span><span className={styles.intervalValue}><input type="number" min="1" max="300" step="1" required value={recovery.delaySeconds} onChange={event=>setRecovery({...recovery,delaySeconds:event.target.value})}/><span>초</span></span></label></> : null}
+                {recoveryError ? <span role="alert">{recoveryError}</span> : null}
+              </section>
               <section className={styles.settingsSection} aria-label="색상 테마"><span className={styles.settingsSectionLabel}>앱 색상</span><PalettePicker appearance={appearance} onChange={onAppearanceChange}/></section>
             </> : null}
             {activeTab === "defaults" ? <>

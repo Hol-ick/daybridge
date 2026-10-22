@@ -8,8 +8,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const nativeMain = fs.readFileSync(path.join(root, "src-tauri", "src", "main.rs"), "utf8").replaceAll("\r\n", "\n");
 const regionCommand = nativeMain.match(/fn set_overlay_interaction_region\([\s\S]*?\n}(?=\n\n#\[tauri::command\])/);
 const overlaySurface = fs.readFileSync(path.join(root, "src", "schedule", "NowFocusOverlay.jsx"), "utf8");
+const scheduleSurface = fs.readFileSync(path.join(root, "src", "ScheduleSurface.jsx"), "utf8");
 const overlayStyles = fs.readFileSync(path.join(root, "src", "schedule", "NowFocusOverlay.module.css"), "utf8");
 const tauriConfig = JSON.parse(fs.readFileSync(path.join(root, "src-tauri", "tauri.conf.json"), "utf8"));
+
+test("the WebView has no independent timer or visibility handler that raises the overlay", () => {
+  assert.doesNotMatch(scheduleSurface, /setInterval\(ensureVisible|visibilitychange.*, ensureVisible/);
+});
 
 test("overlay interaction changes do not force a new show, z-order, or native resize", () => {
   assert.ok(regionCommand, "set_overlay_interaction_region command should exist");
