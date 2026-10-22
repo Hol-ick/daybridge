@@ -34,6 +34,7 @@ const OVERLAY_CANVAS_WIDTH: i32 = 760;
 const OVERLAY_CANVAS_HEIGHT: i32 = 720;
 const OVERLAY_CARD_WIDTH: i32 = 288;
 const OVERLAY_COLLAPSED_HEIGHT: i32 = 64;
+const OVERLAY_VISIBILITY_INTERVAL_SECONDS: u64 = 10;
 static SETTINGS_MODAL_OPEN: AtomicBool = AtomicBool::new(false);
 static BRIDGE_INITIALIZATION_FINISHED: AtomicBool = AtomicBool::new(false);
 static RUNTIME_LOG_WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -756,12 +757,12 @@ fn start_overlay_visibility_watchdog(app: tauri::AppHandle) {
     let _ = append_runtime_event(
         &app,
         "overlay_watchdog_started",
-        &json!({ "intervalSeconds": 3 }).to_string(),
+        &json!({ "intervalSeconds": OVERLAY_VISIBILITY_INTERVAL_SECONDS }).to_string(),
     );
     thread::spawn(move || {
         let mut consecutive_failures = 0_u32;
         loop {
-            thread::sleep(Duration::from_secs(3));
+            thread::sleep(Duration::from_secs(OVERLAY_VISIBILITY_INTERVAL_SECONDS));
             match ensure_overlay_visible(&app, "native_watchdog") {
                 Ok(_) => consecutive_failures = 0,
                 Err(error) => {
