@@ -38,7 +38,6 @@ const OVERLAY_CANVAS_HEIGHT: i32 = 720;
 const OVERLAY_CARD_WIDTH: i32 = 288;
 const OVERLAY_COLLAPSED_HEIGHT: i32 = 64;
 static SETTINGS_MODAL_OPEN: AtomicBool = AtomicBool::new(false);
-static OVERLAY_EXPANDED: AtomicBool = AtomicBool::new(true);
 static BRIDGE_INITIALIZATION_FINISHED: AtomicBool = AtomicBool::new(false);
 static RUNTIME_LOG_WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -993,7 +992,6 @@ fn set_overlay_interaction_region(
         .map_err(|error| error.to_string())?
         .clamp(1, OVERLAY_CANVAS_HEIGHT - safe_y);
     apply_overlay_interaction_region(&window, safe_x, safe_y, safe_width, safe_height)?;
-    OVERLAY_EXPANDED.store(safe_height > OVERLAY_COLLAPSED_HEIGHT + 8, Ordering::Release);
     let _ = append_runtime_event(
         &app,
         "overlay_interaction_region_applied",

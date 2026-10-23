@@ -69,6 +69,27 @@ fn idle_seconds() -> Option<u64> {
 fn idle_seconds() -> Option<u64> {
     None
 }
+#[cfg(windows)]
+fn region_is_collapsed(hwnd: windows::Win32::Foundation::HWND) -> bool {
+    use windows::Win32::{Foundation::RECT, Graphics::Gdi::GetWindowRgnBox};
+    let mut rect = RECT::default();
+    (unsafe { GetWindowRgnBox(hwnd, &mut rect).0 != 0 })
+        && (1..=super::OVERLAY_CARD_WIDTH + 8).contains(&(rect.right - rect.left))
+        && (1..=super::OVERLAY_COLLAPSED_HEIGHT + 8).contains(&(rect.bottom - rect.top))
+}
+fn widget_collapsed(app: &tauri::AppHandle) -> bool {
+    #[cfg(windows)]
+    {
+        app.get_webview_window("overlay")
+            .and_then(|window| window.hwnd().ok())
+            .is_some_and(region_is_collapsed)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        false
+    }
+}
 fn can_apply(app: &tauri::AppHandle) -> bool {
     let Some(idle) = idle_seconds() else {
         return false;
@@ -79,11 +100,12 @@ fn can_apply(app: &tauri::AppHandle) -> bool {
             .app_local_data_dir()
             .map(|p| !memo_idle(&p.join("memos/state.json")))
             .unwrap_or(true);
-    let open = super::OVERLAY_EXPANDED.load(Ordering::Acquire) || ["archive", "dashboard"].iter().any(|label| {
-        app.get_webview_window(label)
-            .map(|w| w.is_visible().unwrap_or(true))
-            .unwrap_or(true)
-    });
+    let open = !widget_collapsed(app)
+        || ["archive", "dashboard"].iter().any(|label| {
+            app.get_webview_window(label)
+                .map(|w| w.is_visible().unwrap_or(true))
+                .unwrap_or(true)
+        });
     eligible(
         idle,
         busy,
@@ -306,6 +328,13 @@ async fn check(app: &tauri::AppHandle) -> Result<(), String> {
         json!({"version":update.version,"bytes":bytes.len()}),
     );
     // A download never closes an editor. Applying waits until the user is idle.
+    if !can_apply(app) {
+        log(
+            app,
+            "app_update_deferred",
+            json!({"version":update.version,"reason":"application_in_use"}),
+        );
+    }
     while !can_apply(app) {
         std::thread::sleep(Duration::from_secs(30));
     }
@@ -341,6 +370,41 @@ pub fn start(app: tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn initial_native_collapsed_region_is_ready_without_a_javascript_resize() {
+        use windows::{
+            core::w,
+            Win32::{
+                Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn},
+                UI::WindowsAndMessaging::*,
+            },
+        };
+        unsafe {
+            let window = CreateWindowExW(
+                WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+                w!("STATIC"),
+                w!("Updater off-screen region fixture"),
+                WS_POPUP,
+                -30000,
+                -30000,
+                760,
+                720,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+            assert!(!region_is_collapsed(window));
+            for (height, expected) in [(64, true), (400, false), (720, false), (64, true)] {
+                let region = CreateRoundRectRgn(0, 0, 288, height, 22, 22);
+                assert_ne!(SetWindowRgn(window, Some(region), false), 0);
+                assert_eq!(region_is_collapsed(window), expected);
+            }
+            DestroyWindow(window).unwrap();
+        }
+    }
     #[test]
     fn updates_wait_for_input_and_every_editor_to_finish() {
         assert!(eligible(120, false, false, false));
