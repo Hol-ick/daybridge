@@ -83,7 +83,8 @@ export async function verifyPackage({executablePath}) {
     const health = await json(baseUrl, "/api/health");
     assert.equal(health.status, 200);
     assert.equal(health.body.service, "daybridge");
-    assert.match(health.body.bridgeVersion, /^0\.1\.0\+[a-f0-9]{12}$/);
+    assert.equal(health.body.bridgeVersion.split("+")[0], manifest.applicationVersion);
+    assert.match(health.body.bridgeVersion.split("+")[1], /^[a-f0-9]{12}$/);
     assert.equal(await realpath(health.body.sourceRoot), await realpath(join(installation, "bridge-runtime")));
     assert.equal(await realpath(health.body.dataDir), await realpath(join(fixture.root, "data")));
     assert.equal(health.body.handoffSinkDir, null);
