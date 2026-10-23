@@ -1,0 +1,94 @@
+name: Publish Daybridge update
+on:
+  workflow_run:
+    workflows: [Verify Daybridge]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: daybridge-stable-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+      - name: Select unpublished application changes
+        id: changes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $head=(git rev-parse HEAD).Trim()
+          $main=(git ls-remote origin refs/heads/main).Split()[0]
+          if($head-ne$main){'publish=false' >> $env:GITHUB_OUTPUT;exit 0}
+          $release=gh api repos/${{ github.repository }}/releases/latest 2>$null|ConvertFrom-Json
+          if($LASTEXITCODE-eq0){
+            $prior=$release.tag_name
+            $names=git diff --name-only $prior HEAD -- src src-tauri scripts package.json pnpm-lock.yaml .github/workflows/release.yml
+            if(-not$names){'publish=false' >> $env:GITHUB_OUTPUT;exit 0}
+            "PREVIOUS_RELEASE_VERSION=$($prior.TrimStart('v'))" >> $env:GITHUB_ENV
+          }
+          'publish=true' >> $env:GITHUB_OUTPUT
+          $global:LASTEXITCODE=0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        if: steps.changes.outputs.publish == 'true'
+        with:
+          version: 11.16.0
+          run_install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        if: steps.changes.outputs.publish == 'true'
+        with:
+          node-version: 24.19.0
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        if: steps.changes.outputs.publish == 'true'
+        with:
+          toolchain: 1.98.1
+      - name: Prepare distinct release version
+        if: steps.changes.outputs.publish == 'true'
+        shell: pwsh
+        run: |
+          $version=node scripts/release-update.mjs prepare
+          if($LASTEXITCODE-ne0){exit $LASTEXITCODE}
+          "DAYBRIDGE_RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+      - name: Install build dependencies
+        if: steps.changes.outputs.publish == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Build signed application
+        if: steps.changes.outputs.publish == 'true'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: pnpm build:widget
+      - name: Verify actual installer payload and manifest
+        if: steps.changes.outputs.publish == 'true'
+        run: |
+          pnpm verify:installer
+          if($LASTEXITCODE-ne0){exit $LASTEXITCODE}
+          node scripts/release-update.mjs manifest
+      - name: Publish verified stable release
+        if: steps.changes.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v=$env:DAYBRIDGE_RELEASE_VERSION
+          $head=(git rev-parse HEAD).Trim()
+          if($head-ne(git ls-remote origin refs/heads/main).Split()[0]){throw 'A newer main exists; refuse stale release'}
+          $installer="src-tauri/target/package/release/bundle/nsis/Daybridge_${v}_x64-setup.exe"
+          $existing=gh release view "v$v" --json isDraft 2>$null|ConvertFrom-Json
+          if($LASTEXITCODE-ne0){
+            gh release create "v$v" --target $head --title "Daybridge $v" --notes "검증된 Windows 자동 업데이트" --draft
+            if($LASTEXITCODE-ne0){exit $LASTEXITCODE}
+          }elseif(-not$existing.isDraft){throw 'Release is already immutable and published'}
+          gh release upload "v$v" $installer "$installer.sig" test-artifacts/release/latest.json --clobber
+          if($LASTEXITCODE-ne0){exit $LASTEXITCODE}
+          gh release edit "v$v" --draft=false --latest

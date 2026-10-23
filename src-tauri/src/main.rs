@@ -10,6 +10,8 @@ mod memo_hotkey;
 mod memo_archive;
 mod startup_identity;
 mod overlay_recovery;
+mod automatic_update;
+mod update_install;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -36,6 +38,7 @@ const OVERLAY_CANVAS_HEIGHT: i32 = 720;
 const OVERLAY_CARD_WIDTH: i32 = 288;
 const OVERLAY_COLLAPSED_HEIGHT: i32 = 64;
 static SETTINGS_MODAL_OPEN: AtomicBool = AtomicBool::new(false);
+static OVERLAY_EXPANDED: AtomicBool = AtomicBool::new(true);
 static BRIDGE_INITIALIZATION_FINISHED: AtomicBool = AtomicBool::new(false);
 static RUNTIME_LOG_WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -838,6 +841,7 @@ fn dashboard_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
 }
 
 fn show_dashboard(app: &tauri::AppHandle) -> tauri::Result<()> {
+    if automatic_update::preparing() { return Ok(()); }
     let _ = ensure_overlay_visible(app, "dashboard_open");
     let window = dashboard_window(app)?;
     window.unminimize()?;
@@ -860,6 +864,7 @@ fn show_overlay(app: tauri::AppHandle) -> Result<bool, String> {
 
 #[tauri::command]
 fn open_dashboard(app: tauri::AppHandle) -> Result<(), String> {
+    if automatic_update::preparing() { return Err("update_in_progress".into()); }
     show_dashboard(&app).map_err(|error| error.to_string())
 }
 
@@ -988,6 +993,7 @@ fn set_overlay_interaction_region(
         .map_err(|error| error.to_string())?
         .clamp(1, OVERLAY_CANVAS_HEIGHT - safe_y);
     apply_overlay_interaction_region(&window, safe_x, safe_y, safe_width, safe_height)?;
+    OVERLAY_EXPANDED.store(safe_height > OVERLAY_COLLAPSED_HEIGHT + 8, Ordering::Release);
     let _ = append_runtime_event(
         &app,
         "overlay_interaction_region_applied",
@@ -1004,6 +1010,7 @@ fn set_overlay_interaction_region(
 
 #[tauri::command]
 fn set_overlay_settings_mode(open: bool) -> Result<(), String> {
+    if open && automatic_update::preparing() { return Err("update_in_progress".into()); }
     SETTINGS_MODAL_OPEN.store(open, Ordering::Relaxed);
     Ok(())
 }
@@ -1028,7 +1035,13 @@ fn record_runtime_event(
     event: String,
     details: String,
 ) -> Result<(), String> {
-    append_runtime_event(&app, &event, &details)
+    let result=append_runtime_event(&app, &event, &details);
+    if event=="surface_mounted" {
+        if let Ok(value)=serde_json::from_str::<serde_json::Value>(&details) {
+            if let Some(surface)=value["surface"].as_str(){automatic_update::surface_ready(&app,surface);}
+        }
+    }
+    result
 }
 
 #[tauri::command]
@@ -1041,6 +1054,7 @@ fn exit_app(app: tauri::AppHandle, reason: Option<String>) {
 
 fn main() {
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+    if let Some(result)=update_install::run_if_requested(&args){std::process::exit(if result.is_ok(){0}else{2});}
     if let Some(result) = package_validation::run_if_requested(&args) {
         match result {
             Ok(()) => std::process::exit(0),
@@ -1074,6 +1088,7 @@ fn main() {
     };
     let installed_launch = role == startup_identity::LaunchRole::Installed;
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(quick_memo::MemoStore::default())
         .manage(overlay_recovery::Settings::default())
         .setup(move |app| {
@@ -1082,7 +1097,7 @@ fn main() {
             let _ = append_runtime_event(
                 app.handle(),
                 "app_started",
-                &json!({ "debug": cfg!(debug_assertions), "revision": env!("DAYBRIDGE_BUILD_REVISION"), "startupOwner": installed_launch }).to_string(),
+                &json!({ "debug": cfg!(debug_assertions), "revision": env!("DAYBRIDGE_BUILD_REVISION"), "version":env!("CARGO_PKG_VERSION"), "startupOwner": installed_launch }).to_string(),
             );
             // Only the packaged application registers itself. Development
             // builds depend on the local Vite server and must not become a
@@ -1201,6 +1216,7 @@ fn main() {
                 })
                 .build(app)?;
 
+            if installed_launch { automatic_update::start(app.handle().clone()); }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

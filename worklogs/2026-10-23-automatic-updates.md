@@ -1,0 +1,11 @@
+# Automatic update delivery
+
+The user requested automatic latest-version maintenance and explicitly authorized operational deployment plus witnessing a subsequent real update, preserving memos/settings and without a Windows reboot. The running installation was c1827a8; b4eaedf had not been installed. This feature also carries that notification-safe recovery change forward.
+
+Added distinct release versions, a signed stable GitHub Release pipeline gated on successful verification, and native background update checks. Downloads are signature verified and pinned to this repository's versioned assets. Applying waits for two minutes of input inactivity, collapsed widget, closed editors/settings, and no active or pending memo. A memo lock and handoff gate cover session-start races.
+
+The installation supervisor backs up and verifies program files, checks data-pointer/memo inventory preservation, waits for the exact parent app to exit, stops only its owned bridge, installs silently and verifies new-version/native/UI/bridge readiness. Installer/startup failure restores program files and quarantines the failed version. It does not replace user data, force-close an active new memo, restore underneath a running installer, or request Windows restart/logoff.
+
+Exploration found Windows PowerShell script execution is restricted. The proposed script supervisor was discarded, without changing or bypassing that execution policy. The final supervisor is the installed native executable's isolated update mode. Local signing material is protected outside the checkout; only the public key is committed and the encrypted Actions signing secret was configured using existing repository permission.
+
+Verification before packaging: 54 Rust tests passed, including updater idle/editor/data guards, invalid signatures, live native process identity and real filesystem program-restore scenarios for partial installation and failed startup. Node regression found an old hard-coded application-version assertion, which was updated to compare with the current package version; the corrected package and release suites passed. Remaining Node suites passed in the full run. Type/frontend build passed. No UI layout was changed by this feature. Packaging, publication, bootstrap and the observed higher-version operational update are recorded separately after they happen.

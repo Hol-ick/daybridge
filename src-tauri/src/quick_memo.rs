@@ -45,6 +45,7 @@ fn operation(app: &tauri::AppHandle, kind: &str, id: Option<&str>, revision: u64
     let started = std::time::Instant::now();
     let store = app.state::<MemoStore>();
     let _guard = store.gate.lock().map_err(|_| "store_busy")?;
+    if super::automatic_update::preparing(){return Err("update_in_progress".into());}
     let result = repository(app).and_then(|repo| action(&repo));
     match result {
         Ok(mut ack) => {
@@ -68,6 +69,7 @@ pub async fn begin_memo_session(window: tauri::WebviewWindow, app: tauri::AppHan
     let session = tauri::async_runtime::spawn_blocking(move || {
         let store = worker_app.state::<MemoStore>();
         let _guard = store.gate.lock().map_err(|_| "store_busy")?;
+        if super::automatic_update::preparing(){return Err("update_in_progress".into());}
         let repo = repository(&worker_app)?;
         let legacy = worker_app.path().app_local_data_dir().map_err(|_| "write_failed")?.join("quick-memo.txt");
         if repo.import_legacy_once(&legacy)? { log(&worker_app, "memo_legacy_imported", json!({"outcome":"success"})); }
@@ -123,6 +125,7 @@ pub fn hide_quick_memo(window: tauri::WebviewWindow, store: tauri::State<MemoSto
 }
 
 pub fn open_archive(app: &tauri::AppHandle) -> Result<(), String> {
+    if super::automatic_update::preparing(){return Err("update_in_progress".into());}
     let window = app.get_webview_window("archive").ok_or("archive_open_failed")?;
     if !window.is_visible().unwrap_or(false) {
         if let Ok(Some(monitor)) = window.current_monitor() {

@@ -79,7 +79,9 @@ test("an independent bridge runtime includes its interpreter, dependencies and i
     assert.equal(health.body.sourceRoot, runtime);
     assert.equal(health.body.dataDir, dataDir);
     assert.equal(health.body.handoffSinkDir, null);
-    assert.match(health.body.bridgeVersion, /^0\.1\.0\+[a-f0-9]{12}$/);
+    const {version: applicationVersion} = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+    assert.equal(health.body.bridgeVersion.split("+")[0], applicationVersion);
+    assert.match(health.body.bridgeVersion.split("+")[1], /^[a-f0-9]{12}$/);
     const created = await json(baseUrl + "/api/quests/manual", {method: "POST", headers: {"Content-Type": "application/json", "X-Request-Id": "packaged-fixture-save"}, body: JSON.stringify({activityDate: "2099-01-02", title: "Packaged fixture", durationMinutes: 50})});
     assert.equal(created.status, 201);
     const persisted = JSON.parse(await readFile(join(dataDir, "boards/2099-01-02.json"), "utf8"));

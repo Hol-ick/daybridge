@@ -1,6 +1,6 @@
 [package]
 name = "daybridge"
-version = "0.1.0"
+version = "0.2.0"
 description = "A floating daily quest board generated from MARU closeout."
 authors = ["Daybridge contributors"]
 edition = "2021"
@@ -13,7 +13,10 @@ tauri-build = { version = "=2.6.3", features = [] }
 tauri = { version = "=2.11.5", features = ["tray-icon"] }
 serde_json = "1"
 sha2 = "=0.10.9"
+tauri-plugin-updater = "=2.10.0"
+base64 = "=0.22.1"
+minisign-verify = "=0.2.5"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"
-windows = { version = "=0.61.3", features = ["Win32_Graphics_Gdi", "Win32_Graphics_Dwm", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security"] }
+windows = { version = "=0.61.3", features = ["Win32_Graphics_Gdi", "Win32_Graphics_Dwm", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Diagnostics_ToolHelp", "Win32_Security"] }

@@ -40,8 +40,8 @@ export async function verifyInstaller({installerPath, sevenZipExecutable = join(
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  if (!process.argv[2]) throw new Error("Usage: node scripts/verify-installer.mjs <NSIS-installer>");
-  const receipt = await verifyInstaller({installerPath: process.argv[2]});
+  const {version} = JSON.parse(await readFile("package.json", "utf8"));
+  const receipt = await verifyInstaller({installerPath: process.argv[2] || `src-tauri/target/package/release/bundle/nsis/Daybridge_${version}_x64-setup.exe`});
   await mkdir("test-artifacts", {recursive: true});
   await writeFile("test-artifacts/installer-payload.json", JSON.stringify(receipt, null, 2) + "\n");
   console.log(JSON.stringify(receipt, null, 2));

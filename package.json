@@ -1,6 +1,6 @@
 {
   "name": "daybridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Turn session-selected work into a focused, calendar-aware action list.",
   "type": "module",
@@ -16,7 +16,7 @@
     "diagnose:runtime": "node scripts/inspect-runtime.mjs",
     "package:bridge": "node scripts/package-bridge.mjs",
     "verify:package": "node scripts/verify-package.mjs src-tauri/target/package/release/daybridge.exe",
-    "verify:installer": "node scripts/verify-installer.mjs src-tauri/target/package/release/bundle/nsis/Daybridge_0.1.0_x64-setup.exe",
+    "verify:installer": "node scripts/verify-installer.mjs",
     "compile": "node scripts/compile-quests.mjs",
     "compile:closeout": "node scripts/compile-quests.mjs --source closeout",
     "test:compiler": "node --test scripts/compile-quests.test.mjs",

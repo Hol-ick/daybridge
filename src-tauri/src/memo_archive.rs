@@ -10,6 +10,7 @@ fn caller(window: &tauri::WebviewWindow) -> Result<(), String> {
 fn run(app: &tauri::AppHandle, action: &str, operation: impl FnOnce(&MemoRepository) -> Result<Value, String>) -> Result<Value, String> {
     let store = app.state::<MemoStore>();
     let _gate = store.gate.lock().map_err(|_| "store_busy")?;
+    if super::automatic_update::preparing(){return Err("update_in_progress".into());}
     let result = repository(app).and_then(|repo| operation(&repo));
     // Neither filenames, titles nor returned body content are diagnostic data.
     let outcome=match &result { Ok(value) if value["removed"] == false => "saved_remove_failed", Ok(_) => "success", Err(_) => "failed" };
