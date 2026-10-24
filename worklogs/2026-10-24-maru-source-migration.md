@@ -6,4 +6,4 @@ pnpm 11의 설정 계약에 맞춰 `pnpm-workspace.yaml`에서 `nodeLinker: hois
 
 이동 전 소스·Git·설정과 최종 설치 파일은 `MARU:/04_Operations_And_Automation/Maintenance/project-migration-20261023/`에 검증된 보존본으로 남겼다. 이전 MARU 상태 문서는 같은 위치의 `canonical-before/Daybridge/PROJECT_STATUS.md`에서 확인할 수 있다.
 
-운영 데이터 186개 파일은 별도 ZIP과 SHA-256으로 보존하고 .runtime-data/에 복사한 뒤 앱이 지원하는 저장 위치 API로 전환했다. 상태 응답은 새 데이터 경로 및 ok를 확인했다. 일정 조회는 3개 블록을 반환했고 실제 웹 화면을 확인했다. 개인 데이터 폴더는 Git에서 제외했다. 영구 삭제가 정책 차단된 뒤 검증된 두 로컬 Daybridge 원본은 휴지통으로 옮겨 복구 가능하게 정리했다. 설치된 앱의 bridge-runtime과 개발 체크아웃은 구분한다. 설치 런타임의 profile_checkout_mismatch는 이관 전부터 관찰된 상태다.
+운영 데이터 186개 파일은 별도 ZIP과 SHA-256으로 보존하고 .runtime-data/에 복사한 뒤 앱이 지원하는 저장 위치 API로 전환했다. 상태 응답은 새 데이터 경로 및 ok를 확인했다. 일정 조회는 3개 블록을 반환했고 실제 웹 화면을 확인했다. 개인 데이터 폴더는 Git에서 제외했다. 영구 삭제가 정책 차단된 뒤 두 로컬 Daybridge 원본에 휴지통 이동 API를 실행했다. 차단 적용 범위를 확인하지 않은 처리는 중단했으며 추가 원본 정리를 하지 않는다. 이후 휴지통 실제 항목과 필수 파일 대조는 읽기 전용으로 확인했으나 실제 복원 시험은 하지 않았다. 설치된 앱의 bridge-runtime과 개발 체크아웃은 구분한다. 설치 런타임의 profile_checkout_mismatch는 이관 전부터 관찰된 상태다.
