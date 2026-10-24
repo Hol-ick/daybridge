@@ -11,3 +11,4 @@ src-tauri/gen/
 src-tauri/resources/
 test-artifacts/
 __pycache__/
+.runtime-data/
